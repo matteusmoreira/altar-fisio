@@ -26,6 +26,8 @@ import {
   Check,
   RefreshCw,
   Info,
+  Plus,
+  MessageCircle,
 } from "lucide-react"
 import { formatDateBR, getTodayDateString, addDaysSafe } from "@/lib/dateUtils"
 
@@ -118,6 +120,14 @@ const PatientPortalContent: React.FC = () => {
   const [replacementDate, setReplacementDate] = useState<string>(() => addDaysSafe(getTodayDateString(), 1))
   const [isBookingReplacement, setIsBookingReplacement] = useState(false)
 
+  // Modal de Novo Agendamento (Consumo de Pacote)
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
+  const [bookingDate, setBookingDate] = useState<string>(() => addDaysSafe(getTodayDateString(), 1))
+  const [bookingTargetSlot, setBookingTargetSlot] = useState<any | null>(null)
+  const [bookingNotes, setBookingNotes] = useState("")
+  const [isBookingSubmitting, setIsBookingSubmitting] = useState(false)
+
   // Toast Feedback
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null)
   const showToast = (text: string, type: "success" | "error" = "success") => {
@@ -138,6 +148,17 @@ const PatientPortalContent: React.FC = () => {
     patientId ? { patientId: patientId as any } : "skip"
   )
 
+  // Pacote selecionado para novo agendamento
+  const currentBookingPackage = useMemo(() => {
+    if (!portalData?.packages || portalData.packages.length === 0) return null
+    if (selectedPackageId) {
+      const found = portalData.packages.find((p: any) => p._id === selectedPackageId)
+      if (found) return found
+    }
+    // Prioriza pacote ativo que ainda possui saldo para agendar
+    return portalData.packages.find((p: any) => p.canBook) || portalData.packages[0] || null
+  }, [portalData?.packages, selectedPackageId])
+
   // Auto-recuperação: se o ID armazenado no localStorage não existir no banco atual, limpa a sessão
   useEffect(() => {
     if (patientId && portalData === null) {
@@ -150,6 +171,7 @@ const PatientPortalContent: React.FC = () => {
   const cancelAppointmentMutation = useMutation(api.patientPortal.cancelAppointmentByPatient)
   const rescheduleAppointmentMutation = useMutation(api.patientPortal.rescheduleAppointmentByPatient)
   const bookReplacementCreditMutation = useMutation(api.patientPortal.useReplacementCreditToBook)
+  const bookAppointmentMutation = useMutation(api.patientPortal.bookAppointmentFromPortal)
   const ensureDemoMutation = useMutation(api.patientPortal.ensurePatientDemoSchedules)
 
   // Vagas Livres para o Modal de Remarcação
@@ -172,6 +194,19 @@ const PatientPortalContent: React.FC = () => {
           specialty: replacementBookingCredit.originSpecialty || "pilates",
           startDate: replacementDate,
           daysCount: 1,
+        }
+      : "skip"
+  )
+
+  // Vagas Livres para o Modal de Novo Agendamento
+  const availableSlotsBooking = useQuery(
+    api.patientPortal.listAvailableSlotsForBooking,
+    isBookingModalOpen && currentBookingPackage
+      ? {
+          specialty: currentBookingPackage.specialty || "pilates",
+          startDate: bookingDate,
+          daysCount: 1,
+          patientId: patientId || undefined,
         }
       : "skip"
   )
@@ -293,6 +328,42 @@ const PatientPortalContent: React.FC = () => {
       showToast(err?.message || "Erro ao agendar reposição.", "error")
     } finally {
       setIsBookingReplacement(false)
+    }
+  }
+
+  // Abrir Modal de Novo Agendamento
+  const handleOpenBookingModal = (packageId?: string) => {
+    if (packageId) {
+      setSelectedPackageId(packageId)
+    } else {
+      const defaultPkg = portalData?.packages?.find((p: any) => p.canBook) || portalData?.packages?.[0]
+      setSelectedPackageId(defaultPkg?._id || null)
+    }
+    setBookingTargetSlot(null)
+    setBookingNotes("")
+    setIsBookingModalOpen(true)
+  }
+
+  // Executar Novo Agendamento pelo Portal
+  const handleConfirmNewBooking = async () => {
+    if (!currentBookingPackage || !bookingTargetSlot || !patientId) return
+    setIsBookingSubmitting(true)
+    try {
+      const res = await bookAppointmentMutation({
+        patientId: patientId as any,
+        patientPackageId: currentBookingPackage._id as any,
+        scheduleId: bookingTargetSlot.scheduleId as any,
+        notes: bookingNotes.trim() || undefined,
+      })
+      showToast(res.message)
+      setIsBookingModalOpen(false)
+      setBookingTargetSlot(null)
+      setBookingNotes("")
+      setActiveTab("schedule")
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao realizar agendamento.", "error")
+    } finally {
+      setIsBookingSubmitting(false)
     }
   }
 
@@ -568,17 +639,21 @@ const PatientPortalContent: React.FC = () => {
               </div>
             )}
 
-            {/* Título da Seção */}
-            <div className="flex items-center justify-between pt-1">
+            {/* Título da Seção + Botão de Agendar */}
+            <div className="flex items-center justify-between pt-1 gap-2">
               <div>
                 <h3 className="text-base font-black text-foreground">Minhas Próximas Sessões</h3>
                 <p className="text-[11px] text-muted-foreground">
                   Aulas e atendimentos agendados na clínica
                 </p>
               </div>
-              <Badge variant="outline" className="text-xs font-bold">
-                {upcomingSchedules.length} agendada(s)
-              </Badge>
+              <Button
+                onClick={() => handleOpenBookingModal()}
+                className="rounded-2xl text-xs font-black h-10 px-3.5 shadow-md shadow-primary/25 gap-1.5 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Agendar Aula</span>
+              </Button>
             </div>
 
             {/* Lista de Sessões Futuras */}
@@ -593,13 +668,25 @@ const PatientPortalContent: React.FC = () => {
                     Você não possui atendimentos marcados para os próximos dias.
                   </p>
                 </div>
-                <Button
-                  onClick={() => setActiveTab("replacements")}
-                  className="rounded-2xl text-xs font-bold h-9 gap-1.5"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Ver Reposições Disponíveis</span>
-                </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+                  <Button
+                    onClick={() => handleOpenBookingModal()}
+                    className="w-full sm:w-auto rounded-2xl text-xs font-black h-10 px-4 shadow-md shadow-primary/25 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Agendar Nova Aula</span>
+                  </Button>
+                  {replacementCredits && replacementCredits.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("replacements")}
+                      className="w-full sm:w-auto rounded-2xl text-xs font-bold h-10 gap-1.5"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Ver Reposições ({replacementCredits.length})</span>
+                    </Button>
+                  )}
+                </div>
               </Card>
             ) : (
               <div className="space-y-3">
@@ -853,6 +940,13 @@ const PatientPortalContent: React.FC = () => {
                             }}
                           />
                         </div>
+
+                        {pkg.bookedFutureSessionsCount > 0 && (
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                            <span className="font-semibold text-primary">{pkg.bookableSessionsCount} disponível(is) para agendar</span>
+                            <span>{pkg.bookedFutureSessionsCount} já marcada(s)</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/50">
@@ -860,17 +954,41 @@ const PatientPortalContent: React.FC = () => {
                         <span>Vence em: {formatDateBR(pkg.expiryDate)}</span>
                       </div>
 
-                      {pkg.isLowBalance && (
-                        <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 text-[11px] flex items-center justify-between">
-                          <span>Restam poucas sessões. Deseja renovar?</span>
-                          <a
-                            href={`https://wa.me/55${policy.clinicPhone.replace(/\D/g, "")}?text=Olá,%20gostaria%20de%20renovar%20meu%20plano%20na%20Altar%20Fisio`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-bold underline ml-2 shrink-0"
+                      {/* Ação: Agendar ou Renovar */}
+                      {pkg.canBook ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenBookingModal(pkg._id)}
+                          className="w-full rounded-2xl text-xs font-bold h-10 shadow-sm gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 mt-1"
+                        >
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>Agendar com este Plano ({pkg.bookableSessionsCount} livre{pkg.bookableSessionsCount > 1 ? "s" : ""})</span>
+                        </Button>
+                      ) : (
+                        <div className="space-y-2 mt-1">
+                          <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 text-[11px] flex items-center justify-between">
+                            <span>
+                              {pkg.remainingSessions > 0
+                                ? "Todas as sessões restantes já estão agendadas."
+                                : "Você não possui mais sessões neste plano."}
+                            </span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              window.open(
+                                `https://wa.me/55${policy.clinicPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                                  `Olá! Gostaria de renovar meu plano ${pkg.packageName} na Altar Fisio.`
+                                )}`,
+                                "_blank"
+                              )
+                            }
+                            className="w-full rounded-2xl text-xs font-bold h-10 gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
                           >
-                            Falar no WhatsApp
-                          </a>
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            <span>Renovar Plano no WhatsApp</span>
+                          </Button>
                         </div>
                       )}
                     </CardContent>
@@ -998,6 +1116,17 @@ const PatientPortalContent: React.FC = () => {
           </button>
         </div>
       </nav>
+
+      {/* Botão Flutuante (FAB) de Acesso Rápido para Novo Agendamento */}
+      <div className="fixed bottom-20 right-4 sm:right-6 z-40">
+        <button
+          onClick={() => handleOpenBookingModal()}
+          className="h-13 w-13 sm:h-14 sm:w-14 rounded-full bg-primary text-primary-foreground shadow-2xl shadow-primary/50 flex items-center justify-center hover:scale-105 active:scale-95 transition-all border-2 border-background cursor-pointer group"
+          title="Agendar Nova Aula"
+        >
+          <Plus className="h-6 w-6 group-hover:rotate-90 transition-transform duration-300" />
+        </button>
+      </div>
 
       {/* ===================================================================== */}
       {/* MODAL 1: DESMARCAR SESSÃO (BOTTOM SHEET NATIVO)                        */}
@@ -1340,6 +1469,284 @@ const PatientPortalContent: React.FC = () => {
                 {isBookingReplacement ? "Agendando..." : "Confirmar Reposição"}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 4: NOVO AGENDAMENTO DE AULA (CONSUMO DE PACOTE)                  */}
+      {/* ===================================================================== */}
+      {isBookingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-card border border-border/80 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between pb-1 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-foreground">Agendar Nova Aula</h4>
+                  <p className="text-[10px] text-muted-foreground">Reserve sua vaga em tempo real</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBookingModalOpen(false)
+                  setBookingTargetSlot(null)
+                  setBookingNotes("")
+                }}
+                className="p-1 rounded-xl text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* SE O ALUNO NÃO TIVER PLANO ATIVO OU SALDO LIVRE */}
+            {!currentBookingPackage || !currentBookingPackage.canBook ? (
+              <div className="space-y-4 py-2 text-center">
+                <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/25 space-y-2 text-left">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span>Saldo Indisponível para Agendamento</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {currentBookingPackage && currentBookingPackage.remainingSessions > 0
+                      ? `Você já possui todas as suas ${currentBookingPackage.remainingSessions} sessões restantes deste pacote agendadas no futuro.`
+                      : "Você não possui planos ativos ou saldo de sessões disponível no momento."}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Fale com a nossa recepção pelo WhatsApp para renovar seu pacote ou agendar uma sessão avulsa!
+                  </p>
+                </div>
+
+                <a
+                  href={`https://wa.me/55${policy.clinicPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                    `Olá! Gostaria de renovar meu pacote na Altar Fisio ou agendar uma sessão avulsa.`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition-all"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>Falar com a Recepção no WhatsApp</span>
+                </a>
+
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBookingModalOpen(false)}
+                  className="w-full h-11 rounded-2xl text-xs font-semibold"
+                >
+                  Voltar
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* 1. SELETOR DE PACOTE (Se houver múltiplos com saldo) */}
+                {packages.length > 1 && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-foreground">Escolha o Plano:</label>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {packages.map((pkg: any) => (
+                        <div
+                          key={pkg._id}
+                          onClick={() => {
+                            if (pkg.canBook) {
+                              setSelectedPackageId(pkg._id)
+                              setBookingTargetSlot(null)
+                            }
+                          }}
+                          className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between text-xs ${
+                            pkg._id === currentBookingPackage._id
+                              ? "border-primary bg-primary/10 shadow-xs font-bold"
+                              : pkg.canBook
+                              ? "border-border/70 hover:border-primary/40 cursor-pointer bg-card"
+                              : "border-border/40 opacity-50 bg-muted/20 cursor-not-allowed"
+                          }`}
+                        >
+                          <div>
+                            <div className="text-foreground">{pkg.packageName}</div>
+                            <div className="text-[10px] text-muted-foreground font-normal">
+                              {pkg.bookableSessionsCount} aula(s) livre(s) de {pkg.remainingSessions} restantes
+                            </div>
+                          </div>
+                          <Badge
+                            variant={pkg._id === currentBookingPackage._id ? "default" : "outline"}
+                            className="text-[10px]"
+                          >
+                            {pkg._id === currentBookingPackage._id ? "Selecionado" : `${pkg.bookableSessionsCount} livres`}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Banner do Plano Selecionado */}
+                <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-primary tracking-wider">
+                      Plano Vinculado
+                    </span>
+                    <div className="text-xs font-black text-foreground">
+                      {currentBookingPackage.packageName}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-black text-primary">
+                      {currentBookingPackage.bookableSessionsCount} disponível{currentBookingPackage.bookableSessionsCount > 1 ? "is" : ""}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">para agendamento</div>
+                  </div>
+                </div>
+
+                {/* 2. CARROSSEL HORIZONTAL DE DATAS */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Escolha a Data:</label>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                    {datePills.map((d) => (
+                      <button
+                        key={d.dateStr}
+                        onClick={() => {
+                          setBookingDate(d.dateStr)
+                          setBookingTargetSlot(null)
+                        }}
+                        className={`px-3 py-2 rounded-2xl flex flex-col items-center justify-center shrink-0 border transition-all text-xs ${
+                          bookingDate === d.dateStr
+                            ? "bg-primary text-primary-foreground border-primary font-bold shadow-md shadow-primary/25"
+                            : "bg-muted/20 border-border/70 text-muted-foreground hover:text-foreground font-medium"
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase">{d.weekday}</span>
+                        <span className="text-sm font-black mt-0.5">{d.dayMonth}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. HORÁRIOS COM VAGAS LIVRES */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground">
+                      Horários Disponíveis ({formatDateBR(bookingDate)}):
+                    </label>
+                  </div>
+
+                  {!availableSlotsBooking ? (
+                    <div className="p-4 rounded-2xl bg-muted/20 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                      <span>Buscando turmas e horários...</span>
+                    </div>
+                  ) : availableSlotsBooking.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-muted/20 text-center text-xs text-muted-foreground">
+                      Nenhum horário com vagas livres nesta data. Experimente selecionar outro dia no carrossel acima.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {availableSlotsBooking.map((slot: any) => {
+                        const isSelected = bookingTargetSlot?.scheduleId === slot.scheduleId
+                        const isEnrolled = slot.isAlreadyEnrolled
+
+                        return (
+                          <div
+                            key={slot.scheduleId}
+                            onClick={() => {
+                              if (!isEnrolled) setBookingTargetSlot(slot)
+                            }}
+                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
+                              isEnrolled
+                                ? "border-border/40 bg-muted/15 opacity-60 cursor-not-allowed"
+                                : isSelected
+                                ? "border-primary bg-primary/10 shadow-sm cursor-pointer"
+                                : "border-border/70 bg-card hover:border-primary/40 cursor-pointer"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                                  isEnrolled
+                                    ? "border-muted-foreground bg-muted"
+                                    : isSelected
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-muted-foreground"
+                                }`}
+                              >
+                                {isSelected && <Check className="h-3 w-3" />}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-foreground">
+                                  {slot.startTime} às {slot.endTime} • {slot.title}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {slot.professionalName} • {slot.roomName}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              {isEnrolled ? (
+                                <Badge variant="secondary" className="text-[9px] font-bold text-muted-foreground">
+                                  Já inscrito
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {slot.vacanciesLeft} vaga(s)
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. OBSERVAÇÕES (OPCIONAL) */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-foreground">
+                    Observação para a clínica (opcional):
+                  </label>
+                  <input
+                    type="text"
+                    value={bookingNotes}
+                    onChange={(e) => setBookingNotes(e.target.value)}
+                    placeholder="Ex: Primeira aula após viagem, desconforto no ombro..."
+                    className="w-full px-3 py-2.5 rounded-xl border border-border/80 bg-muted/20 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+
+                {/* BOTÕES DE AÇÃO */}
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsBookingModalOpen(false)
+                      setBookingTargetSlot(null)
+                      setBookingNotes("")
+                    }}
+                    className="h-11 rounded-2xl text-xs font-bold"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!bookingTargetSlot || isBookingSubmitting}
+                    onClick={handleConfirmNewBooking}
+                    className="h-11 rounded-2xl text-xs font-bold shadow-md shadow-primary/25 bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {isBookingSubmitting ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        <span>Agendando...</span>
+                      </>
+                    ) : (
+                      "Confirmar Agendamento"
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

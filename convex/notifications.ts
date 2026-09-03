@@ -835,6 +835,33 @@ export const testResendConnectionAction = action({
   },
 })
 
+export const sendScheduleConfirmationAction = action({
+  args: {
+    patientName: v.string(),
+    phone: v.string(),
+    serviceName: v.string(),
+    professionalName: v.string(),
+    date: v.string(),
+    startTime: v.string(),
+    endTime: v.string(),
+    roomName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
+    const clinicName = settings?.clinicName || "Altar Fisio"
+    const noticeHours = settings?.cancellationNoticeHours || 2
+
+    const message = `Olá, *${args.patientName}*! 🎉\n\nSua aula/sessão foi agendada com sucesso pelo *Portal do Aluno* na *${clinicName}*:\n\n📌 *Atividade:* ${args.serviceName}\n📅 *Data:* ${args.date}\n⏰ *Horário:* ${args.startTime} às ${args.endTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
+
+    return await sendWhatsAppDirectHelper(ctx, {
+      recipientName: args.patientName,
+      phone: args.phone,
+      message,
+      triggerType: "confirmacao_agendamento_portal",
+    })
+  },
+})
+
 // ============================================================================
 // MUTATIONS PÚBLICAS PARA COMPATIBILIDADE COM O FRONTEND EXISTENTE
 // ============================================================================

@@ -163,6 +163,8 @@ export const getPatientPortalData = query({
       const item = {
         participantId: part._id,
         scheduleId: schedule._id,
+        patientPackageId: part.patientPackageId,
+        replacementCreditId: part.replacementCreditId,
         title: schedule.title,
         specialty: schedule.specialty,
         type: schedule.type,
@@ -214,6 +216,32 @@ export const getPatientPortalData = query({
     const enrichedPackages = await Promise.all(
       rawPackages.map(async (pkg) => {
         const pkgDef = await ctx.db.get(pkg.packageId)
+        let specialty: "pilates" | "fisioterapia" | "rpg" = "pilates"
+        let serviceName = "Pilates"
+        if (pkgDef?.serviceId) {
+          const service = await ctx.db.get(pkgDef.serviceId)
+          if (service?.specialty) specialty = service.specialty
+          if (service?.name) serviceName = service.name
+        } else {
+          const nameLower = (pkgDef?.name || "").toLowerCase()
+          if (nameLower.includes("fisio")) specialty = "fisioterapia"
+          else if (nameLower.includes("rpg")) specialty = "rpg"
+        }
+
+        const isExpired = pkg.status !== "active" || pkg.expiryDate < todayStr
+        const actualStatus = isExpired ? "expired" : pkg.status
+
+        // Quantidade de aulas futuras já agendadas consumindo este pacote
+        const bookedFutureSessionsCount = upcomingList.filter(
+          (u) => u.patientPackageId === pkg._id
+        ).length
+
+        // Saldo real livre para novos agendamentos no futuro
+        const bookableSessionsCount = Math.max(
+          0,
+          pkg.remainingSessions - bookedFutureSessionsCount
+        )
+
         const usagePercentage =
           pkg.totalSessions > 0
             ? Math.round((pkg.usedSessions / pkg.totalSessions) * 100)
@@ -221,10 +249,16 @@ export const getPatientPortalData = query({
 
         return {
           ...pkg,
+          status: actualStatus,
           packageName: pkgDef?.name || "Plano Altar Fisio",
           packagePrice: pkgDef?.price,
+          serviceName,
+          specialty,
           usagePercentage,
+          bookedFutureSessionsCount,
+          bookableSessionsCount,
           isLowBalance: pkg.remainingSessions <= 2,
+          canBook: actualStatus === "active" && bookableSessionsCount > 0,
         }
       })
     )
@@ -499,18 +533,20 @@ export const useReplacementCreditToBook = mutation({
   },
 })
 
-// 6. Listagem de Vagas Livres para Remarcacao e Reposicao
+// 6. Listagem de Vagas Livres para Agendamento, Remarcacao e Reposicao
 export const listAvailableSlotsForBooking = query({
   args: {
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
     startDate: v.string(), // YYYY-MM-DD
     daysCount: v.optional(v.number()), // Padrao: 14 dias
+    patientId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const days = args.daysCount || 14
     const result: any[] = []
 
     const startObj = new Date(`${args.startDate}T12:00:00Z`)
+    const normPatientId = args.patientId ? ctx.db.normalizeId("patients", args.patientId) : null
 
     for (let i = 0; i < days; i++) {
       const d = new Date(startObj)
@@ -535,16 +571,25 @@ export const listAvailableSlotsForBooking = query({
           .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
           .collect()
 
-        const activeCount = parts.filter((p) => p.status !== "justified_absence").length
+        const activeParts = parts.filter(
+          (p) => p.status !== "justified_absence" && p.status !== "absence"
+        )
+        const activeCount = activeParts.length
         const vacancies = Math.max(0, s.maxCapacity - activeCount)
 
-        if (vacancies > 0) {
+        const isAlreadyEnrolled = normPatientId
+          ? activeParts.some((p) => p.patientId === normPatientId)
+          : false
+
+        if (vacancies > 0 || isAlreadyEnrolled) {
           const room = await ctx.db.get(s.roomId)
           const prof = await ctx.db.get(s.professionalId)
 
           result.push({
             scheduleId: s._id,
             title: s.title,
+            specialty: s.specialty,
+            type: s.type,
             date: s.date,
             startTime: s.startTime,
             endTime: s.endTime,
@@ -552,6 +597,7 @@ export const listAvailableSlotsForBooking = query({
             professionalName: prof?.name || "Profissional",
             vacanciesLeft: vacancies,
             maxCapacity: s.maxCapacity,
+            isAlreadyEnrolled,
           })
         }
       }
@@ -615,6 +661,13 @@ export const ensurePatientDemoSchedules = mutation({
     if (d2.getDay() === 0) d2.setDate(d2.getDate() + 1)
     const date2Str = d2.toISOString().split("T")[0]
 
+    // Se o paciente tiver pacote ativo, vincula nas sessoes de demonstracao
+    const activePkg = await ctx.db
+      .query("patientPackages")
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first()
+
     // Criar Sessao 1 (Amanha 09:00 - Pilates)
     const sch1 = await ctx.db.insert("schedules", {
       title: "Pilates Aparelhos - Manha",
@@ -633,6 +686,7 @@ export const ensurePatientDemoSchedules = mutation({
       scheduleId: sch1,
       patientId: normPatientId,
       status: "scheduled",
+      patientPackageId: activePkg?._id,
     })
 
     // Criar Sessao 2 (Daqui a 3 dias 16:00 - Pilates)
@@ -653,9 +707,10 @@ export const ensurePatientDemoSchedules = mutation({
       scheduleId: sch2,
       patientId: normPatientId,
       status: "scheduled",
+      patientPackageId: activePkg?._id,
     })
 
-    // Criar Horarios Alternativos com Vagas Livres para Remarcacao
+    // Criar Horarios Alternativos com Vagas Livres para Agendamento e Remarcacao
     const dAlt = new Date()
     dAlt.setDate(dAlt.getDate() + 2)
     if (dAlt.getDay() === 0) dAlt.setDate(dAlt.getDate() + 1)
@@ -710,6 +765,159 @@ export const ensurePatientDemoSchedules = mutation({
     return {
       success: true,
       message: "Horarios de demonstracao e creditos gerados com sucesso para o paciente!",
+    }
+  },
+})
+
+// 8. Novo Agendamento pelo Aluno (Consumindo Saldo do Pacote Ativo com Smart Allocation)
+export const bookAppointmentFromPortal = mutation({
+  args: {
+    patientId: v.string(),
+    patientPackageId: v.string(),
+    scheduleId: v.string(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) throw new Error("Paciente não encontrado.")
+
+    const normPackageId = ctx.db.normalizeId("patientPackages", args.patientPackageId)
+    if (!normPackageId) throw new Error("Plano/Pacote não encontrado.")
+
+    const normScheduleId = ctx.db.normalizeId("schedules", args.scheduleId)
+    if (!normScheduleId) throw new Error("Horário de aula não encontrado.")
+
+    const patient = await ctx.db.get(normPatientId)
+    if (!patient) throw new Error("Paciente não encontrado.")
+
+    const pkg = await ctx.db.get(normPackageId)
+    if (!pkg) throw new Error("Plano/Pacote não encontrado.")
+    if (pkg.patientId !== normPatientId) throw new Error("Este plano pertence a outro aluno.")
+
+    const todayStr = new Date().toISOString().split("T")[0]
+    if (pkg.status !== "active" || pkg.expiryDate < todayStr) {
+      throw new Error("Este plano está inativo ou expirado. Renove seu pacote na recepção.")
+    }
+
+    if (pkg.remainingSessions <= 0) {
+      throw new Error("Você não possui saldo restante de sessões neste plano.")
+    }
+
+    // 1. Validar Smart Allocation (sessões futuras já agendadas com este pacote)
+    const participations = await ctx.db
+      .query("scheduleParticipants")
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
+      .collect()
+
+    const futureBookings: any[] = []
+    for (const part of participations) {
+      if (
+        part.patientPackageId === normPackageId &&
+        part.status !== "justified_absence" &&
+        part.status !== "absence"
+      ) {
+        const sch = await ctx.db.get(part.scheduleId)
+        if (sch && sch.status !== "cancelled" && sch.date >= todayStr) {
+          futureBookings.push(part)
+        }
+      }
+    }
+
+    if (futureBookings.length >= pkg.remainingSessions) {
+      throw new Error(
+        `Você já possui ${futureBookings.length} aula(s) futura(s) agendada(s) para este plano, atingindo seu saldo de ${pkg.remainingSessions} sessão(ões) disponível(is).`
+      )
+    }
+
+    // 2. Validar horário da aula
+    const schedule = await ctx.db.get(normScheduleId)
+    if (!schedule || schedule.status === "cancelled") {
+      throw new Error("Esta aula não está disponível para agendamento.")
+    }
+
+    if (schedule.date < todayStr) {
+      throw new Error("Não é possível agendar aulas em datas passadas.")
+    }
+
+    // 3. Validar se o paciente já está matriculado nesta aula
+    const scheduleParts = await ctx.db
+      .query("scheduleParticipants")
+      .withIndex("by_schedule", (q) => q.eq("scheduleId", normScheduleId))
+      .collect()
+
+    const alreadyEnrolled = scheduleParts.some(
+      (p) => p.patientId === normPatientId && p.status !== "justified_absence" && p.status !== "absence"
+    )
+    if (alreadyEnrolled) {
+      throw new Error("Você já está matriculado(a) neste horário!")
+    }
+
+    // 4. Validar capacidade da turma
+    const activeParticipants = scheduleParts.filter(
+      (p) => p.status !== "justified_absence" && p.status !== "absence"
+    )
+    if (activeParticipants.length >= schedule.maxCapacity) {
+      throw new Error("Este horário acabou de preencher todas as vagas disponíveis!")
+    }
+
+    // 5. Validar anti-conflito de horário do paciente no mesmo dia
+    for (const p of participations) {
+      if (p.status === "justified_absence" || p.status === "absence") continue
+      const s = await ctx.db.get(p.scheduleId)
+      if (!s || s.status === "cancelled" || s.date !== schedule.date) continue
+
+      if (checkTimeOverlap(s.startTime, s.endTime, schedule.startTime, schedule.endTime)) {
+        throw new Error(
+          `Você já possui um atendimento conflitante das ${s.startTime} às ${s.endTime} no dia ${schedule.date}.`
+        )
+      }
+    }
+
+    // 6. Inserir participante na turma
+    const participantId = await ctx.db.insert("scheduleParticipants", {
+      scheduleId: normScheduleId,
+      patientId: normPatientId,
+      status: "scheduled",
+      patientPackageId: normPackageId,
+      notes: args.notes || "Agendado pelo próprio aluno no Portal",
+    })
+
+    // 7. Notificações
+    const room = await ctx.db.get(schedule.roomId)
+    const prof = await ctx.db.get(schedule.professionalId)
+
+    // Log interno para recepção
+    await ctx.db.insert("notificationLogs", {
+      channel: "whatsapp_uazapi",
+      recipientName: "Recepção Altar Fisio",
+      recipientContact: patient.phone || "Portal Aluno",
+      triggerType: "agendamento_portal_aluno",
+      content: `O aluno ${patient.name} agendou ${schedule.title} para ${schedule.date} às ${schedule.startTime} via Portal do Aluno.`,
+      status: "sent",
+      timestamp: Date.now(),
+    })
+
+    // Disparo de confirmação WhatsApp para o aluno
+    if (patient.phone) {
+      await ctx.scheduler.runAfter(0, api.notifications.sendScheduleConfirmationAction, {
+        patientName: patient.name,
+        phone: patient.phone,
+        serviceName: schedule.title,
+        professionalName: prof?.name || "Instrutor(a)",
+        date: schedule.date,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        roomName: room?.name || "Sala Clínica",
+      })
+    }
+
+    return {
+      success: true,
+      participantId,
+      date: schedule.date,
+      startTime: schedule.startTime,
+      title: schedule.title,
+      message: `Aula agendada com sucesso para ${schedule.date} às ${schedule.startTime}!`,
     }
   },
 })
