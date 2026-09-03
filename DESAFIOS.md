@@ -145,3 +145,15 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   1. Em tabelas com grande crescimento temporal (`schedules`, `financialTransactions`, `notificationLogs`), indexar por data (`by_dueDate`, `by_date`) e utilizar range queries (`.gte("dueDate", start).lte("dueDate", end)`) com `.take(limit)` para carregar estritamente o mês em visualização.
   2. Em consultas agregadas como prontuários (`listAllClinicalOverview`), buscar apenas a última evolução (`.order("desc").first()`) e limitar contagens amostrais, evitando baixar parágrafos SOAP de todas as sessões anteriores.
   3. Registrar rotina diária de manutenção (`convex/maintenance.ts` em `convex/crons.ts`) para purgar sessões expiradas, expurgar logs com mais de 60 dias e marcar créditos vencidos, além de deletar arquivos do `ctx.storage` quando fotos forem substituídas ou prontuários/pacientes forem excluídos.
+
+---
+
+### [2026-09-02] Vercel CLI Global Config no Windows em Execuções Automatizadas
+- **Ponto de Fricção**: Em ambientes Windows automatizados, executar comandos `vercel` sem apontar a pasta de configuração global pode travar o terminal em prompt interativo de login, mesmo com o usuário já autenticado anteriormente.
+- **Mitigação / Regra**: O Vercel CLI no Windows grava as credenciais em `$env:APPDATA\com.vercel.cli\Data\auth.json`. Passar o parâmetro `-Q "$env:APPDATA\com.vercel.cli\Data"` reaproveita a sessão ativa e executa comandos como `vercel --prod`, `vercel env ls` e `vercel alias` sem intervenção manual.
+
+---
+
+### [2026-09-02] Regeneração de Tipos Convex (npx convex codegen) Pré-Build
+- **Ponto de Fricção**: Ao modificar tabelas ou campos em `convex/schema.ts`, executar diretamente `npm run build` (`tsc -b`) falha com `error TS2353: Object literal may only specify known properties` porque o arquivo `convex/_generated/dataModel.d.ts` ainda contém as tipagens antigas em cache.
+- **Mitigação / Regra**: Sempre executar `npx convex codegen` antes de builds de produção ou typechecks após alterações estruturais de schema. O codegen sincroniza os tipos estáticos instantaneamente.
