@@ -872,12 +872,12 @@ export const PublicBookingPage: React.FC = () => {
                             <div className="font-extrabold text-sm sm:text-base text-foreground tracking-tight">
                               {spec.label}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            <div className="text-xs text-muted-foreground mt-1 font-medium">
                               {spec.desc}
                             </div>
                           </div>
 
-                          <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between">
+                          <div className="mt-3.5 pt-2.5 border-t border-border/50 flex items-center justify-between">
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                                 isSelected
@@ -946,7 +946,7 @@ export const PublicBookingPage: React.FC = () => {
                           }`}
                         >
                           {/* Tag Especial (Hoje / Amanhã / Ícone de Dia) */}
-                          <div className="w-full flex items-center justify-center mb-1">
+                          <div className="w-full flex items-center justify-center mb-1.5">
                             {item.isToday ? (
                               <span
                                 className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full flex items-center gap-1 ${
@@ -981,7 +981,7 @@ export const PublicBookingPage: React.FC = () => {
 
                           {/* Número do Dia com Tipografia de Destaque */}
                           <span
-                            className={`text-2xl font-black tracking-tight leading-none my-1 ${
+                            className={`text-2xl font-black tracking-tight leading-none my-1.5 ${
                               isSelected ? "text-white" : "text-foreground"
                             }`}
                           >
@@ -989,7 +989,7 @@ export const PublicBookingPage: React.FC = () => {
                           </span>
 
                           {/* Mês e Micro Indicador */}
-                          <div className="w-full flex items-center justify-center gap-1 mt-0.5">
+                          <div className="w-full flex items-center justify-center gap-1 mt-1">
                             <span
                               className={`text-[10px] font-bold uppercase tracking-wider ${
                                 isSelected ? "text-white/90" : "text-muted-foreground"
@@ -1011,13 +1011,13 @@ export const PublicBookingPage: React.FC = () => {
 
                 {/* 3. HORÁRIOS DISPONÍVEIS COM FILTROS DE TURNO & CARDS LUXUOSOS */}
                 <div className="space-y-4 pt-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/60 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60 pb-3.5">
                     <div>
                       <label className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5 text-primary" />
                         <span>3. Horários Disponíveis</span>
                       </label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-1.5">
                         Para <strong className="text-foreground">{formatDateBR(selectedDate)}</strong> • Sessões com 55 minutos de duração
                       </p>
                     </div>
@@ -1027,52 +1027,52 @@ export const PublicBookingPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setSelectedPeriodFilter("all")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                           selectedPeriodFilter === "all"
                             ? "bg-card text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <Clock className="h-3 w-3 text-primary" />
+                        <Clock className="h-3.5 w-3.5 text-primary" />
                         <span>Todos ({slotCounts.all})</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setSelectedPeriodFilter("morning")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                           selectedPeriodFilter === "morning"
                             ? "bg-card text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <Sunrise className="h-3 w-3 text-amber-500" />
+                        <Sunrise className="h-3.5 w-3.5 text-amber-500" />
                         <span>Manhã</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setSelectedPeriodFilter("afternoon")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                           selectedPeriodFilter === "afternoon"
                             ? "bg-card text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <Sun className="h-3 w-3 text-amber-600" />
+                        <Sun className="h-3.5 w-3.5 text-amber-600" />
                         <span>Tarde</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setSelectedPeriodFilter("evening")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                           selectedPeriodFilter === "evening"
                             ? "bg-card text-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <Moon className="h-3 w-3 text-indigo-400" />
+                        <Moon className="h-3.5 w-3.5 text-indigo-400" />
                         <span>Noite</span>
                       </button>
                     </div>
@@ -1105,7 +1105,7 @@ export const PublicBookingPage: React.FC = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
                       {filteredSlots.map((slot) => {
                         const isSelected = selectedSlot?.startTime === slot.startTime
                         const firstRoom = slot.rooms[0]
@@ -1142,7 +1142,7 @@ export const PublicBookingPage: React.FC = () => {
                                 })
                               }
                             }}
-                            className={`group p-4 rounded-2xl border text-left transition-all duration-200 relative flex flex-col justify-between min-h-[96px] ${
+                            className={`group p-4 rounded-2xl border text-left transition-all duration-200 relative flex flex-col justify-between min-h-[104px] ${
                               !slot.isAvailable
                                 ? "opacity-35 bg-muted/20 border-dashed cursor-not-allowed"
                                 : isSelected
@@ -1151,10 +1151,10 @@ export const PublicBookingPage: React.FC = () => {
                             }`}
                           >
                             {/* Linha Superior: Ícone do Turno + Horário Principal + Badge de Vagas */}
-                            <div className="flex items-center justify-between w-full">
-                              <div className="flex items-center gap-2.5">
+                            <div className="flex items-center justify-between gap-3 w-full">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <div
-                                  className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all ${
+                                  className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
                                     isSelected
                                       ? "bg-white/20 text-white shadow-inner"
                                       : `${iconColorClass} group-hover:scale-105`
@@ -1163,17 +1163,17 @@ export const PublicBookingPage: React.FC = () => {
                                   <PeriodIcon className="h-4 w-4" />
                                 </div>
 
-                                <div>
+                                <div className="flex flex-col min-w-0">
                                   <span
-                                    className={`text-lg sm:text-xl font-black tracking-tight leading-none block ${
+                                    className={`text-lg sm:text-xl font-black tracking-tight leading-tight block ${
                                       isSelected ? "text-white" : "text-foreground"
                                     }`}
                                   >
                                     {slot.startTime}
                                   </span>
                                   <span
-                                    className={`text-[10px] font-medium leading-none block mt-0.5 ${
-                                      isSelected ? "text-white/80" : "text-muted-foreground"
+                                    className={`text-[11px] font-medium leading-tight block mt-1 ${
+                                      isSelected ? "text-white/85" : "text-muted-foreground"
                                     }`}
                                   >
                                     até {slot.endTime}
@@ -1182,39 +1182,45 @@ export const PublicBookingPage: React.FC = () => {
                               </div>
 
                               {/* Badge de Vagas ou Status Selecionado */}
-                              {isSelected ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-white text-primary px-2.5 py-1 rounded-full shadow-sm">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  Escolhido
-                                </span>
-                              ) : slot.totalAvailableSpots === 1 ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-300/60 dark:border-amber-700/60 px-2 py-0.5 rounded-full">
-                                  <Flame className="h-3 w-3 text-amber-500 animate-pulse" />
-                                  Última vaga
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-300/60 dark:border-emerald-700/60 px-2 py-0.5 rounded-full">
-                                  <Users className="h-3 w-3" />
-                                  {slot.totalAvailableSpots} vagas
-                                </span>
-                              )}
+                              <div className="shrink-0">
+                                {isSelected ? (
+                                  <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-wide uppercase bg-white text-emerald-800 dark:text-emerald-950 px-2.5 py-1 rounded-full shadow-sm">
+                                    <Check className="h-3 w-3 stroke-[3] text-emerald-700" />
+                                    <span>Escolhido</span>
+                                  </span>
+                                ) : slot.totalAvailableSpots === 1 ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-300/60 dark:border-amber-700/60 px-2 py-0.5 rounded-full">
+                                    <Flame className="h-3 w-3 text-amber-500 animate-pulse" />
+                                    1 vaga
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-700/60 px-2.5 py-0.5 rounded-full">
+                                    <Users className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>{slot.totalAvailableSpots} vagas</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Linha Inferior: Sala & Duração da Sessão */}
-                            <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px]">
+                            <div
+                              className={`mt-3.5 pt-2.5 border-t flex items-center justify-between gap-2 text-[11px] ${
+                                isSelected ? "border-white/20" : "border-border/60"
+                              }`}
+                            >
                               <div
-                                className={`flex items-center gap-1 truncate ${
+                                className={`flex items-center gap-1.5 truncate min-w-0 ${
                                   isSelected ? "text-white/90" : "text-muted-foreground"
                                 }`}
                               >
-                                <Layers className="h-3 w-3 shrink-0 opacity-75" />
+                                <Layers className="h-3.5 w-3.5 shrink-0 opacity-80" />
                                 <span className="truncate font-medium">
                                   {firstRoom?.roomName || "Studio Pilates Aparelhos"}
                                 </span>
                               </div>
 
                               <span
-                                className={`text-[10px] font-semibold shrink-0 ${
+                                className={`text-[10px] font-semibold shrink-0 tabular-nums ${
                                   isSelected ? "text-white/80" : "text-muted-foreground/80"
                                 }`}
                               >
@@ -1229,9 +1235,9 @@ export const PublicBookingPage: React.FC = () => {
 
                   {/* Banner de Horário Selecionado */}
                   {selectedSlot && (
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 via-emerald-500/5 to-card border border-primary/25 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20 shrink-0">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-emerald-500/5 to-card border border-primary/25 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                      <div className="flex items-center gap-3.5">
+                        <div className="h-11 w-11 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20 shrink-0">
                           <CheckCircle2 className="h-5 w-5" />
                         </div>
                         <div>
@@ -1241,9 +1247,9 @@ export const PublicBookingPage: React.FC = () => {
                               {selectedSpecialty}
                             </span>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="text-xs text-muted-foreground mt-1">
                             {formatDateWithWeekdayBR(selectedDate)} às{" "}
-                            <strong className="text-foreground">{selectedSlot.startTime}</strong> (
+                            <strong className="text-foreground font-semibold">{selectedSlot.startTime}</strong> (
                             {selectedSlot.roomName || "Studio Pilates"})
                           </div>
                         </div>
@@ -1252,7 +1258,7 @@ export const PublicBookingPage: React.FC = () => {
                       <Button
                         type="button"
                         onClick={handleNextStep}
-                        className="rounded-xl px-4 py-2 h-10 text-xs font-bold shadow-md shadow-primary/20 flex items-center gap-1.5 shrink-0 self-end sm:self-auto"
+                        className="rounded-xl px-5 py-2.5 h-10 sm:h-11 text-xs font-bold shadow-md shadow-primary/20 flex items-center gap-2 shrink-0 self-end sm:self-auto"
                       >
                         <span>Confirmar e Continuar</span>
                         <ChevronRight className="h-4 w-4" />

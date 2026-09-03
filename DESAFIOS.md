@@ -226,3 +226,13 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   1. Componentizar o alternador de visualização em `<ViewModeToggle>` (`src/components/ui/view-mode-toggle.tsx`) com ícones `LayoutGrid`/`List`, segmented control e rótulos responsivos (`hidden sm:inline`).
   2. Isolar o estado de layout por tela (ex: `overviewLayoutMode` em páginas com navegação própria) e memorizar preferências do usuário no `localStorage` sob chaves com prefixo específico (`altar_<modulo>_view_mode`).
   3. No Modo Lista, adotar design responsivo híbrido: em telas `>= 640px` (`hidden sm:block`), exibir tabela estruturada com cabeçalho limpo e colunas alinhadas; em telas `< 640px` (`sm:hidden`), renderizar cards condensados em linha (card-row) com separadores sutis, garantindo 100% de responsividade sem forçar rolagem lateral exaustiva no celular.
+
+---
+
+### [2026-09-03] Colisão de Elementos em Grades Responsivas, Micro-Tipografia e Respiro Visual em Cards de Horários
+- **Ponto de Fricção**: Em grades com 3 colunas ativadas precocemente no breakpoint `md` (768px a 1023px) ou com padding lateral amplo, a largura interna útil de cada card é restrita (~190px). O uso simultâneo de badges com texto inflado (`uppercase tracking-wider`), ausência de `gap` explícito entre containers `flex justify-between`, ícone do turno e dígitos do horário resulta em colisão física horizontal (texto colado ou encostando na badge). Além disso, o uso de `leading-none` combinado a `mt-0.5` causa colapso do respiro vertical entre a hora de início e o horário de término ("até HH:MM"), e linhas divisórias com cor estática (`border-border`) degradam o contraste quando renderizadas sobre gradientes com cor de fundo ativa (ex: card selecionado).
+- **Mitigação / Regra**:
+  1. **Escalonamento de Grade**: Em layouts de cards com conteúdo denso (ícone + horário + subtítulo + badge), reservar 3 colunas para `lg` (`lg:grid-cols-3`), mantendo 2 colunas em telas intermediárias (`sm:grid-cols-2`) e 1 coluna em mobile (`grid-cols-1`).
+  2. **Garantia de Gap Mínimo**: Em contêineres `flex justify-between`, sempre declarar um `gap-2.5` ou `gap-3` explícito com `min-w-0` no bloco textual e `shrink-0` nas badges/ícones, impedindo colisão sob qualquer largura.
+  3. **Respiro Vertical e Micro-Tipografia**: Utilizar `leading-tight` com `mt-1` a `mt-1.5` entre títulos e legendas (`text-[11px] font-medium`), e normalizar badges com padding equilibrado (`px-2.5 py-1 text-[10px] font-extrabold tracking-wide`) e ícones de 3x3 ou 3.5x3.5.
+  4. **Divisores Reativos ao Estado**: Em cards selecionados ou com fundo contrastante, aplicar bordas contextuais `${isSelected ? "border-white/20" : "border-border/60"}` para preservar elegância e nitidez.
