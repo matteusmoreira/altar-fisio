@@ -62,7 +62,7 @@ interface ClinicDataContextType {
   schedules: Schedule[]
   selectedDate: string
   setSelectedDate: (date: string) => void
-  addSchedule: (schedule: Omit<Schedule, "id" | "participants">) => Promise<void>
+  addSchedule: (schedule: Omit<Schedule, "id" | "participants">) => Promise<string>
   updateSchedule: (id: string, data: Partial<Schedule>) => Promise<void>
   deleteSchedule: (id: string, deleteSeries?: boolean) => Promise<void>
   removeParticipantFromSchedule: (scheduleId: string, participantRecordId: string) => Promise<void>
@@ -1273,7 +1273,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }
 
 
-  const addSchedule = async (scheduleData: Omit<Schedule, "id" | "participants">) => {
+  const addSchedule = async (scheduleData: Omit<Schedule, "id" | "participants">): Promise<string> => {
     // Validação de conflito e persistência via Convex
     try {
       const scheduleId = await createScheduleMutation({
@@ -1295,17 +1295,20 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         participants: [],
       }
       setSchedules((prev) => [...prev, newSchedule])
+      return scheduleId
     } catch (err: any) {
       if (err?.message) {
         throw err
       }
       // Fallback local se estiver offline
+      const fallbackId = `sch_${Date.now()}`
       const newSchedule: Schedule = {
         ...scheduleData,
-        id: `sch_${Date.now()}`,
+        id: fallbackId,
         participants: [],
       }
       setSchedules((prev) => [...prev, newSchedule])
+      return fallbackId
     }
   }
 

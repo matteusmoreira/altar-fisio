@@ -27,6 +27,7 @@ import {
   Clock,
   User,
   Plus,
+  UserPlus,
   ChevronLeft,
   ChevronRight,
   Send,
@@ -48,10 +49,12 @@ export const SchedulePage: React.FC = () => {
     rooms,
     professionals,
     patients,
+    replacementCredits,
     selectedDate,
     setSelectedDate,
     addSchedule,
     addRecurringScheduleSeries,
+    addParticipantToClass,
     checkIn,
     cancelWithReplacement,
     sendWhatsAppReminder,
@@ -89,6 +92,55 @@ export const SchedulePage: React.FC = () => {
   const [enrolledPatients, setEnrolledPatients] = useState<string[]>([])
   const [modalError, setModalError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Seleção de Paciente no Agendamento Único (Balcão / Presencial)
+  const [singlePatientId, setSinglePatientId] = useState("")
+  const [singleIsReplacement, setSingleIsReplacement] = useState(false)
+  const [singleCreditId, setSingleCreditId] = useState("")
+
+  // Modal de Encaixe / Agendamento Rápido em Horário Existente da Grade
+  const [enrollTarget, setEnrollTarget] = useState<Schedule | null>(null)
+  const [enrollPatientId, setEnrollPatientId] = useState("")
+  const [enrollIsReplacement, setEnrollIsReplacement] = useState(false)
+  const [enrollCreditId, setEnrollCreditId] = useState("")
+  const [enrollError, setEnrollError] = useState<string | null>(null)
+  const [isSubmittingEnroll, setIsSubmittingEnroll] = useState(false)
+
+  const handleOpenEnrollModal = (schedule: Schedule) => {
+    setEnrollTarget(schedule)
+    setEnrollPatientId(patients[0]?.id || "")
+    setEnrollIsReplacement(false)
+    setEnrollCreditId("")
+    setEnrollError(null)
+  }
+
+  const handleConfirmEnroll = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!enrollTarget || !enrollPatientId) {
+      setEnrollError("Selecione um paciente para agendar.")
+      return
+    }
+
+    setIsSubmittingEnroll(true)
+    setEnrollError(null)
+
+    try {
+      await addParticipantToClass(
+        enrollTarget.id,
+        enrollPatientId,
+        enrollIsReplacement,
+        enrollCreditId || undefined
+      )
+      const patient = patients.find((p) => p.id === enrollPatientId)
+      setFeedback(`Paciente ${patient?.name || ""} agendado com sucesso para às ${enrollTarget.startTime}!`)
+      setEnrollTarget(null)
+      setTimeout(() => setFeedback(null), 4000)
+    } catch (err: any) {
+      setEnrollError(err?.message || "Erro ao agendar paciente.")
+    } finally {
+      setIsSubmittingEnroll(false)
+    }
+  }
 
   // Modal de Desmarcação com Regra de Antecedência
   const [cancelTarget, setCancelTarget] = useState<{
@@ -139,8 +191,13 @@ export const SchedulePage: React.FC = () => {
 
     try {
       if (creationMode === "single") {
-        await addSchedule({
-          title: title || `${type === "turma" ? "Turma" : "Sessão"} de ${specialty.toUpperCase()}`,
+        const selectedPat = patients.find((p) => p.id === singlePatientId)
+        const defaultTitle = `${type === "turma" ? "Turma" : "Atendimento"} de ${specialty.toUpperCase()}${
+          selectedPat ? ` - ${selectedPat.name}` : ""
+        }`
+
+        const createdScheduleId = await addSchedule({
+          title: title || defaultTitle,
           type,
           specialty,
           roomId,
@@ -155,7 +212,18 @@ export const SchedulePage: React.FC = () => {
           maxCapacity: type === "turma" ? room.capacity : 1,
           status: "scheduled",
         })
-        setFeedback("Horário adicionado à agenda com sucesso!")
+
+        if (singlePatientId) {
+          await addParticipantToClass(
+            createdScheduleId,
+            singlePatientId,
+            singleIsReplacement,
+            singleCreditId || undefined
+          )
+          setFeedback(`Horário agendado com sucesso para ${selectedPat?.name || "o paciente"}!`)
+        } else {
+          setFeedback("Horário adicionado à agenda com sucesso!")
+        }
       } else {
         if (daysOfWeek.length === 0) {
           setModalError("Selecione ao menos um dia da semana para a turma recorrente.")
@@ -187,6 +255,9 @@ export const SchedulePage: React.FC = () => {
 
       setIsNewModalOpen(false)
       setTitle("")
+      setSinglePatientId("")
+      setSingleIsReplacement(false)
+      setSingleCreditId("")
       setEnrolledPatients([])
       setModalError(null)
       setTimeout(() => setFeedback(null), 4000)
@@ -448,9 +519,21 @@ export const SchedulePage: React.FC = () => {
                           Lotada ({occupied}/{schedule.maxCapacity})
                         </Badge>
                       ) : (
-                        <Badge variant="success" className="text-[10px]">
-                          {schedule.maxCapacity - occupied} vaga(s) ({occupied}/{schedule.maxCapacity})
-                        </Badge>
+                        <>
+                          <Badge variant="success" className="text-[10px]">
+                            {schedule.maxCapacity - occupied} vaga(s) ({occupied}/{schedule.maxCapacity})
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenEnrollModal(schedule)}
+                            className="h-6 text-[10px] px-2 gap-1 text-primary border-primary/30 hover:bg-primary/5 rounded-lg font-semibold shadow-2xs"
+                            title="Agendar / Encaixar paciente neste horário"
+                          >
+                            <UserPlus className="h-3 w-3" />
+                            <span>+ Encaixar</span>
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -458,8 +541,17 @@ export const SchedulePage: React.FC = () => {
                   {/* Lista de Alunos / Pacientes */}
                   <div className="p-3.5 divide-y divide-border/60">
                     {schedule.participants.length === 0 ? (
-                      <div className="py-4 text-center text-xs text-muted-foreground">
-                        Nenhum paciente agendado neste horário.
+                      <div className="py-5 text-center flex flex-col items-center justify-center gap-2">
+                        <p className="text-xs text-muted-foreground">Nenhum paciente agendado neste horário.</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEnrollModal(schedule)}
+                          className="h-7 text-xs px-2.5 gap-1.5 text-primary border-primary/30 hover:bg-primary/5 rounded-xl font-semibold shadow-2xs"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          <span>Agendar Paciente</span>
+                        </Button>
                       </div>
                     ) : (
                       schedule.participants.map((p) => {
@@ -625,9 +717,21 @@ export const SchedulePage: React.FC = () => {
                         Lotada
                       </Badge>
                     ) : (
-                      <Badge variant="success" className="text-[10px]">
-                        {schedule.maxCapacity - occupied} vaga(s)
-                      </Badge>
+                      <>
+                        <Badge variant="success" className="text-[10px]">
+                          {schedule.maxCapacity - occupied} vaga(s)
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEnrollModal(schedule)}
+                          className="h-7 text-xs px-2.5 gap-1.5 text-primary border-primary/30 hover:bg-primary/5 rounded-xl font-semibold shadow-2xs"
+                          title="Agendar / Encaixar paciente neste horário"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          <span>+ Encaixar Paciente</span>
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -635,8 +739,17 @@ export const SchedulePage: React.FC = () => {
                 {/* Lista de Alunos / Pacientes */}
                 <div className="p-4 divide-y divide-border/60">
                   {schedule.participants.length === 0 ? (
-                    <div className="py-3 text-center text-xs text-muted-foreground">
-                      Nenhum paciente agendado neste horário.
+                    <div className="py-4 text-center flex flex-col sm:flex-row items-center justify-center gap-3 bg-muted/20 rounded-xl border border-dashed border-border/70 my-1">
+                      <span className="text-xs text-muted-foreground">Nenhum paciente agendado neste horário.</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenEnrollModal(schedule)}
+                        className="h-7 text-xs px-2.5 gap-1.5 text-primary border-primary/30 hover:bg-primary/5 rounded-xl font-semibold shadow-2xs"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>Agendar Paciente</span>
+                      </Button>
                     </div>
                   ) : (
                     schedule.participants.map((p) => {
@@ -920,6 +1033,88 @@ export const SchedulePage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Seção de Paciente no Agendamento Único (Balcão / Presencial) */}
+              {creationMode === "single" && (
+                <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground flex items-center gap-1.5 text-xs">
+                      <User className="h-3.5 w-3.5 text-primary" />
+                      Vincular Paciente / Aluno
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {singlePatientId ? "Paciente selecionado" : "Opcional (ou selecione para agendamento direto)"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <Select
+                      value={singlePatientId}
+                      onChange={(e) => {
+                        const pId = e.target.value
+                        setSinglePatientId(pId)
+                        setSingleIsReplacement(false)
+                        setSingleCreditId("")
+                        if (pId && (!title || title.startsWith("Sessão") || title.startsWith("Atendimento") || title.startsWith("Turma"))) {
+                          const p = patients.find((pat) => pat.id === pId)
+                          if (p) {
+                            setTitle(`${type === "turma" ? "Turma" : "Atendimento"} - ${p.name}`)
+                          }
+                        }
+                      }}
+                    >
+                      <option value="">Nenhum aluno vinculado (abrir horário na grade)...</option>
+                      {patients.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.documentCpf ? `• CPF: ${p.documentCpf}` : ""} {p.phone ? `• (${p.phone})` : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {singlePatientId && (() => {
+                    const patientCredits = replacementCredits.filter(
+                      (c) => c.patientId === singlePatientId && c.status === "available"
+                    )
+                    if (patientCredits.length === 0) return null
+
+                    return (
+                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer font-medium text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={singleIsReplacement}
+                            onChange={(e) => {
+                              setSingleIsReplacement(e.target.checked)
+                              if (e.target.checked && !singleCreditId && patientCredits.length > 0) {
+                                setSingleCreditId(patientCredits[0].id)
+                              }
+                            }}
+                            className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                          />
+                          <span className="text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
+                            Utilizar crédito de reposição ({patientCredits.length} disponível{patientCredits.length > 1 ? "is" : ""})
+                          </span>
+                        </label>
+
+                        {singleIsReplacement && (
+                          <Select
+                            value={singleCreditId}
+                            onChange={(e) => setSingleCreditId(e.target.value)}
+                            className="text-xs h-8"
+                          >
+                            {patientCredits.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                Reposição de {formatDateBR(c.originDate)} (Expira: {formatDateBR(c.expiryDate)})
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
               {/* Seção Exclusiva para Turmas Recorrentes */}
               {creationMode === "recurring" && (
                 <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3 mt-2">
@@ -1148,6 +1343,144 @@ export const SchedulePage: React.FC = () => {
               </div>
             )
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Encaixe / Agendamento Rápido em Horário Existente */}
+      <Dialog
+        open={!!enrollTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEnrollTarget(null)
+            setEnrollError(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {enrollTarget && (
+            <form onSubmit={handleConfirmEnroll}>
+              <DialogHeader className="space-y-1">
+                <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <UserPlus className="h-5 w-5 text-primary" />
+                  <span>Agendar / Encaixar Paciente</span>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Insira o paciente nesta sessão de forma manual e imediata.
+                </DialogDescription>
+              </DialogHeader>
+
+              {enrollError && (
+                <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-fade-in">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span className="font-medium">{enrollError}</span>
+                </div>
+              )}
+
+              <div className="py-4 space-y-3.5 text-xs">
+                {/* Card com Detalhes do Horário */}
+                <div className="p-3 rounded-xl bg-muted/40 border border-border space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground text-sm">
+                      {enrollTarget.title}
+                    </span>
+                    <Badge variant={enrollTarget.type === "turma" ? "purple" : "info"} className="text-[10px]">
+                      {enrollTarget.type === "turma" ? "Turma" : "Individual"}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-[11px] pt-1">
+                    <span>📅 {formatDateBR(enrollTarget.date)}</span>
+                    <span>⏰ {enrollTarget.startTime} - {enrollTarget.endTime}</span>
+                    <span>📍 {enrollTarget.roomName}</span>
+                    <span>👤 {enrollTarget.professionalName}</span>
+                  </div>
+                </div>
+
+                {/* Selecionar Paciente */}
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">
+                    Paciente / Aluno *
+                  </label>
+                  <Select
+                    value={enrollPatientId}
+                    onChange={(e) => {
+                      setEnrollPatientId(e.target.value)
+                      setEnrollIsReplacement(false)
+                      setEnrollCreditId("")
+                    }}
+                  >
+                    <option value="">Selecione o paciente...</option>
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.documentCpf ? `(${p.documentCpf})` : ""} {p.phone ? `• ${p.phone}` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* Créditos de Reposição se houver */}
+                {enrollPatientId && (() => {
+                  const patientCredits = replacementCredits.filter(
+                    (c) => c.patientId === enrollPatientId && c.status === "available"
+                  )
+                  if (patientCredits.length === 0) return null
+
+                  return (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer font-medium text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={enrollIsReplacement}
+                          onChange={(e) => {
+                            setEnrollIsReplacement(e.target.checked)
+                            if (e.target.checked && !enrollCreditId && patientCredits.length > 0) {
+                              setEnrollCreditId(patientCredits[0].id)
+                            }
+                          }}
+                          className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span className="text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
+                          Utilizar crédito de reposição disponível ({patientCredits.length})
+                        </span>
+                      </label>
+
+                      {enrollIsReplacement && (
+                        <Select
+                          value={enrollCreditId}
+                          onChange={(e) => setEnrollCreditId(e.target.value)}
+                          className="text-xs h-8"
+                        >
+                          {patientCredits.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              Reposição de {formatDateBR(c.originDate)} (Validade: {formatDateBR(c.expiryDate)})
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEnrollTarget(null)}
+                  disabled={isSubmittingEnroll}
+                  className="h-9 px-4 text-xs font-semibold rounded-xl"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingEnroll || !enrollPatientId}
+                  className="h-9 px-5 text-xs font-semibold rounded-xl shadow-xs"
+                >
+                  {isSubmittingEnroll ? "Agendando..." : "Confirmar Agendamento"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
