@@ -112,3 +112,15 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   1. Em contêineres de preview de documentos, aplicar sempre `items-start` no container flex e `h-fit` no elemento da folha (`#printable-document`), garantindo que o cartão branco acompanhe 100% da extensão do texto sem truncamento.
   2. Adicionar `pr-10` no cabeçalho do `DialogHeader` para garantir espaço livre de segurança contra sobreposição do botão "X".
   3. Adicionar `@media print` no CSS global com `body * { visibility: hidden; } #printable-document, #printable-document * { visibility: visible; }` e posicionamento absoluto no topo com margens A4 para exportação de PDFs vetoriais impecáveis.
+
+---
+
+### [2026-09-02] Token de Autenticação na CLI do Convex em Ambientes Automatizados
+- **Ponto de Fricção**: A CLI oficial do Convex não utiliza `CONVEX_ACCESS_TOKEN` para Personal Access Tokens em execuções de terminal ou CI. O uso dessa variável resulta em falha de permissão (`You don't have access to the selected project`).
+- **Mitigação / Regra**: A CLI do Convex espera a variável de ambiente `CONVEX_OVERRIDE_ACCESS_TOKEN` para tokens de acesso pessoal da plataforma. Com ela definida e `CONVEX_DEPLOYMENT="prod:<deployment-name>"`, comandos como `npx convex deploy`, `npx convex run` e queries remotas funcionam de forma não-interativa e estável.
+
+---
+
+### [2026-09-02] Roteamento SPA e Rewrites no Vercel CLI com Vite
+- **Ponto de Fricção**: A presença de `"version": 2` e `"cleanUrls": true` com `destination: "/index.html"` no `vercel.json` faz a CDN da Vercel retornar 404 NOT_FOUND em rotas internas do Single Page Application acessadas diretamente (como `/agendamento` e `/login`).
+- **Mitigação / Regra**: Utilizar configuração moderna sem `version` nem `cleanUrls`, com a regra canônica de rewrites SPA: `[ { "source": "/(.*)", "destination": "/" } ]`. Isso delega qualquer rota dinâmica ao `index.html` do Vite com retorno HTTP 200 garantido.
