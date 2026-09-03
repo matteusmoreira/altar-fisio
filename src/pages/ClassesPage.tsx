@@ -993,6 +993,13 @@ export const ClassesPage: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ========================================================================= */}
+        {/* ABA 4: RELATÓRIO DE FREQUÊNCIA, CHECK-IN & FALTAS COM EXPORTAÇÃO XLS     */}
+        {/* ========================================================================= */}
+        <TabsContent value="relatorio" className="space-y-6">
+          <AttendanceReportView onBackToClasses={() => setActiveTab("turmas")} />
+        </TabsContent>
       </Tabs>
 
       {/* MODAIS */}
@@ -1573,6 +1580,32 @@ export const ClassesPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Registro de Falta */}
+      <AbsenceModal
+        isOpen={absenceModalTarget.isOpen}
+        onClose={() => setAbsenceModalTarget((prev) => ({ ...prev, isOpen: false }))}
+        studentName={absenceModalTarget.studentName}
+        studentPhone={absenceModalTarget.studentPhone}
+        classNameTitle={absenceModalTarget.classNameTitle}
+        initialNotes={absenceModalTarget.initialNotes}
+        initialDebitPackage={absenceModalTarget.initialDebitPackage ?? true}
+        onConfirm={async (notes, debitPackage) => {
+          const res = await checkIn(
+            absenceModalTarget.scheduleId,
+            absenceModalTarget.participantId,
+            "absence",
+            {
+              notes,
+              debitPackageOnAbsence: debitPackage,
+            }
+          )
+          if (res?.message) {
+            setFeedback(res.message)
+            setTimeout(() => setFeedback(null), 4000)
+          }
+        }}
+      />
     </div>
   )
 }

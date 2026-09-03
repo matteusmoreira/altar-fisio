@@ -30,7 +30,9 @@ import {
   UserX,
   AlertTriangle,
   HeartPulse,
+  Eye,
 } from "lucide-react"
+import { PatientProfileModal } from "@/components/patients/PatientProfileModal"
 
 interface PatientsPageProps {
   onNavigateToClinical: (patientId: string) => void
@@ -42,6 +44,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "has_record">("all")
   const [feedback, setFeedback] = useState<string | null>(null)
+
+  // Modal de Ficha Completa 360°
+  const [profilePatient, setProfilePatient] = useState<Patient | null>(null)
 
   // Modal de Criação / Edição
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -341,13 +346,33 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                 <CardHeader className="p-5 pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center font-bold text-base shadow-2xs">
+                      <div
+                        onClick={() => setProfilePatient(patient)}
+                        className="h-11 w-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center font-bold text-base shadow-2xs cursor-pointer hover:bg-primary/25 transition-colors"
+                        title="Ver Ficha Completa 360°"
+                      >
                         {patient.name.charAt(0)}
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm text-foreground leading-tight">
-                          {patient.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <h3
+                            onClick={() => setProfilePatient(patient)}
+                            className="font-bold text-sm text-foreground leading-tight hover:text-primary cursor-pointer transition-colors"
+                            title="Ver Ficha Completa 360°"
+                          >
+                            {patient.name}
+                          </h3>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setProfilePatient(patient)}
+                            className="h-6 w-6 rounded-lg text-primary hover:bg-primary/10 hover:text-primary shrink-0"
+                            title="Ver Ficha Completa 360°"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                         <p className="text-xs font-mono text-muted-foreground mt-0.5">
                           CPF: {patient.documentCpf}
                         </p>
@@ -401,30 +426,40 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                   <div className="pt-3 border-t border-border space-y-2">
                     <Button
                       size="sm"
-                      onClick={() => onNavigateToClinical(patient.id)}
-                      className="w-full text-xs gap-1.5 h-8.5 shadow-xs"
+                      onClick={() => setProfilePatient(patient)}
+                      className="w-full text-xs gap-1.5 h-8.5 shadow-xs font-semibold"
                     >
-                      <FileText className="h-3.5 w-3.5" />
-                      <span>Ver Prontuário & Evoluções</span>
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Ficha Completa 360°</span>
                     </Button>
 
                     <div className="flex items-center justify-between gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleToggleStatus(patient)}
-                        className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground"
-                        title={patient.active ? "Inativar paciente" : "Ativar paciente"}
+                        onClick={() => onNavigateToClinical(patient.id)}
+                        className="text-xs h-8 px-2.5 gap-1 text-muted-foreground hover:text-foreground border-border"
+                        title="Ver Prontuário Clínico & Evoluções"
                       >
-                        {patient.active ? (
-                          <UserX className="h-3.5 w-3.5 mr-1 text-amber-500" />
-                        ) : (
-                          <UserCheck className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                        )}
-                        <span>{patient.active ? "Inativar" : "Ativar"}</span>
+                        <FileText className="h-3.5 w-3.5 text-rose-500" />
+                        <span>Prontuário</span>
                       </Button>
 
                       <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleStatus(patient)}
+                          className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground"
+                          title={patient.active ? "Inativar paciente" : "Ativar paciente"}
+                        >
+                          {patient.active ? (
+                            <UserX className="h-3.5 w-3.5 text-amber-500" />
+                          ) : (
+                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                          )}
+                        </Button>
+
                         <Button
                           size="sm"
                           variant="outline"
@@ -643,6 +678,15 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Amplo de Ficha Completa 360° do Paciente */}
+      <PatientProfileModal
+        patient={profilePatient}
+        isOpen={!!profilePatient}
+        onClose={() => setProfilePatient(null)}
+        onEdit={handleOpenEdit}
+        onNavigateToClinical={onNavigateToClinical}
+      />
     </div>
   )
 }
