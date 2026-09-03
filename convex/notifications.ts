@@ -1,7 +1,9 @@
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
-import { sendUazapiInteractiveMessage, normalizeWhatsAppText, sanitizeUazapiEndpoint } from "./whatsapp"
+import { sendUazapiInteractiveMessage, normalizeWhatsAppText, sanitizeUazapiEndpoint, formatDateBR } from "./whatsapp"
+
+export { formatDateBR }
 
 // ============================================================================
 // HELPERS DE DATA E FORMATAÇÃO (Fuso Horário de Brasília UTC-3)
@@ -490,7 +492,7 @@ export const checkAndSendDailyReminders24hAction = action({
     for (const c of candidates) {
       const vars: Record<string, string> = {
         paciente: c.patientName,
-        data: c.date,
+        data: formatDateBR(c.date),
         horario: c.startTime,
         profissional: c.professionalName,
         sala: c.roomName,
@@ -516,7 +518,7 @@ export const checkAndSendDailyReminders24hAction = action({
           errorMessage: res.error,
         })
       } else {
-        const defaultMsg = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${c.date}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
+        const defaultMsg = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(c.date)}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
         const res = await sendWhatsAppDirectHelper(ctx, {
           recipientName: c.patientName,
           phone: c.phone,
@@ -581,7 +583,7 @@ export const checkAndSendUpcomingReminders2hAction = action({
 
       const vars: Record<string, string> = {
         paciente: c.patientName,
-        data: c.date,
+        data: formatDateBR(c.date),
         horario: c.startTime,
         profissional: c.professionalName,
         sala: c.roomName,
@@ -643,7 +645,7 @@ export const sendReplacementCreditNoticeAction = action({
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
     const clinicName = settings?.clinicName || "Altar Fisio"
 
-    const message = `Olá, *${args.patientName}*! ✅\n\nConfirmamos a desmarcação da sua sessão agendada para *${args.scheduleDate} às ${args.scheduleTime}* na *${clinicName}*.\n\n✨ *Crédito de Reposição Liberado!*\nComo você avisou com a antecedência necessária, um crédito de reposição foi gerado na sua conta com validade até *${args.expiryDate}*.\n\nPara agendar sua reposição em um horário disponível, fale diretamente com a nossa recepção.`
+    const message = `Olá, *${args.patientName}*! ✅\n\nConfirmamos a desmarcação da sua sessão agendada para *${formatDateBR(args.scheduleDate)} às ${args.scheduleTime}* na *${clinicName}*.\n\n✨ *Crédito de Reposição Liberado!*\nComo você avisou com a antecedência necessária, um crédito de reposição foi gerado na sua conta com validade até *${formatDateBR(args.expiryDate)}*.\n\nPara agendar sua reposição em um horário disponível, fale diretamente com a nossa recepção.`
 
     return await sendWhatsAppDirectHelper(ctx, {
       recipientName: args.patientName,
@@ -693,7 +695,7 @@ export const sendReceiptNotificationAction = action({
                 </tr>
                 <tr>
                   <td style="padding: 6px 0; color: #64748b;">Data do Pagamento:</td>
-                  <td style="padding: 6px 0; text-align: right; font-weight: 600;">${args.paymentDate}</td>
+                  <td style="padding: 6px 0; text-align: right; font-weight: 600;">${formatDateBR(args.paymentDate)}</td>
                 </tr>
                 <tr>
                   <td style="padding: 6px 0; color: #64748b;">Forma de Liquidação:</td>
@@ -724,7 +726,7 @@ export const sendReceiptNotificationAction = action({
     }
 
     if (args.phone) {
-      const message = `Olá, *${args.patientName}*! 🧾\n\nConfirmamos o recebimento do seu pagamento na *${clinicName}*:\n\n📌 *Descrição:* ${args.description}\n💰 *Valor:* R$ ${args.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n🗓 *Data:* ${args.paymentDate}\n💳 *Forma:* ${args.paymentMethod.toUpperCase()}\n\nMuito obrigado pela confiança! Se precisar do recibo em PDF para reembolso, solicite à recepção.`
+      const message = `Olá, *${args.patientName}*! 🧾\n\nConfirmamos o recebimento do seu pagamento na *${clinicName}*:\n\n📌 *Descrição:* ${args.description}\n💰 *Valor:* R$ ${args.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n🗓 *Data:* ${formatDateBR(args.paymentDate)}\n💳 *Forma:* ${args.paymentMethod.toUpperCase()}\n\nMuito obrigado pela confiança! Se precisar do recibo em PDF para reembolso, solicite à recepção.`
 
       whatsappResult = await sendWhatsAppDirectHelper(ctx, {
         recipientName: args.patientName,
@@ -756,7 +758,7 @@ export const triggerManualScanAction = action({
 
     let sent24 = 0
     for (const c of candidates24) {
-      const message = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${c.date}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
+      const message = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(c.date)}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
       const res = await sendWhatsAppDirectHelper(ctx, {
         recipientName: c.patientName,
         phone: c.phone,
@@ -875,7 +877,7 @@ export const sendScheduleConfirmationAction = action({
     if (templateConf && effectiveToken) {
       const vars: Record<string, string> = {
         paciente: args.patientName,
-        data: args.date,
+        data: formatDateBR(args.date),
         horario: args.startTime,
         horario_fim: args.endTime,
         servico: args.serviceName,
@@ -908,7 +910,7 @@ export const sendScheduleConfirmationAction = action({
     }
 
     // Texto Padrão da Clínica
-    const message = `Olá, *${args.patientName}*! 🎉\n\nSua aula/sessão foi agendada com sucesso na *${clinicName}*:\n\n📌 *Atividade:* ${args.serviceName}\n📅 *Data:* ${args.date}\n⏰ *Horário:* ${args.startTime} às ${args.endTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
+    const message = `Olá, *${args.patientName}*! 🎉\n\nSua aula/sessão foi agendada com sucesso na *${clinicName}*:\n\n📌 *Atividade:* ${args.serviceName}\n📅 *Data:* ${formatDateBR(args.date)}\n⏰ *Horário:* ${args.startTime} às ${args.endTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
 
     return await sendWhatsAppDirectHelper(ctx, {
       recipientName: args.patientName,
@@ -938,7 +940,7 @@ export const sendWhatsAppReminder = mutation({
     const clinicName = settings?.clinicName || "Altar Fisio"
     const noticeHours = settings?.cancellationNoticeHours || 2
 
-    const message = `Olá, *${args.recipientName}*! 👋\n\nEste é um lembrete do seu atendimento na *${clinicName}*:\n\n📅 *Data:* ${args.scheduleDate}\n⏰ *Horário:* ${args.scheduleTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com no mínimo ${noticeHours}h de antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
+    const message = `Olá, *${args.recipientName}*! 👋\n\nEste é um lembrete do seu atendimento na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(args.scheduleDate)}\n⏰ *Horário:* ${args.scheduleTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com no mínimo ${noticeHours}h de antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
 
     const logId = await ctx.db.insert("notificationLogs", {
       channel: "whatsapp_uazapi",

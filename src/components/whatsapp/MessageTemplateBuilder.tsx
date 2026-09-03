@@ -258,7 +258,7 @@ export const MessageTemplateBuilder: React.FC = () => {
   const renderFormattedPreview = (txt: string) => {
     const mockReplacements: Record<string, string> = {
       "{{paciente}}": "Juliana Mendes",
-      "{{data}}": "Amanhã (10/09)",
+      "{{data}}": "04/09/2026",
       "{{horario}}": "08:00",
       "{{horario_fim}}": "09:00",
       "{{servico}}": "Pilates Studio (Aparelhos)",

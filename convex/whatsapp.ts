@@ -58,11 +58,26 @@ export function normalizeWhatsAppText(text: string): string {
     .replace(/\r/g, "\n")
 }
 
+export function formatDateBR(dateStr?: string | null): string {
+  if (!dateStr) return ""
+  const trimmed = dateStr.trim()
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch
+    return `${d}/${m}/${y}`
+  }
+  return trimmed
+}
+
 export function interpolateText(text: string, vars: Record<string, string>): string {
   let result = normalizeWhatsAppText(text)
   for (const [key, val] of Object.entries(vars)) {
+    let formattedVal = val
+    if (formattedVal && (/^\d{4}-\d{2}-\d{2}/.test(formattedVal) || key.toLowerCase().includes("data"))) {
+      formattedVal = formatDateBR(formattedVal)
+    }
     const reg = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi")
-    result = result.replace(reg, val ? normalizeWhatsAppText(val) : "")
+    result = result.replace(reg, formattedVal ? normalizeWhatsAppText(formattedVal) : "")
   }
   return normalizeWhatsAppText(result)
 }
