@@ -32,10 +32,22 @@ import {
   AlertTriangle,
 } from "lucide-react"
 
+import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
+
 const ALL_SPECIALTIES: Specialty[] = ["Fisioterapia", "Pilates", "RPG"]
 
 export const ProfessionalsPage: React.FC = () => {
   const { professionals, addProfessional, updateProfessional, deleteProfessional } = useClinicData()
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("altar_professionals_view_mode")
+    return saved === "list" || saved === "grid" ? saved : "grid"
+  })
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem("altar_professionals_view_mode", mode)
+  }
 
   // Estados de Busca e Filtros
   const [searchTerm, setSearchTerm] = useState("")
@@ -320,7 +332,7 @@ export const ProfessionalsPage: React.FC = () => {
               </Select>
             </div>
 
-            <div className="w-40">
+            <div className="w-36 sm:w-40">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -330,11 +342,13 @@ export const ProfessionalsPage: React.FC = () => {
                 <option value="inactive">Apenas Inativos</option>
               </Select>
             </div>
+
+            <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
           </div>
         </div>
       </Card>
 
-      {/* Grid de Profissionais */}
+      {/* Listagem de Profissionais (Grade ou Lista) */}
       {filteredProfessionals.length === 0 ? (
         <Card className="p-12 text-center border-border shadow-xs">
           <Stethoscope className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
@@ -347,8 +361,9 @@ export const ProfessionalsPage: React.FC = () => {
             <span>Cadastrar Profissional</span>
           </Button>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      ) : viewMode === "grid" ? (
+        /* MODO GRADE */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
           {filteredProfessionals.map((prof) => (
             <Card
               key={prof.id}
@@ -470,6 +485,247 @@ export const ProfessionalsPage: React.FC = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
+      ) : (
+        /* MODO LISTA (100% RESPONSIVO) */
+        <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden animate-fade-in">
+          {/* Tabela para Desktop e Tablet (>= 640px) */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground font-semibold">
+                  <th className="p-3 pl-4">Profissional</th>
+                  <th className="p-3">Especialidades</th>
+                  <th className="p-3">Contato</th>
+                  <th className="p-3">Repasse / Comissão</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 pr-4 text-right">Ações Rápidas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {filteredProfessionals.map((prof) => (
+                  <tr
+                    key={prof.id}
+                    className={`hover:bg-muted/30 transition-colors ${
+                      !prof.active ? "opacity-75 bg-muted/10" : ""
+                    }`}
+                  >
+                    <td className="p-3 pl-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                          {prof.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-foreground">{prof.name}</div>
+                          <div className="text-[11px] font-mono text-primary font-semibold">
+                            {prof.crefito}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {prof.specialties.map((spec) => (
+                          <Badge
+                            key={spec}
+                            variant="secondary"
+                            className="text-[10px] font-semibold py-0.5 px-2 bg-secondary text-secondary-foreground"
+                          >
+                            {spec}
+                          </Badge>
+                        ))}
+                      </div>
+                    </td>
+
+                    <td className="p-3 whitespace-nowrap text-muted-foreground">
+                      <div className="flex items-center gap-1.5 text-foreground font-medium">
+                        <Phone className="h-3 w-3 text-primary shrink-0" />
+                        <span>{prof.phone}</span>
+                      </div>
+                      {prof.email && (
+                        <div className="text-[11px] text-muted-foreground truncate max-w-[170px]">
+                          {prof.email}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="p-3 whitespace-nowrap">
+                      <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/25">
+                        {prof.commissionType === "percentage"
+                          ? `${prof.commissionValue}% por atendimento`
+                          : `R$ ${prof.commissionValue.toFixed(2)} fixo/aluno`}
+                      </Badge>
+                    </td>
+
+                    <td className="p-3 whitespace-nowrap">
+                      <Badge
+                        variant={prof.active ? "default" : "outline"}
+                        className={`text-[10px] font-semibold ${
+                          prof.active
+                            ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {prof.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </td>
+
+                    <td className="p-3 pr-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleStatus(prof)}
+                          className={`h-8 px-2.5 text-xs ${
+                            prof.active
+                              ? "text-muted-foreground hover:text-amber-500"
+                              : "text-muted-foreground hover:text-emerald-600"
+                          }`}
+                          title={prof.active ? "Inativar Profissional" : "Ativar Profissional"}
+                        >
+                          {prof.active ? (
+                            <>
+                              <UserX className="h-3.5 w-3.5 mr-1" />
+                              <span className="hidden lg:inline">Inativar</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                              <span className="hidden lg:inline">Ativar</span>
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleOpenEdit(prof)}
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          title="Editar Profissional"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeletingProf(prof)}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          title="Excluir Profissional"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cards Condensados para Mobile (< 640px) */}
+          <div className="sm:hidden divide-y divide-border/60">
+            {filteredProfessionals.map((prof) => (
+              <div
+                key={prof.id}
+                className={`p-4 space-y-3 ${!prof.active ? "opacity-75 bg-muted/10" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-sm shrink-0">
+                      {prof.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-foreground leading-tight">
+                        {prof.name}
+                      </div>
+                      <div className="text-xs font-mono text-primary font-semibold mt-0.5">
+                        {prof.crefito}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Badge
+                    variant={prof.active ? "default" : "outline"}
+                    className={`text-[9px] font-semibold ${
+                      prof.active
+                        ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {prof.active ? "Ativo" : "Inativo"}
+                  </Badge>
+                </div>
+
+                {/* Especialidades */}
+                <div className="flex flex-wrap gap-1">
+                  {prof.specialties.map((spec) => (
+                    <Badge
+                      key={spec}
+                      variant="secondary"
+                      className="text-[9px] font-semibold py-0.5 px-2 bg-secondary text-secondary-foreground"
+                    >
+                      {spec}
+                    </Badge>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="h-3 w-3 text-primary shrink-0" />
+                    <span>{prof.phone}</span>
+                  </div>
+                  <span className="font-semibold text-primary">
+                    {prof.commissionType === "percentage"
+                      ? `${prof.commissionValue}% comissão`
+                      : `R$ ${prof.commissionValue.toFixed(2)}`}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleToggleStatus(prof)}
+                    className="h-8 px-2.5 text-xs flex-1 gap-1"
+                  >
+                    {prof.active ? (
+                      <>
+                        <UserX className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Inativar</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Ativar</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => handleOpenEdit(prof)}
+                    className="h-8 w-8 text-muted-foreground shrink-0"
+                    title="Editar"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setDeletingProf(prof)}
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    title="Excluir"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

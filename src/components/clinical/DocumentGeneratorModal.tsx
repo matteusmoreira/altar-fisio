@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select-native"
+import { useTheme } from "@/contexts/ThemeContext"
 import { formatDateExtendedBR, formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 import {
   FileText,
@@ -83,6 +84,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
   onDocumentPrinted,
   onSaveReport,
 }) => {
+  const { theme } = useTheme()
   const [selectedDocType, setSelectedDocType] = useState<ClinicalDocumentType>("report")
   const [selectedProfId, setSelectedProfId] = useState<string>(
     currentProfessional?.id || professionals[0]?.id || ""
@@ -911,15 +913,23 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
               <div className="border-b-2 border-primary/30 pb-4 flex items-start justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center font-bold print:border print:border-black">
-                      <HeartPulse className="h-5 w-5 text-primary print:text-black" />
+                    <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center font-bold print:border print:border-black overflow-hidden">
+                      {theme.logoUrl ? (
+                        <img
+                          src={theme.logoUrl}
+                          alt={theme.clinicName}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <HeartPulse className="h-5 w-5 text-primary print:text-black" />
+                      )}
                     </div>
                     <div>
                       <h2 className="text-base font-bold tracking-tight text-foreground uppercase print:text-black">
-                        Altar Fisio
+                        {theme.clinicName || "Altar Fisio"}
                       </h2>
                       <p className="text-[10px] text-muted-foreground tracking-wider uppercase font-medium print:text-gray-600">
-                        Clínica de Fisioterapia, Studio de Pilates & RPG
+                        {theme.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"}
                       </p>
                     </div>
                   </div>

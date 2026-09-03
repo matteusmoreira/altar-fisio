@@ -10,6 +10,7 @@ export default defineSchema({
     colorPreset: v.string(),
     mode: v.union(v.literal("light"), v.literal("dark")),
     logoUrl: v.optional(v.string()),
+    logoStorageId: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
     // Regras de agendamento & reposição

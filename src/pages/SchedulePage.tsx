@@ -38,6 +38,7 @@ import {
   Sparkles,
   AlertTriangle,
 } from "lucide-react"
+import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 
 export const SchedulePage: React.FC = () => {
   const { user, isProfessional } = useAuth()
@@ -54,6 +55,16 @@ export const SchedulePage: React.FC = () => {
     cancelWithReplacement,
     sendWhatsAppReminder,
   } = useClinicData()
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("altar_schedule_view_mode")
+    return saved === "list" || saved === "grid" ? saved : "list"
+  })
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem("altar_schedule_view_mode", mode)
+  }
 
   const [selectedRoom, setSelectedRoom] = useState<string>("all")
   const [selectedProf, setSelectedProf] = useState<string>(
@@ -323,7 +334,7 @@ export const SchedulePage: React.FC = () => {
             </div>
 
             {/* Filtro por Sala */}
-            <div className="w-44">
+            <div className="w-40 sm:w-44">
               <Select
                 value={selectedRoom}
                 onChange={(e) => setSelectedRoom(e.target.value)}
@@ -338,7 +349,7 @@ export const SchedulePage: React.FC = () => {
             </div>
 
             {/* Filtro por Profissional */}
-            <div className="w-48">
+            <div className="w-44 sm:w-48">
               <Select
                 value={selectedProf}
                 onChange={(e) => setSelectedProf(e.target.value)}
@@ -351,38 +362,219 @@ export const SchedulePage: React.FC = () => {
                 ))}
               </Select>
             </div>
+
+            <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
           </div>
         </div>
       </Card>
 
       {/* Lista de Horários / Grade */}
-      <div className="space-y-4">
-        {filteredSchedules.length === 0 ? (
-          <Card className="p-12 text-center">
-            <CalendarIcon className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-foreground">Nenhum agendamento encontrado</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              Não há sessões ou turmas marcadas com os filtros selecionados para esta data.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsNewModalOpen(true)}
-              className="mt-4 gap-2 text-xs"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Criar Agendamento</span>
-            </Button>
-          </Card>
-        ) : (
-          filteredSchedules.map((schedule) => {
+      {filteredSchedules.length === 0 ? (
+        <Card className="p-12 text-center border-border shadow-xs">
+          <CalendarIcon className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-foreground">Nenhum agendamento encontrado</h3>
+          <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+            Não há sessões ou turmas marcadas com os filtros selecionados para esta data.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsNewModalOpen(true)}
+            className="mt-4 gap-2 text-xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Criar Agendamento</span>
+          </Button>
+        </Card>
+      ) : viewMode === "grid" ? (
+        /* MODO GRADE (MOSAICO MULTI-COLUNA) */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5 animate-fade-in">
+          {filteredSchedules.map((schedule) => {
             const occupied = schedule.participants.filter(
               (p) => p.status !== "justified_absence"
             ).length
             const isFull = occupied >= schedule.maxCapacity
 
             return (
-              <Card key={schedule.id} className="overflow-hidden border-border">
+              <Card
+                key={schedule.id}
+                className="overflow-hidden border-border flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs"
+              >
+                <div>
+                  {/* Cabeçalho do Card */}
+                  <div className="p-4 bg-muted/20 border-b border-border flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20 shrink-0">
+                        {schedule.startTime}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-bold text-sm text-foreground leading-tight">
+                            {schedule.title}
+                          </h3>
+                          <Badge
+                            variant={schedule.type === "turma" ? "purple" : "info"}
+                            className="text-[9px] px-1.5 py-0"
+                          >
+                            {schedule.type === "turma" ? "Turma" : "Individual"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {schedule.professionalName} •{" "}
+                          <span style={{ color: schedule.roomColor }} className="font-medium">
+                            {schedule.roomName}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {isFull ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Lotada ({occupied}/{schedule.maxCapacity})
+                        </Badge>
+                      ) : (
+                        <Badge variant="success" className="text-[10px]">
+                          {schedule.maxCapacity - occupied} vaga(s) ({occupied}/{schedule.maxCapacity})
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lista de Alunos / Pacientes */}
+                  <div className="p-3.5 divide-y divide-border/60">
+                    {schedule.participants.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground">
+                        Nenhum paciente agendado neste horário.
+                      </div>
+                    ) : (
+                      schedule.participants.map((p) => {
+                        const isPresent = p.status === "present"
+                        const isJustified = p.status === "justified_absence"
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="py-2.5 flex flex-col gap-2 first:pt-0 last:pb-0"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div
+                                  className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                                    isPresent
+                                      ? "bg-emerald-500 text-white"
+                                      : isJustified
+                                      ? "bg-amber-500 text-white"
+                                      : "bg-muted text-foreground"
+                                  }`}
+                                >
+                                  {p.patientName.charAt(0)}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-semibold text-foreground">
+                                      {p.patientName}
+                                    </span>
+                                    {p.status === "replacement" && (
+                                      <Badge variant="warning" className="text-[8px] py-0 px-1">
+                                        Reposição
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                    <span>{p.patientPhone}</span>
+                                    {p.hasActivePackage && (
+                                      <span className="text-[10px] text-primary font-medium">
+                                        • {p.remainingSessions} rest.
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {!isJustified ? (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant={isPresent ? "default" : "outline"}
+                                      onClick={async () => {
+                                        const res = await checkIn(
+                                          schedule.id,
+                                          p.id,
+                                          isPresent ? "scheduled" : "present"
+                                        )
+                                        if (res?.message) {
+                                          setFeedback(res.message)
+                                          setTimeout(() => setFeedback(null), 4000)
+                                        }
+                                      }}
+                                      className="h-7 text-[11px] px-2 gap-1"
+                                      title={isPresent ? "Marcar como ausente/pendente" : "Confirmar Presença"}
+                                    >
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      <span>{isPresent ? "Presente" : "Confirmar"}</span>
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setCancelTarget({ schedule, participant: p })
+                                        setCancelReason("")
+                                        setForceExemption(false)
+                                      }}
+                                      className="h-7 text-[11px] px-1.5 text-amber-600 hover:text-amber-700"
+                                      title="Desmarcar atendimento"
+                                    >
+                                      Desmarcar
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        sendWhatsAppReminder(schedule, {
+                                          name: p.patientName,
+                                          phone: p.patientPhone,
+                                        })
+                                        setFeedback(`Lembrete WhatsApp enviado para ${p.patientName}!`)
+                                        setTimeout(() => setFeedback(null), 3000)
+                                      }}
+                                      className="h-7 w-7 p-0 text-emerald-600 shrink-0"
+                                      title="Enviar Lembrete WhatsApp"
+                                    >
+                                      <Send className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Badge variant="warning" className="text-[10px]">
+                                    Reposição Gerada
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        /* MODO LISTA (TIMELINE LINEAR CRONOLÓGICA) */
+        <div className="space-y-4 animate-fade-in">
+          {filteredSchedules.map((schedule) => {
+            const occupied = schedule.participants.filter(
+              (p) => p.status !== "justified_absence"
+            ).length
+            const isFull = occupied >= schedule.maxCapacity
+
+            return (
+              <Card key={schedule.id} className="overflow-hidden border-border shadow-xs">
                 {/* Cabeçalho do Card */}
                 <div className="p-4 bg-muted/20 border-b border-border flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -444,7 +636,7 @@ export const SchedulePage: React.FC = () => {
                         >
                           <div className="flex items-center gap-3">
                             <div
-                              className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold ${
+                              className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                                 isPresent
                                   ? "bg-emerald-500 text-white"
                                   : isJustified
@@ -454,60 +646,60 @@ export const SchedulePage: React.FC = () => {
                             >
                               {p.patientName.charAt(0)}
                             </div>
-                              <div>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-sm font-semibold text-foreground">
-                                    {p.patientName}
-                                  </span>
-                                  {p.status === "replacement" && (
-                                    <Badge variant="warning" className="text-[9px] py-0">
-                                      Reposição
-                                    </Badge>
-                                  )}
-                                  {p.hasActivePackage ? (
-                                    <Badge
-                                      variant={p.remainingSessions && p.remainingSessions <= 2 ? "warning" : "outline"}
-                                      className="text-[9px] py-0 font-medium"
-                                      title={p.activePackageName}
-                                    >
-                                      {p.remainingSessions && p.remainingSessions <= 2 ? "Renovar: " : "Saldo: "}
-                                      {p.remainingSessions} rest.
-                                    </Badge>
-                                  ) : p.status !== "replacement" && (
-                                    <Badge variant="outline" className="text-[9px] py-0 text-amber-600 border-amber-500/30">
-                                      Avulso / Sem Plano
-                                    </Badge>
-                                  )}
-                                </div>
-                                <span className="text-xs text-muted-foreground">
-                                  {p.patientPhone}
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-sm font-semibold text-foreground">
+                                  {p.patientName}
                                 </span>
-                              </div>
-                            </div>
-
-                            {/* Ações */}
-                            <div className="flex items-center gap-2 self-end sm:self-auto">
-                              {!isJustified ? (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant={isPresent ? "default" : "outline"}
-                                    onClick={async () => {
-                                      const res = await checkIn(
-                                        schedule.id,
-                                        p.id,
-                                        isPresent ? "scheduled" : "present"
-                                      )
-                                      if (res?.message) {
-                                        setFeedback(res.message)
-                                        setTimeout(() => setFeedback(null), 4000)
-                                      }
-                                    }}
-                                    className="h-8 text-xs gap-1.5"
+                                {p.status === "replacement" && (
+                                  <Badge variant="warning" className="text-[9px] py-0">
+                                    Reposição
+                                  </Badge>
+                                )}
+                                {p.hasActivePackage ? (
+                                  <Badge
+                                    variant={p.remainingSessions && p.remainingSessions <= 2 ? "warning" : "outline"}
+                                    className="text-[9px] py-0 font-medium"
+                                    title={p.activePackageName}
                                   >
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                    <span>{isPresent ? "Presente" : "Confirmar Presença"}</span>
-                                  </Button>
+                                    {p.remainingSessions && p.remainingSessions <= 2 ? "Renovar: " : "Saldo: "}
+                                    {p.remainingSessions} rest.
+                                  </Badge>
+                                ) : p.status !== "replacement" && (
+                                  <Badge variant="outline" className="text-[9px] py-0 text-amber-600 border-amber-500/30">
+                                    Avulso / Sem Plano
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {p.patientPhone}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ações */}
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            {!isJustified ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant={isPresent ? "default" : "outline"}
+                                  onClick={async () => {
+                                    const res = await checkIn(
+                                      schedule.id,
+                                      p.id,
+                                      isPresent ? "scheduled" : "present"
+                                    )
+                                    if (res?.message) {
+                                      setFeedback(res.message)
+                                      setTimeout(() => setFeedback(null), 4000)
+                                    }
+                                  }}
+                                  className="h-8 text-xs gap-1.5"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  <span>{isPresent ? "Presente" : "Confirmar Presença"}</span>
+                                </Button>
 
                                 <Button
                                   size="sm"
@@ -552,9 +744,9 @@ export const SchedulePage: React.FC = () => {
                 </div>
               </Card>
             )
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* Modal Criar Agendamento / Turma (Único ou Série Recorrente) */}
       <Dialog

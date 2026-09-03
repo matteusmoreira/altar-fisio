@@ -43,6 +43,7 @@ import {
 } from "lucide-react"
 import { AbsenceModal } from "@/components/classes/AbsenceModal"
 import { AttendanceReportView } from "@/components/classes/AttendanceReportView"
+import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 
 const ROOM_TYPES: Array<{ id: RoomType; label: string }> = [
   { id: "pilates_aparelhos", label: "Pilates em Aparelhos" },
@@ -73,6 +74,16 @@ export const ClassesPage: React.FC = () => {
 
   // Aba ativa (Turmas, Salas, Reposições, Relatório de Frequência)
   const [activeTab, setActiveTab] = useState<"turmas" | "salas" | "reposicoes" | "relatorio">("turmas")
+  const [turmasViewMode, setTurmasViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("altar_turmas_view_mode")
+    return saved === "list" || saved === "grid" ? saved : "grid"
+  })
+
+  const handleTurmasViewModeChange = (mode: ViewMode) => {
+    setTurmasViewMode(mode)
+    localStorage.setItem("altar_turmas_view_mode", mode)
+  }
+
   const [feedback, setFeedback] = useState<string | null>(null)
 
   // Estado do Modal de Falta
@@ -577,6 +588,8 @@ export const ClassesPage: React.FC = () => {
                     ))}
                   </Select>
                 </div>
+
+                <ViewModeToggle viewMode={turmasViewMode} onChange={handleTurmasViewModeChange} />
               </div>
             </div>
           </Card>
@@ -600,7 +613,7 @@ export const ClassesPage: React.FC = () => {
               </Button>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={turmasViewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in" : "space-y-4 animate-fade-in"}>
               {filteredTurmas.map((schedule) => {
                 const activeParticipants = schedule.participants.filter(
                   (p) => p.status !== "justified_absence"

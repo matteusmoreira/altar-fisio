@@ -33,6 +33,7 @@ import {
   Eye,
 } from "lucide-react"
 import { PatientProfileModal } from "@/components/patients/PatientProfileModal"
+import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 
 interface PatientsPageProps {
   onNavigateToClinical: (patientId: string) => void
@@ -40,6 +41,16 @@ interface PatientsPageProps {
 
 export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical }) => {
   const { patients, addPatient, updatePatient, deletePatient, clinicalOverview } = useClinicData()
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem("altar_patients_view_mode")
+    return saved === "list" || saved === "grid" ? saved : "grid"
+  })
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem("altar_patients_view_mode", mode)
+  }
 
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "has_record">("all")
@@ -303,21 +314,25 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
             />
           </div>
 
-          <div className="w-48 sm:w-56">
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-            >
-              <option value="all">Todos os Pacientes</option>
-              <option value="active">Apenas Ativos</option>
-              <option value="inactive">Apenas Inativos</option>
-              <option value="has_record">Com Prontuário Ativo</option>
-            </Select>
+          <div className="flex items-center gap-2.5">
+            <div className="w-48 sm:w-56 flex-1 sm:flex-initial">
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+              >
+                <option value="all">Todos os Pacientes</option>
+                <option value="active">Apenas Ativos</option>
+                <option value="inactive">Apenas Inativos</option>
+                <option value="has_record">Com Prontuário Ativo</option>
+              </Select>
+            </div>
+
+            <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
           </div>
         </div>
       </Card>
 
-      {/* Grid de Pacientes */}
+      {/* Listagem de Pacientes (Grade ou Lista) */}
       {filteredPatients.length === 0 ? (
         <Card className="p-12 text-center border-border shadow-xs">
           <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
@@ -330,8 +345,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
             <span>Cadastrar Paciente</span>
           </Button>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      ) : viewMode === "grid" ? (
+        /* MODO GRADE */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
           {filteredPatients.map((patient) => {
             const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
             const hasRecord = !!overviewItem?.hasRecord
@@ -450,11 +466,15 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                           size="sm"
                           variant="outline"
                           onClick={() => handleToggleStatus(patient)}
-                          className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground"
-                          title={patient.active ? "Inativar paciente" : "Ativar paciente"}
+                          className={`text-xs h-8 px-2 border-border ${
+                            patient.active
+                              ? "text-muted-foreground hover:text-amber-500"
+                              : "text-muted-foreground hover:text-emerald-600"
+                          }`}
+                          title={patient.active ? "Inativar Paciente" : "Reativar Paciente"}
                         >
                           {patient.active ? (
-                            <UserX className="h-3.5 w-3.5 text-amber-500" />
+                            <UserX className="h-3.5 w-3.5 text-muted-foreground" />
                           ) : (
                             <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
                           )}
@@ -486,6 +506,266 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
               </Card>
             )
           })}
+        </div>
+      ) : (
+        /* MODO LISTA (100% RESPONSIVO) */
+        <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden animate-fade-in">
+          {/* Tabela para Desktop e Tablet (>= 640px) */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground font-semibold">
+                  <th className="p-3 pl-4">Paciente</th>
+                  <th className="p-3">Contato</th>
+                  <th className="p-3">Nascimento / Sexo</th>
+                  <th className="p-3">Status & Prontuário</th>
+                  <th className="p-3 pr-4 text-right">Ações Rápidas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {filteredPatients.map((patient) => {
+                  const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
+                  const hasRecord = !!overviewItem?.hasRecord
+
+                  return (
+                    <tr
+                      key={patient.id}
+                      className={`hover:bg-muted/30 transition-colors ${
+                        !patient.active ? "opacity-75 bg-muted/10" : ""
+                      }`}
+                    >
+                      <td className="p-3 pl-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            onClick={() => setProfilePatient(patient)}
+                            className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-xs shrink-0 cursor-pointer hover:bg-primary/25 transition-colors"
+                            title="Ver Ficha Completa 360°"
+                          >
+                            {patient.name.charAt(0)}
+                          </div>
+                          <div>
+                            <div
+                              onClick={() => setProfilePatient(patient)}
+                              className="font-bold text-sm text-foreground hover:text-primary cursor-pointer transition-colors"
+                            >
+                              {patient.name}
+                            </div>
+                            <div className="text-[11px] font-mono text-muted-foreground">
+                              CPF: {patient.documentCpf}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Phone className="h-3 w-3 text-primary shrink-0" />
+                          <span className="font-medium text-foreground">{patient.phone}</span>
+                        </div>
+                        {patient.email && (
+                          <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                            {patient.email}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap text-muted-foreground">
+                        <div>{formatDateBR(patient.birthDate)}</div>
+                        <div className="text-[11px] text-muted-foreground/80">{patient.gender}</div>
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge
+                            variant={patient.active ? "default" : "outline"}
+                            className={`text-[10px] font-semibold ${
+                              patient.active
+                                ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {patient.active ? "Ativo" : "Inativo"}
+                          </Badge>
+                          {hasRecord ? (
+                            <Badge variant="outline" className="text-[9px] text-primary border-primary/30 bg-primary/5">
+                              Prontuário Ativo
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px] text-muted-foreground">
+                              Sem Prontuário
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3 pr-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setProfilePatient(patient)}
+                            className="h-8 px-2.5 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/5"
+                            title="Ver Ficha Completa 360°"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Ficha 360°</span>
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onNavigateToClinical(patient.id)}
+                            className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground border-border"
+                            title="Prontuário Clínico"
+                          >
+                            <FileText className="h-3.5 w-3.5 text-rose-500" />
+                            <span className="hidden lg:inline">Prontuário</span>
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleToggleStatus(patient)}
+                            className={`h-8 w-8 ${
+                              patient.active
+                                ? "text-muted-foreground hover:text-amber-500"
+                                : "text-muted-foreground hover:text-emerald-600"
+                            }`}
+                            title={patient.active ? "Inativar Paciente" : "Reativar Paciente"}
+                          >
+                            {patient.active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleOpenEdit(patient)}
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            title="Editar Paciente"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeletingPatient(patient)}
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            title="Excluir Paciente"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cards Condensados para Mobile (< 640px) */}
+          <div className="sm:hidden divide-y divide-border/60">
+            {filteredPatients.map((patient) => {
+              const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
+              const hasRecord = !!overviewItem?.hasRecord
+
+              return (
+                <div
+                  key={patient.id}
+                  className={`p-4 space-y-3 ${!patient.active ? "opacity-75 bg-muted/10" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div
+                        onClick={() => setProfilePatient(patient)}
+                        className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-sm shrink-0 cursor-pointer"
+                      >
+                        {patient.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div
+                          onClick={() => setProfilePatient(patient)}
+                          className="font-bold text-sm text-foreground hover:text-primary cursor-pointer leading-tight"
+                        >
+                          {patient.name}
+                        </div>
+                        <div className="text-xs font-mono text-muted-foreground mt-0.5">
+                          CPF: {patient.documentCpf}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge
+                        variant={patient.active ? "default" : "outline"}
+                        className={`text-[9px] font-semibold ${
+                          patient.active
+                            ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {patient.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                      {hasRecord ? (
+                        <Badge variant="outline" className="text-[9px] text-primary border-primary/30 bg-primary/5">
+                          Prontuário
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] text-muted-foreground">
+                          Sem Ficha
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="h-3 w-3 text-primary shrink-0" />
+                      <span>{patient.phone}</span>
+                    </div>
+                    <span>{formatDateBR(patient.birthDate)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={() => setProfilePatient(patient)}
+                      className="h-8 px-2.5 text-xs gap-1 flex-1 font-semibold"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Ficha 360°</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onNavigateToClinical(patient.id)}
+                      className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-rose-500" />
+                      <span>Prontuário</span>
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleOpenEdit(patient)}
+                      className="h-8 w-8 text-muted-foreground shrink-0"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => setDeletingPatient(patient)}
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

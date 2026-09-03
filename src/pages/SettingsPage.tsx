@@ -24,6 +24,11 @@ import {
   AlertCircle,
   Loader2,
   CalendarCheck,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  HeartPulse,
+  Link as LinkIcon,
 } from "lucide-react"
 
 export const SettingsPage: React.FC = () => {
@@ -33,11 +38,22 @@ export const SettingsPage: React.FC = () => {
 
   const convexSettings = useQuery(api.clinic.getSettings)
   const updateSettingsMutation = useMutation(api.clinic.updateSettings)
+  const generateUploadUrlMutation = useMutation(api.clinic.generateUploadUrl)
+  const removeLogoMutation = useMutation(api.clinic.removeLogo)
 
   const [clinicName, setClinicName] = useState(theme.clinicName)
   const [clinicSubtitle, setClinicSubtitle] = useState(theme.clinicSubtitle)
   const [phone, setPhone] = useState("(11) 98765-4321")
   const [address, setAddress] = useState("Av. Paulista, 1000 - Bela Vista, São Paulo - SP")
+
+  // Logotipo da Clínica
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(theme.logoUrl)
+  const [logoStorageId, setLogoStorageId] = useState<string | undefined>(undefined)
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false)
+  const [showCustomUrlInput, setShowCustomUrlInput] = useState(false)
+  const [customUrlValue, setCustomUrlValue] = useState("")
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Regras de negócio
   const [noticeHours, setNoticeHours] = useState(2)
@@ -60,6 +76,8 @@ export const SettingsPage: React.FC = () => {
     if (convexSettings) {
       if (convexSettings.clinicName) setClinicName(convexSettings.clinicName)
       if (convexSettings.clinicSubtitle) setClinicSubtitle(convexSettings.clinicSubtitle)
+      if (convexSettings.logoUrl !== undefined) setLogoUrl(convexSettings.logoUrl)
+      if (convexSettings.logoStorageId !== undefined) setLogoStorageId(convexSettings.logoStorageId)
       if (convexSettings.phone) setPhone(convexSettings.phone)
       if (convexSettings.address) setAddress(convexSettings.address)
       if (convexSettings.cancellationNoticeHours !== undefined)
@@ -79,16 +97,94 @@ export const SettingsPage: React.FC = () => {
     setTimeout(() => setFeedback(null), 3500)
   }
 
+  const handleLogoFileUpload = async (file: File) => {
+    if (!file) return
+
+    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"]
+    if (!validTypes.includes(file.type)) {
+      showToast("Formato inválido! Envie uma imagem PNG, JPG, SVG ou WebP.")
+      return
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      showToast("Arquivo muito grande! O limite máximo para a logo é 5 MB.")
+      return
+    }
+
+    setIsUploadingLogo(true)
+    const localPreviewUrl = URL.createObjectURL(file)
+    setLogoUrl(localPreviewUrl)
+
+    try {
+      // 1. Obter URL segura para upload do Convex Storage
+      const postUrl = await generateUploadUrlMutation()
+
+      // 2. Fazer upload do binário da imagem
+      const response = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Falha no upload HTTP: status ${response.status}`)
+      }
+
+      const data = await response.json()
+      if (data && data.storageId) {
+        setLogoStorageId(data.storageId)
+        showToast("Logotipo carregado com sucesso! Clique em 'Salvar Todas as Configurações' para consolidar.")
+      }
+    } catch (err: any) {
+      console.error("Erro no upload da logo:", err)
+      showToast("Erro ao fazer upload da logo: " + (err?.message || "Tente novamente."))
+    } finally {
+      setIsUploadingLogo(false)
+    }
+  }
+
+  const handleRemoveLogo = async () => {
+    if (confirm("Deseja realmente remover o logotipo da clínica e restaurar o ícone padrão?")) {
+      setIsUploadingLogo(true)
+      try {
+        await removeLogoMutation()
+        setLogoUrl(undefined)
+        setLogoStorageId(undefined)
+        updateClinicInfo(clinicName, clinicSubtitle, undefined)
+        showToast("Logotipo removido com sucesso!")
+      } catch (err: any) {
+        showToast("Erro ao remover logo: " + (err?.message || "Tente novamente"))
+      } finally {
+        setIsUploadingLogo(false)
+      }
+    }
+  }
+
+  const handleApplyCustomUrl = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customUrlValue.trim()) {
+      showToast("Insira uma URL válida para a imagem.")
+      return
+    }
+    setLogoUrl(customUrlValue.trim())
+    setLogoStorageId(undefined) // Limpa storageId para priorizar a URL direta
+    setShowCustomUrlInput(false)
+    showToast("URL do logotipo aplicada! Clique em 'Salvar Todas as Configurações' para consolidar.")
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
 
-    updateClinicInfo(clinicName, clinicSubtitle)
+    updateClinicInfo(clinicName, clinicSubtitle, logoUrl)
 
     try {
       await updateSettingsMutation({
         clinicName,
         clinicSubtitle,
+        logoUrl,
+        logoStorageId,
         primaryColor:
           theme.customHex ||
           (theme.preset !== "custom" && PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]
@@ -108,7 +204,7 @@ export const SettingsPage: React.FC = () => {
         resendApiKey,
         resendFromEmail,
       })
-      showToast("Configurações e credenciais salvas no Convex com sucesso!")
+      showToast("Configurações e logotipo salvos no Convex com sucesso!")
     } catch (err: any) {
       showToast("Erro ao sincronizar com o backend: " + (err?.message || "Tente novamente"))
     } finally {
@@ -255,7 +351,181 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-3 text-xs">
+          <CardContent className="p-5 pt-0 space-y-4 text-xs">
+            {/* Seção 1: Logotipo da Clínica */}
+            <div className="p-4 rounded-2xl border border-border bg-muted/20 space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    <span>Logotipo da Clínica & Identidade Visual</span>
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Exibido no menu lateral, login, portal do aluno, agendamentos online e documentos timbrados.
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
+                    className="h-7 text-[11px] text-muted-foreground hover:text-foreground gap-1 px-2"
+                  >
+                    <LinkIcon className="h-3 w-3" />
+                    <span>{showCustomUrlInput ? "Ocultar URL" : "Inserir via URL"}</span>
+                  </Button>
+
+                  {logoUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemoveLogo}
+                      disabled={isUploadingLogo}
+                      className="h-7 text-[11px] text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 px-2"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Remover Logo</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Inserção por URL Externa (Expansível) */}
+              {showCustomUrlInput && (
+                <div className="p-3 rounded-xl border border-border bg-card space-y-2 animate-fade-in">
+                  <span className="text-[11px] font-semibold text-foreground block">
+                    Link Direto da Imagem (Externa / CDN)
+                  </span>
+                  <div className="flex gap-2">
+                    <Input
+                      value={customUrlValue}
+                      onChange={(e) => setCustomUrlValue(e.target.value)}
+                      placeholder="https://sua-clinica.com.br/logo.png"
+                      className="h-8 text-xs font-mono"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleApplyCustomUrl}
+                      className="h-8 text-xs px-3 shrink-0"
+                    >
+                      Aplicar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Grid: Preview & Upload Drag-and-Drop */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-stretch pt-0.5">
+                {/* Visualizador de Previews */}
+                <div className="md:col-span-5 flex items-center gap-3.5 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs">
+                  {/* Preview Principal */}
+                  <div className="relative h-16 w-16 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center bg-muted/60 overflow-hidden shrink-0 shadow-inner">
+                    {logoUrl ? (
+                      <img
+                        src={logoUrl}
+                        alt="Preview Logo"
+                        className="h-full w-full object-contain p-1.5"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-primary/60">
+                        <HeartPulse className="h-7 w-7" />
+                      </div>
+                    )}
+                    {isUploadingLogo && (
+                      <div className="absolute inset-0 bg-background/85 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col min-w-0 justify-center">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-foreground truncate">
+                        {logoUrl ? "Logotipo Ativo" : "Ícone Padrão Altar"}
+                      </span>
+                      {logoUrl && (
+                        <Badge variant="success" className="text-[9px] py-0 px-1.5">
+                          Personalizado
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      {logoUrl ? "Conectado ao sistema" : "Ícone padrão da plataforma"}
+                    </span>
+
+                    {/* Preview Contextual da Sidebar */}
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-[10px] font-semibold text-muted-foreground">Na Sidebar:</span>
+                      <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs">
+                        {logoUrl ? (
+                          <img src={logoUrl} alt="Mini" className="h-full w-full object-contain p-0.5" />
+                        ) : (
+                          <HeartPulse className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dropzone de Upload para o Convex Storage */}
+                <div className="md:col-span-7">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleLogoFileUpload(file)
+                    }}
+                  />
+
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDraggingLogo(true)
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      setIsDraggingLogo(false)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setIsDraggingLogo(false)
+                      const file = e.dataTransfer.files?.[0]
+                      if (file) handleLogoFileUpload(file)
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`h-full min-h-[96px] border-2 border-dashed rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                      isDraggingLogo
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/30"
+                        : "border-border hover:border-primary/50 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1">
+                      {isUploadingLogo ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-foreground">
+                      {isUploadingLogo
+                        ? "Enviando arquivo para o Convex Storage..."
+                        : "Clique para selecionar ou arraste o arquivo aqui"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                      PNG (transparente), JPG, WebP ou SVG até 5 MB
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">Nome da Clínica</label>

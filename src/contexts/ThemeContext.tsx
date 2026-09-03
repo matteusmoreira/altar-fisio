@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 
 export type ColorPreset = "emerald" | "ocean" | "teal" | "indigo" | "rose" | "amber" | "custom"
 
@@ -8,6 +10,7 @@ export interface ClinicThemeConfig {
   customHex?: string
   clinicName: string
   clinicSubtitle: string
+  logoUrl?: string
 }
 
 export const PRESET_COLORS: Record<
@@ -111,7 +114,8 @@ interface ThemeContextType {
   theme: ClinicThemeConfig
   setMode: (mode: "light" | "dark") => void
   setPreset: (preset: ColorPreset, customHex?: string) => void
-  updateClinicInfo: (name: string, subtitle: string) => void
+  updateClinicInfo: (name: string, subtitle: string, logoUrl?: string) => void
+  updateLogoUrl: (logoUrl?: string) => void
   toggleMode: () => void
 }
 
@@ -121,12 +125,15 @@ const defaultTheme: ClinicThemeConfig = {
   customHex: "#10b981",
   clinicName: "Altar Fisio",
   clinicSubtitle: "Dr. Marcelo - Fisio, Pilates & RPG",
+  logoUrl: undefined,
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<ClinicThemeConfig>(() => {
+  const convexSettings = useQuery(api.clinic.getSettings)
+
+  const [localTheme, setLocalTheme] = useState<ClinicThemeConfig>(() => {
     try {
       const saved = localStorage.getItem("altar_fisio_theme")
       if (saved) {
@@ -137,6 +144,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     return defaultTheme
   })
+
+  // Derivação reativa sem render cascata: dados do servidor têm precedência sobre cache local
+  const theme: ClinicThemeConfig = useMemo(() => {
+    return {
+      mode: convexSettings?.mode ?? localTheme.mode,
+      preset: (convexSettings?.colorPreset as ColorPreset) ?? localTheme.preset,
+      customHex: convexSettings?.primaryColor ?? localTheme.customHex,
+      clinicName: convexSettings?.clinicName ?? localTheme.clinicName,
+      clinicSubtitle: convexSettings?.clinicSubtitle ?? localTheme.clinicSubtitle,
+      logoUrl: convexSettings?.logoUrl !== undefined ? convexSettings.logoUrl : localTheme.logoUrl,
+    }
+  }, [convexSettings, localTheme])
 
   // Apply CSS variables & dark class whenever theme changes
   useEffect(() => {
@@ -177,23 +196,32 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [theme])
 
   const setMode = (mode: "light" | "dark") => {
-    setTheme((prev) => ({ ...prev, mode }))
+    setLocalTheme((prev) => ({ ...prev, mode }))
   }
 
   const toggleMode = () => {
-    setTheme((prev) => ({ ...prev, mode: prev.mode === "light" ? "dark" : "light" }))
+    setLocalTheme((prev) => ({ ...prev, mode: prev.mode === "light" ? "dark" : "light" }))
   }
 
   const setPreset = (preset: ColorPreset, customHex?: string) => {
-    setTheme((prev) => ({
+    setLocalTheme((prev) => ({
       ...prev,
       preset,
       customHex: customHex || prev.customHex,
     }))
   }
 
-  const updateClinicInfo = (clinicName: string, clinicSubtitle: string) => {
-    setTheme((prev) => ({ ...prev, clinicName, clinicSubtitle }))
+  const updateClinicInfo = (clinicName: string, clinicSubtitle: string, logoUrl?: string) => {
+    setLocalTheme((prev) => ({
+      ...prev,
+      clinicName,
+      clinicSubtitle,
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+    }))
+  }
+
+  const updateLogoUrl = (logoUrl?: string) => {
+    setLocalTheme((prev) => ({ ...prev, logoUrl }))
   }
 
   return (
@@ -203,6 +231,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setMode,
         setPreset,
         updateClinicInfo,
+        updateLogoUrl,
         toggleMode,
       }}
     >

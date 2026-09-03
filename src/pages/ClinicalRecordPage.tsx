@@ -55,6 +55,7 @@ import { PainEvolutionChart } from "@/components/clinical/PainEvolutionChart"
 import { BiofotogrametriaModal } from "@/components/clinical/BiofotogrametriaModal"
 import { DocumentGeneratorModal } from "@/components/clinical/DocumentGeneratorModal"
 import { LgpdConsentModal } from "@/components/clinical/LgpdConsentModal"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 
 interface ClinicalRecordPageProps {
   initialPatientId?: string
@@ -96,6 +97,15 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
   // Filtros na Central de Prontuários
   const [overviewSearch, setOverviewSearch] = useState("")
   const [overviewFilter, setOverviewFilter] = useState<"all" | "has_record" | "no_record" | "high_pain">("all")
+  const [overviewLayoutMode, setOverviewLayoutMode] = useState<"grid" | "list">(() => {
+    const saved = localStorage.getItem("altar_records_view_mode")
+    return saved === "list" || saved === "grid" ? saved : "grid"
+  })
+
+  const handleOverviewLayoutChange = (mode: "grid" | "list") => {
+    setOverviewLayoutMode(mode)
+    localStorage.setItem("altar_records_view_mode", mode)
+  }
 
   // Abas na Ficha do Paciente
   const [activeTab, setActiveTab] = useState("evolutions")
@@ -619,16 +629,20 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
               />
             </div>
 
-            <div className="w-64">
-              <Select
-                value={overviewFilter}
-                onChange={(e) => setOverviewFilter(e.target.value as any)}
-              >
-                <option value="all">Todos os Pacientes ({clinicalOverview.length})</option>
-                <option value="has_record">Com Prontuário Ativo ({totalRecords})</option>
-                <option value="no_record">Sem Prontuário Iniciado</option>
-                <option value="high_pain">Dor Intensa (EVA &ge; 7)</option>
-              </Select>
+            <div className="flex items-center gap-2.5">
+              <div className="w-56 sm:w-64 flex-1 sm:flex-initial">
+                <Select
+                  value={overviewFilter}
+                  onChange={(e) => setOverviewFilter(e.target.value as any)}
+                >
+                  <option value="all">Todos os Pacientes ({clinicalOverview.length})</option>
+                  <option value="has_record">Com Prontuário Ativo ({totalRecords})</option>
+                  <option value="no_record">Sem Prontuário Iniciado</option>
+                  <option value="high_pain">Dor Intensa (EVA &ge; 7)</option>
+                </Select>
+              </div>
+
+              <ViewModeToggle viewMode={overviewLayoutMode} onChange={handleOverviewLayoutChange} />
             </div>
           </div>
         </Card>
@@ -642,8 +656,9 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
               Ajuste os filtros de busca ou selecione um paciente para iniciar o prontuário.
             </p>
           </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        ) : overviewLayoutMode === "grid" ? (
+          /* MODO GRADE */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
             {filteredOverview.map((item) => (
               <Card
                 key={item.patientId}
@@ -749,6 +764,227 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                 </CardContent>
               </Card>
             ))}
+          </div>
+        ) : (
+          /* MODO LISTA (100% RESPONSIVO) */
+          <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden animate-fade-in">
+            {/* Tabela para Desktop e Tablet (>= 640px) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground font-semibold">
+                    <th className="p-3 pl-4">Paciente</th>
+                    <th className="p-3">Queixa Principal / Hipótese</th>
+                    <th className="p-3">Evoluções SOAP</th>
+                    <th className="p-3">Escala EVA</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 pr-4 text-right">Ações Rápidas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredOverview.map((item) => (
+                    <tr
+                      key={item.patientId}
+                      className="hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="p-3 pl-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            onClick={() => handleOpenPatientRecord(item.patientId)}
+                            className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-xs shrink-0 cursor-pointer hover:bg-primary/25 transition-colors"
+                            title="Abrir Prontuário"
+                          >
+                            {item.patientName.charAt(0)}
+                          </div>
+                          <div>
+                            <div
+                              onClick={() => handleOpenPatientRecord(item.patientId)}
+                              className="font-bold text-sm text-foreground hover:text-primary cursor-pointer transition-colors"
+                            >
+                              {item.patientName}
+                            </div>
+                            <div className="text-[11px] font-mono text-muted-foreground">
+                              CPF: {item.patientCpf}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3 max-w-xs">
+                        {item.chiefComplaint ? (
+                          <div className="text-xs text-foreground/90 font-medium truncate" title={item.chiefComplaint}>
+                            &ldquo;{item.chiefComplaint}&rdquo;
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground italic">
+                            Anamnese pendente
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        <span className="font-semibold text-foreground">
+                          {item.evolutionsCount} atendimento{item.evolutionsCount !== 1 ? "s" : ""}
+                        </span>
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        {item.painScaleEva !== null && item.painScaleEva !== undefined ? (
+                          <span className={`font-bold px-2 py-0.5 rounded-full border text-[11px] ${getEvaColor(item.painScaleEva)}`}>
+                            EVA {item.painScaleEva}/10
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">Não avaliada</span>
+                        )}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        <Badge
+                          variant={item.hasRecord ? "default" : "outline"}
+                          className={`text-[10px] font-semibold ${
+                            item.hasRecord
+                              ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.hasRecord ? "Prontuário Ativo" : "Sem Ficha"}
+                        </Badge>
+                      </td>
+
+                      <td className="p-3 pr-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenPatientRecord(item.patientId)}
+                            className="h-8 px-2.5 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/5"
+                            title="Abrir Prontuário Completo"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Abrir Prontuário</span>
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedPatientId(item.patientId)
+                              setIsEvolutionModalOpen(true)
+                            }}
+                            className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                            title="Nova Evolução SOAP"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Evolução</span>
+                          </Button>
+
+                          {item.hasRecord && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setDeletingRecordPatientId(item.patientId)}
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              title="Excluir Prontuário"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Cards Condensados para Mobile (< 640px) */}
+            <div className="sm:hidden divide-y divide-border/60">
+              {filteredOverview.map((item) => (
+                <div key={item.patientId} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div
+                        onClick={() => handleOpenPatientRecord(item.patientId)}
+                        className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-sm shrink-0 cursor-pointer"
+                      >
+                        {item.patientName.charAt(0)}
+                      </div>
+                      <div>
+                        <div
+                          onClick={() => handleOpenPatientRecord(item.patientId)}
+                          className="font-bold text-sm text-foreground hover:text-primary cursor-pointer leading-tight"
+                        >
+                          {item.patientName}
+                        </div>
+                        <div className="text-xs font-mono text-muted-foreground mt-0.5">
+                          CPF: {item.patientCpf}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge
+                        variant={item.hasRecord ? "default" : "outline"}
+                        className={`text-[9px] font-semibold ${
+                          item.hasRecord
+                            ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {item.hasRecord ? "Ativo" : "Sem Ficha"}
+                      </Badge>
+                      {item.painScaleEva !== null && item.painScaleEva !== undefined && (
+                        <span className={`font-bold px-1.5 py-0.5 rounded-full border text-[9px] ${getEvaColor(item.painScaleEva)}`}>
+                          EVA {item.painScaleEva}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {item.chiefComplaint && (
+                    <p className="text-xs text-muted-foreground line-clamp-1 italic">
+                      &ldquo;{item.chiefComplaint}&rdquo;
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-border/50">
+                    <Button
+                      size="sm"
+                      onClick={() => handleOpenPatientRecord(item.patientId)}
+                      className="h-8 px-2.5 text-xs gap-1 flex-1 font-semibold"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>Prontuário</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedPatientId(item.patientId)
+                        setIsEvolutionModalOpen(true)
+                      }}
+                      className="h-8 px-2.5 text-xs gap-1 text-primary border-primary/30 hover:bg-primary/5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Evolução</span>
+                    </Button>
+
+                    {item.hasRecord && (
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => setDeletingRecordPatientId(item.patientId)}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                        title="Excluir"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

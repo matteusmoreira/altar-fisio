@@ -170,8 +170,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <div className="h-16 flex items-center px-4 border-b border-border justify-between overflow-hidden">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/20">
-                <HeartPulse className="h-6 w-6" />
+              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/20 overflow-hidden">
+                {theme.logoUrl ? (
+                  <img
+                    src={theme.logoUrl}
+                    alt={theme.clinicName}
+                    className="h-full w-full object-contain p-0.5"
+                  />
+                ) : (
+                  <HeartPulse className="h-6 w-6" />
+                )}
               </div>
               <div className="flex flex-col truncate">
                 <span className="font-bold text-sm leading-tight text-foreground truncate tracking-tight">
@@ -184,8 +192,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </div>
           ) : (
             <div className="mx-auto">
-              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shadow-sm border border-primary/20">
-                <HeartPulse className="h-6 w-6" />
+              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shadow-sm border border-primary/20 overflow-hidden">
+                {theme.logoUrl ? (
+                  <img
+                    src={theme.logoUrl}
+                    alt={theme.clinicName}
+                    className="h-full w-full object-contain p-0.5"
+                  />
+                ) : (
+                  <HeartPulse className="h-6 w-6" />
+                )}
               </div>
             </div>
           )}
@@ -454,8 +470,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-            <HeartPulse className="h-5 w-5" />
+          <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
+            {theme.logoUrl ? (
+              <img
+                src={theme.logoUrl}
+                alt={theme.clinicName}
+                className="h-full w-full object-contain p-0.5"
+              />
+            ) : (
+              <HeartPulse className="h-5 w-5" />
+            )}
           </div>
           <div className="flex flex-col truncate">
             <span className="font-bold text-xs leading-tight text-foreground truncate">
@@ -527,8 +551,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <div className="relative w-4/5 max-w-xs bg-card border-r border-border h-full flex flex-col z-10 shadow-2xl">
             <div className="h-16 px-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20">
-                  <HeartPulse className="h-5 w-5" />
+                <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden">
+                  {theme.logoUrl ? (
+                    <img
+                      src={theme.logoUrl}
+                      alt={theme.clinicName}
+                      className="h-full w-full object-contain p-0.5"
+                    />
+                  ) : (
+                    <HeartPulse className="h-5 w-5" />
+                  )}
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-foreground">{theme.clinicName}</h3>

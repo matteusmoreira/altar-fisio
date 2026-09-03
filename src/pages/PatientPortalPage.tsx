@@ -89,6 +89,8 @@ class PortalErrorBoundary extends React.Component<
 }
 
 const PatientPortalContent: React.FC = () => {
+  const clinicSettings = useQuery(api.clinic.getSettings)
+
   // Estado de Autenticação / Identificação do Aluno
   const [patientId, setPatientId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -408,15 +410,23 @@ const PatientPortalContent: React.FC = () => {
         <div className="max-w-md w-full mx-auto my-auto space-y-6 animate-fade-in pt-4 pb-8">
           {/* Header Marca */}
           <div className="text-center space-y-3">
-            <div className="inline-flex h-16 w-16 rounded-3xl bg-primary/10 text-primary items-center justify-center shadow-lg shadow-primary/15 border border-primary/20">
-              <HeartPulse className="h-8 w-8 text-primary" />
+            <div className="inline-flex h-16 w-16 rounded-3xl bg-primary/10 text-primary items-center justify-center shadow-lg shadow-primary/15 border border-primary/20 overflow-hidden">
+              {clinicSettings?.logoUrl ? (
+                <img
+                  src={clinicSettings.logoUrl}
+                  alt={clinicSettings.clinicName || "Logo"}
+                  className="h-full w-full object-contain p-1.5"
+                />
+              ) : (
+                <HeartPulse className="h-8 w-8 text-primary" />
+              )}
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-tight text-foreground">
-                Altar Fisio
+                {clinicSettings?.clinicName || "Altar Fisio"}
               </h1>
               <p className="text-xs font-semibold text-primary uppercase tracking-wider mt-0.5">
-                Área Exclusiva do Aluno & Paciente
+                {clinicSettings?.clinicSubtitle || "Área Exclusiva do Aluno & Paciente"}
               </p>
             </div>
             <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
@@ -577,8 +587,16 @@ const PatientPortalContent: React.FC = () => {
       {/* Header Fixo Tipo App Nativo com Blur */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 sm:px-6 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-sm">
-            <HeartPulse className="h-5 w-5" />
+          <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-sm overflow-hidden">
+            {clinicSettings?.logoUrl ? (
+              <img
+                src={clinicSettings.logoUrl}
+                alt={clinicSettings.clinicName || "Logo"}
+                className="h-full w-full object-contain p-1"
+              />
+            ) : (
+              <HeartPulse className="h-5 w-5" />
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
@@ -590,7 +608,7 @@ const PatientPortalContent: React.FC = () => {
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground font-medium">
-              Altar Fisio • Dr. Marcelo
+              {clinicSettings?.clinicName || "Altar Fisio"} • {clinicSettings?.clinicSubtitle || "Dr. Marcelo"}
             </p>
           </div>
         </div>

@@ -207,3 +207,22 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-03] Exportação de Planilhas Excel (.xlsx) com Múltiplas Abas e Code-Splitting Sob Demanda
 - **Ponto de Fricção**: A inclusão estática da biblioteca `xlsx` (SheetJS) no bundle principal do cliente adicionaria mais de 400 kB ao carregamento inicial da aplicação, impactando o First Contentful Paint (FCP) de todos os usuários, mesmo os que nunca usam a funcionalidade de exportação. Por outro lado, a geração simplificada de arquivos `.csv` não suporta múltiplas abas (ex: "Histórico Detalhado" e "Consolidado por Aluno") e o formato XML 2003 `.xls` dispara avisos de arquivo não seguro no Microsoft Excel moderno.
 - **Mitigação / Regra**: Carregar a biblioteca `xlsx` estritamente sob demanda via import dinâmico assíncrono (`const XLSX = await import("xlsx")`) dentro do manipulador do clique de exportação (`handleExportExcel`). O Vite/Rollup isola a biblioteca automaticamente em um chunk separado (`xlsx-*.js`), mantendo o bundle principal da aplicação leve e veloz, enquanto entrega planilhas binárias `.xlsx` profissionais com formatação, larguras de colunas calculadas e múltiplas abas limpas.
+
+---
+
+### [2026-09-03] Upload de Assets Institucionais (Logotipo), Convex File Storage e Propagação Reativa no Layout
+- **Ponto de Fricção**: Gravar imagens de marca (PNG, JPG, SVG, WebP) em Base64 Data URI diretamente na linha de configurações do banco Convex aumenta o payload JSON em ~33%, satura cotas de bandwidth e desacelera todas as telas do sistema que consomem `clinicSettings`. Por outro lado, o uso de File Storage requer resolução dinâmica de URL (`ctx.storage.getUrl`) e deleção ativa de arquivos anteriores (`ctx.storage.delete`) para evitar o acúmulo de imagens órfãs ao substituir ou excluir logos.
+- **Mitigação / Regra**:
+  1. No schema Convex (`convex/schema.ts`), armazenar `logoUrl: v.optional(v.string())` e `logoStorageId: v.optional(v.string())`.
+  2. No backend (`convex/clinic.ts`), expor mutation `generateUploadUrl` para upload direto do cliente via POST HTTP binário, e implementar auto-limpeza em `updateSettings` e `removeLogo`: se o `logoStorageId` for alterado ou removido, invocar `await ctx.storage.delete(existing.logoStorageId).catch(() => {})`. Na query `getSettings`, resolver dinamicamente o link público atualizado do storage.
+  3. No frontend (`SettingsPage.tsx`), criar área de upload com Drag & Drop, clique, validação de tipos MIME e limite de 5MB, pré-visualização instantânea via `URL.createObjectURL` e pré-visualização em escala real e em tamanho de sidebar (40x40). Fornecer também opção de remoção de logo e inserção via link direto.
+  4. No `ThemeContext.tsx`, derivar a marca de forma reativa a partir de `useQuery(api.clinic.getSettings)` mantendo cache local de fallback (`localStorage`), propagando a logo em tempo real para a sidebar (expandida e recolhida), barra mobile, drawer, tela de login, portal do aluno e cabeçalhos de impressão timbrados.
+
+---
+
+### [2026-09-03] Alternância Dinâmica Grade/Lista, Prevenção de Conflitos de Nomenclatura e Responsividade Mobile Híbrida
+- **Ponto de Fricção**: Ao implementar modos de visualização (Grade vs Lista) em telas complexas que já possuem estados como `viewMode` para chavear rotas ou subvisões internas (como em `ClinicalRecordPage`, onde `viewMode` controlava "overview" vs "patient"), reutilizar o mesmo nome quebra a navegação interna ou sobrescreve estados. Além disso, tabelas no modo lista com muitas colunas (Ações, Contatos, Badges) estouram a largura da tela em smartphones (375px–420px) se renderizadas puramente em `<table>` sem layout alternativo, e botões de filtro sem `flex-wrap` ou `flex-1` quebram linhas desordenadamente.
+- **Mitigação / Regra**:
+  1. Componentizar o alternador de visualização em `<ViewModeToggle>` (`src/components/ui/view-mode-toggle.tsx`) com ícones `LayoutGrid`/`List`, segmented control e rótulos responsivos (`hidden sm:inline`).
+  2. Isolar o estado de layout por tela (ex: `overviewLayoutMode` em páginas com navegação própria) e memorizar preferências do usuário no `localStorage` sob chaves com prefixo específico (`altar_<modulo>_view_mode`).
+  3. No Modo Lista, adotar design responsivo híbrido: em telas `>= 640px` (`hidden sm:block`), exibir tabela estruturada com cabeçalho limpo e colunas alinhadas; em telas `< 640px` (`sm:hidden`), renderizar cards condensados em linha (card-row) com separadores sutis, garantindo 100% de responsividade sem forçar rolagem lateral exaustiva no celular.
