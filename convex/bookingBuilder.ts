@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server"
+import { api } from "./_generated/api"
 import { v } from "convex/values"
 
 export const DEFAULT_BOOKING_STEPS = [
@@ -540,7 +541,30 @@ export const submitPublicBooking = mutation({
       timestamp: now,
     })
 
-    // 6. Registra na trilha de auditoria
+    // 6. Envia confirmação WhatsApp para o paciente caso agendado
+    if (patient.phone && !requireApproval) {
+      const room = args.roomId ? await ctx.db.get(args.roomId) : null
+      const prof = args.professionalId ? await ctx.db.get(args.professionalId) : null
+      const serviceTitle =
+        args.specialty === "pilates"
+          ? "Pilates Studio"
+          : args.specialty === "rpg"
+          ? "RPG"
+          : "Fisioterapia"
+
+      await ctx.scheduler.runAfter(0, api.notifications.sendScheduleConfirmationAction, {
+        patientName: patient.name,
+        phone: patient.phone,
+        serviceName: serviceTitle,
+        professionalName: prof?.name || "Dr(a). Fisioterapeuta",
+        date: args.date,
+        startTime: args.startTime,
+        endTime: args.endTime,
+        roomName: room?.name || "Unidade Principal",
+      })
+    }
+
+    // 7. Registra na trilha de auditoria
     await ctx.db.insert("auditLogs", {
       action: "public_booking_created",
       userName: args.name,

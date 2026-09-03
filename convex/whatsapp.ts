@@ -40,8 +40,13 @@ export function sanitizeAdminToken(rawToken?: string): string {
 
 export function formatBrazilianPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "")
-  if (digits.startsWith("55")) return digits
-  return `55${digits}`
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    return digits
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`
+  }
+  return digits.startsWith("55") ? digits : `55${digits}`
 }
 
 export function normalizeWhatsAppText(text: string): string {
@@ -142,17 +147,30 @@ export const getInstanceByTokenInternal = internalQuery({
 
 export const getDefaultInstanceInternal = internalQuery({
   handler: async (ctx) => {
+    // 1. Instância default QUE ESTEJA conectada
+    const defaultConnected = await ctx.db
+      .query("whatsappInstances")
+      .withIndex("by_default", (q) => q.eq("isDefault", true))
+      .filter((q) => q.eq(q.field("status"), "connected"))
+      .first()
+    if (defaultConnected) return defaultConnected
+
+    // 2. Qualquer outra instância conectada
+    const anyConnected = await ctx.db
+      .query("whatsappInstances")
+      .withIndex("by_status", (q) => q.eq("status", "connected"))
+      .first()
+    if (anyConnected) return anyConnected
+
+    // 3. Fallback: instância marcada como default mesmo que desconectada
     const defaultInst = await ctx.db
       .query("whatsappInstances")
       .withIndex("by_default", (q) => q.eq("isDefault", true))
       .first()
     if (defaultInst) return defaultInst
 
-    // Fallback: primeira conectada
-    return await ctx.db
-      .query("whatsappInstances")
-      .withIndex("by_status", (q) => q.eq("status", "connected"))
-      .first()
+    // 4. Último fallback: qualquer instância cadastrada
+    return await ctx.db.query("whatsappInstances").first()
   },
 })
 
@@ -702,7 +720,15 @@ export const deleteInstanceAction = action({
 
 export const listTemplates = query({
   args: {
-    category: v.optional(v.union(v.literal("reminder_24h"), v.literal("reminder_2h"), v.literal("broadcast"), v.literal("custom"))),
+    category: v.optional(
+      v.union(
+        v.literal("reminder_24h"),
+        v.literal("reminder_2h"),
+        v.literal("booking_confirmation"),
+        v.literal("broadcast"),
+        v.literal("custom")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     let templates = await ctx.db.query("messageTemplates").order("desc").collect()
@@ -766,6 +792,7 @@ export const saveTemplate = mutation({
     category: v.union(
       v.literal("reminder_24h"),
       v.literal("reminder_2h"),
+      v.literal("booking_confirmation"),
       v.literal("broadcast"),
       v.literal("custom")
     ),
@@ -805,7 +832,7 @@ export const deleteTemplate = mutation({
 
 export const assignReminderTemplate = mutation({
   args: {
-    target: v.union(v.literal("reminder_24h"), v.literal("reminder_2h")),
+    target: v.union(v.literal("reminder_24h"), v.literal("reminder_2h"), v.literal("booking_confirmation")),
     templateId: v.optional(v.id("messageTemplates")),
   },
   handler: async (ctx, args) => {
@@ -814,8 +841,10 @@ export const assignReminderTemplate = mutation({
 
     if (args.target === "reminder_24h") {
       await ctx.db.patch(settings._id, { activeReminder24hTemplateId: args.templateId })
-    } else {
+    } else if (args.target === "reminder_2h") {
       await ctx.db.patch(settings._id, { activeReminder2hTemplateId: args.templateId })
+    } else if (args.target === "booking_confirmation") {
+      await ctx.db.patch(settings._id, { activeConfirmationTemplateId: args.templateId })
     }
     return { success: true }
   },

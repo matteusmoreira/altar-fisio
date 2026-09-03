@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from "react"
+import { useQuery, useAction } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useTheme } from "@/contexts/ThemeContext"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -7,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select-native"
 import { formatDateBR, formatDateTimeBR, getTodayDateString } from "@/lib/dateUtils"
+import { formatPhoneBR, cleanPhoneDigits } from "@/lib/utils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -55,11 +58,25 @@ export const NotificationsPage: React.FC = () => {
   } = useClinicData()
 
   // Feedback Toast
-  const [feedback, setFeedback] = useState<string | null>(null)
-  const showToast = (msg: string) => {
-    setFeedback(msg)
-    setTimeout(() => setFeedback(null), 4000)
+  const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setFeedback({ message, type })
+    setTimeout(() => setFeedback(null), 5000)
   }
+
+  // Instâncias UAZAPI e Action de Disparo Direto
+  const instances = useQuery(api.whatsapp.listInstances) || []
+  const activeWhatsappInstance = useMemo(() => {
+    return (
+      instances.find((i: any) => i.isDefault && i.status === "connected") ||
+      instances.find((i: any) => i.status === "connected") ||
+      instances.find((i: any) => i.isDefault) ||
+      instances[0] ||
+      null
+    )
+  }, [instances])
+
+  const sendWhatsAppAction = useAction(api.notifications.sendWhatsAppNotificationAction)
 
   // Estados de Teste Manual
   const [testTab, setTestTab] = useState<"whatsapp" | "email">("whatsapp")
@@ -104,23 +121,32 @@ export const NotificationsPage: React.FC = () => {
   // Disparo de Teste de WhatsApp
   const handleSendWhatsAppTest = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSendingTest(true)
-    const mockSchedule = schedules[0] || {
-      title: "Sessão de Pilates Aparelhos",
-      startTime: "08:00",
-      date: getTodayDateString(),
-      professionalName: "Dra. Camila Duarte",
-      roomName: "Studio Pilates Aparelhos",
+
+    const rawDigits = cleanPhoneDigits(testNumber)
+    if (rawDigits.length < 10) {
+      showToast("Informe um número de WhatsApp válido com DDD (mínimo 10 dígitos, ex: (22) 99902-1889)", "error")
+      return
     }
 
+    setIsSendingTest(true)
+
+    const formattedMessage = `Olá, *${testName}*! 👋\n\nEste é um lembrete do seu atendimento na *Altar Fisio*:\n📅 *Data:* ${formatDateBR(getTodayDateString())}\n⏰ *Horário:* 08:00\n👨‍⚕️ *Profissional:* Dra. Camila Duarte\n📍 *Local:* Studio Pilates Aparelhos\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
+
     try {
-      const res = await sendWhatsAppReminder(mockSchedule as any, {
-        name: testName,
+      const res = await sendWhatsAppAction({
+        recipientName: testName,
         phone: testNumber,
+        message: formattedMessage,
+        triggerType: "simulador_teste",
       })
-      showToast(`Lembrete WhatsApp disparado para ${testName} (${testNumber})!`)
+
+      if (res?.success) {
+        showToast(`Lembrete WhatsApp de teste disparado com sucesso para ${testNumber}!`, "success")
+      } else {
+        showToast(`Falha no disparo: ${res?.errorMessage || "Instância do WhatsApp desconectada ou erro no gateway Uazapi"}`, "error")
+      }
     } catch (err: any) {
-      showToast(`Erro ao disparar: ${err?.message || "Verifique as configurações"}`)
+      showToast(`Erro ao disparar: ${err?.message || "Verifique a conexão e as credenciais do WhatsApp"}`, "error")
     } finally {
       setIsSendingTest(false)
     }
@@ -187,9 +213,19 @@ export const NotificationsPage: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
       {feedback && (
-        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{feedback}</span>
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-sm font-medium animate-fade-in ${
+            feedback.type === "error"
+              ? "bg-rose-600 text-white shadow-rose-900/30 border border-rose-500/40"
+              : "bg-emerald-600 text-white shadow-emerald-900/30 border border-emerald-500/40"
+          }`}
+        >
+          {feedback.type === "error" ? (
+            <AlertCircle className="h-4 w-4 shrink-0 text-white" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-white" />
+          )}
+          <span>{feedback.message}</span>
         </div>
       )}
 
@@ -583,16 +619,48 @@ export const NotificationsPage: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Telefone WhatsApp (Com DDD)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-foreground">Telefone WhatsApp (Com DDD)</label>
+                    <span className="text-[10px] text-muted-foreground font-normal">Máscara (XX) XXXXX-XXXX</span>
+                  </div>
                   <Input
                     value={testNumber}
-                    onChange={(e) => setTestNumber(e.target.value)}
-                    placeholder="(11) 98877-6655"
-                    className="h-9 text-xs"
+                    onChange={(e) => setTestNumber(formatPhoneBR(e.target.value))}
+                    placeholder="(22) 99902-1889"
+                    maxLength={16}
+                    className="h-9 text-xs font-mono"
                     required
                   />
                 </div>
               </div>
+
+              {/* Status da Instância do WhatsApp Conectada */}
+              {activeWhatsappInstance && activeWhatsappInstance.status === "connected" ? (
+                <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px]">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-medium">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span>
+                      Instância UAZAPI Ativa: <strong>{activeWhatsappInstance.name}</strong> ({activeWhatsappInstance.ownerNumber || activeWhatsappInstance.profileName || "Online"})
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                    Conectado
+                  </Badge>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+                  <div className="flex items-center gap-2 font-medium">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Nenhuma instância conectada detectada. Conecte seu aparelho via QR Code na aba <strong>Central WhatsApp</strong>.</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
+                    Aguardando Conexão
+                  </Badge>
+                </div>
+              )}
 
               {/* Preview da Mensagem */}
               <div className="p-3 bg-muted/30 border border-border rounded-xl space-y-1">

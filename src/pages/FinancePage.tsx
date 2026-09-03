@@ -81,8 +81,21 @@ export const FinancePage: React.FC = () => {
   const [newDueDate, setNewDueDate] = useState(todayStr)
   const [newPaymentMethod, setNewPaymentMethod] = useState<any>("pix")
   const [newStatus, setNewStatus] = useState<"paid" | "pending">("paid")
-  const [newPatientId, setNewPatientId] = useState<string>(patients[0]?.id || "")
+  const [newPatientId, setNewPatientId] = useState<string>("")
   const [newProfessionalId, setNewProfessionalId] = useState<string>("")
+
+  const handleOpenNewTxModal = () => {
+    setNewType("income")
+    setNewCategory("Mensalidade Pilates")
+    setNewDescription("")
+    setNewAmount(380)
+    setNewDueDate(todayStr)
+    setNewPaymentMethod("pix")
+    setNewStatus("paid")
+    setNewPatientId("")
+    setNewProfessionalId("")
+    setIsNewTxModalOpen(true)
+  }
 
   // Modal 2: Baixa Rápida de Pagamento
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false)
@@ -130,7 +143,8 @@ export const FinancePage: React.FC = () => {
       const matchCat = t.category.toLowerCase().includes(q)
       const matchPatient = (t.patientName || "").toLowerCase().includes(q)
       const matchProf = (t.professionalName || "").toLowerCase().includes(q)
-      if (!matchDesc && !matchCat && !matchPatient && !matchProf) return false
+      const matchClinic = !t.patientName && (q.includes("clini") || q.includes("geral"))
+      if (!matchDesc && !matchCat && !matchPatient && !matchProf && !matchClinic) return false
     }
     return true
   })
@@ -141,27 +155,35 @@ export const FinancePage: React.FC = () => {
   // Ações de formulário
   const handleCreateTx = async (e: React.FormEvent) => {
     e.preventDefault()
-    const pat = patients.find((p) => p.id === newPatientId)
-    const prof = professionals.find((pr) => pr.id === newProfessionalId)
+    const pat = (newPatientId && newPatientId.trim() !== "") ? patients.find((p) => p.id === newPatientId) : undefined
+    const prof = (newProfessionalId && newProfessionalId.trim() !== "") ? professionals.find((pr) => pr.id === newProfessionalId) : undefined
 
     await addTransaction({
       type: newType,
       category: newCategory,
-      description: newDescription || (newType === "income" ? `${newCategory} - ${pat?.name || "Paciente"}` : newCategory),
+      description:
+        newDescription.trim() ||
+        (pat
+          ? `${newCategory} - ${pat.name}`
+          : newType === "income"
+          ? `${newCategory} (Clínica)`
+          : newCategory),
       amount: Number(newAmount),
       dueDate: newDueDate,
       paymentDate: newStatus === "paid" ? newDueDate : undefined,
       paymentMethod: newPaymentMethod,
       status: newStatus,
-      patientId: newType === "income" ? newPatientId : undefined,
-      patientName: newType === "income" ? pat?.name : undefined,
-      professionalId: newType === "expense" && newProfessionalId ? newProfessionalId : undefined,
+      patientId: pat ? pat.id : undefined,
+      patientName: pat ? pat.name : undefined,
+      professionalId: newType === "expense" && prof ? prof.id : undefined,
       professionalName: newType === "expense" && prof ? prof.name : undefined,
       receiptIssued: newStatus === "paid",
     })
 
     setIsNewTxModalOpen(false)
     setNewDescription("")
+    setNewPatientId("")
+    setNewProfessionalId("")
     showFeedback("Lançamento financeiro registrado com sucesso no caixa!")
   }
 
@@ -245,7 +267,7 @@ export const FinancePage: React.FC = () => {
             </select>
           </div>
 
-          <Button onClick={() => setIsNewTxModalOpen(true)} className="gap-2 text-xs h-9">
+          <Button onClick={handleOpenNewTxModal} className="gap-2 text-xs h-9">
             <Plus className="h-4 w-4" />
             <span>Novo Lançamento</span>
           </Button>
@@ -548,7 +570,11 @@ export const FinancePage: React.FC = () => {
                             <span>Vencimento: <strong>{formatDateBR(t.dueDate)}</strong></span>
                             {t.paymentDate && <span>• Pago em: <strong>{formatDateBR(t.paymentDate)}</strong></span>}
                             <span>• Forma: <strong>{t.paymentMethod.toUpperCase()}</strong></span>
-                            {t.patientName && <span>• Paciente: <strong className="text-foreground">{t.patientName}</strong></span>}
+                            {t.patientName ? (
+                              <span>• Paciente: <strong className="text-foreground">{t.patientName}</strong></span>
+                            ) : (
+                              <span>• Origem: <strong className="text-foreground/80">Clínica (Geral)</strong></span>
+                            )}
                             {t.professionalName && <span>• Profissional: <strong className="text-foreground">{t.professionalName}</strong></span>}
                           </p>
                         </div>
@@ -953,7 +979,10 @@ export const FinancePage: React.FC = () => {
                         <option value="Pacote Fisioterapia">Pacote Fisioterapia</option>
                         <option value="Sessão RPG Avulsa">Sessão RPG Avulsa</option>
                         <option value="Avaliação Postural">Avaliação Postural</option>
-                        <option value="Outras Receitas">Outras Receitas</option>
+                        <option value="Venda de Produtos & Acessórios">Venda de Produtos & Acessórios (Clínica)</option>
+                        <option value="Sublocação de Sala">Sublocação de Sala / Espaço</option>
+                        <option value="Cursos & Eventos">Cursos, Workshops & Eventos</option>
+                        <option value="Outras Receitas">Outras Receitas da Clínica</option>
                       </>
                     ) : (
                       <>
@@ -970,19 +999,39 @@ export const FinancePage: React.FC = () => {
                 </div>
               </div>
 
-              {newType === "income" && (
+              {/* Paciente Associado (Opcional) */}
+              {newCategory !== "Repasse de Comissão" && (
                 <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Paciente Associado</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-foreground/85">
+                      Paciente Associado <span className="text-muted-foreground font-normal">(Opcional)</span>
+                    </label>
+                    {newPatientId && (
+                      <button
+                        type="button"
+                        onClick={() => setNewPatientId("")}
+                        className="text-[11px] text-primary hover:underline font-medium"
+                      >
+                        Limpar / Lançamento da Clínica
+                      </button>
+                    )}
+                  </div>
                   <Select
                     value={newPatientId}
                     onChange={(e) => setNewPatientId(e.target.value)}
                   >
+                    <option value="">Sem paciente vinculado (Lançamento da própria clínica / Geral)</option>
                     {patients.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name} ({p.documentCpf})
                       </option>
                     ))}
                   </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {newPatientId
+                      ? "Lançamento associado à ficha deste paciente."
+                      : "Deixe em 'Sem paciente vinculado' quando for receita ou despesa operacional da clínica."}
+                  </p>
                 </div>
               )}
 
@@ -1008,7 +1057,11 @@ export const FinancePage: React.FC = () => {
                 <Input
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Ex: Mensalidade Pilates 2x/Semana..."
+                  placeholder={
+                    newPatientId
+                      ? "Ex: Mensalidade Pilates 2x/Semana, Pacote 10 sessões..."
+                      : "Ex: Aluguel da clínica, Compra de materiais, Manutenção de aparelho..."
+                  }
                   required
                 />
               </div>

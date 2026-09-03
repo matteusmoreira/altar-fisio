@@ -75,12 +75,21 @@ interface ClinicDataContextType {
   checkIn: (
     scheduleId: string,
     participantId: string,
-    status: "present" | "absence" | "scheduled"
+    status: "present" | "absence" | "scheduled",
+    options?: {
+      notes?: string
+      debitPackageOnAbsence?: boolean
+    }
   ) => Promise<{
     success: boolean
     hasPackage?: boolean
     remainingSessions?: number
     message?: string
+  }>
+  batchCheckIn: (scheduleId: string) => Promise<{
+    success: boolean
+    updatedCount: number
+    message: string
   }>
   cancelWithReplacement: (
     scheduleId: string,
@@ -817,6 +826,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const removeParticipantMutation = useMutation(api.schedules.removeParticipantFromSchedule)
   const createRecurringScheduleMutation = useMutation(api.schedules.createRecurringScheduleSeries)
   const checkInMutation = useMutation(api.schedules.checkInParticipant)
+  const batchCheckInMutation = useMutation(api.schedules.batchCheckInClass)
   const cancelWithReplacementMutation = useMutation(api.schedules.cancelWithReplacementCredit)
   const addParticipantMutation = useMutation(api.schedules.addParticipantToSchedule)
   const saveClinicalRecordMutation = useMutation(api.clinical.saveClinicalRecord)
@@ -1386,7 +1396,11 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const checkIn = async (
     scheduleId: string,
     participantId: string,
-    status: "present" | "absence" | "scheduled"
+    status: "present" | "absence" | "scheduled",
+    options?: {
+      notes?: string
+      debitPackageOnAbsence?: boolean
+    }
   ) => {
     setSchedules((prev) =>
       prev.map((s) => {
@@ -1398,6 +1412,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return {
               ...p,
               status,
+              notes: options?.notes !== undefined ? options.notes : p.notes,
               checkedInAt: status === "present" ? Date.now() : undefined,
             }
           }),
@@ -1409,6 +1424,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const res = await checkInMutation({
         participantId: participantId as any,
         status,
+        notes: options?.notes,
+        debitPackageOnAbsence: options?.debitPackageOnAbsence,
       })
       return res
     } catch (err) {
@@ -1416,7 +1433,50 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return {
         success: true,
         hasPackage: false,
-        message: status === "present" ? "Presença confirmada" : "Presença desfeita",
+        message: status === "present" ? "Presença confirmada" : "Presença ou falta registrada",
+      }
+    }
+  }
+
+  const batchCheckIn = async (
+    scheduleId: string
+  ): Promise<{
+    success: boolean
+    updatedCount: number
+    message: string
+  }> => {
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.id !== scheduleId) return s
+        return {
+          ...s,
+          participants: s.participants.map((p) => {
+            if (p.status === "justified_absence") return p
+            return {
+              ...p,
+              status: "present",
+              checkedInAt: Date.now(),
+            }
+          }),
+        }
+      })
+    )
+
+    try {
+      const res = await batchCheckInMutation({
+        scheduleId: scheduleId as any,
+      })
+      return {
+        success: res?.success ?? true,
+        updatedCount: res?.updatedCount ?? 0,
+        message: res?.message ?? "Presenças em lote confirmadas",
+      }
+    } catch (err) {
+      console.warn("Convex sync warning (batchCheckIn):", err)
+      return {
+        success: true,
+        updatedCount: 0,
+        message: "Presenças em lote confirmadas",
       }
     }
   }
@@ -2048,9 +2108,9 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         paymentDate: txData.paymentDate,
         paymentMethod: txData.paymentMethod,
         status: txData.status,
-        patientId: txData.patientId as any,
-        professionalId: txData.professionalId as any,
-        packageId: txData.packageId as any,
+        patientId: txData.patientId ? (txData.patientId as any) : undefined,
+        professionalId: txData.professionalId ? (txData.professionalId as any) : undefined,
+        packageId: txData.packageId ? (txData.packageId as any) : undefined,
         receiptIssued: txData.receiptIssued ?? false,
       })
       if (cid) createdId = cid
@@ -2061,6 +2121,10 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newTx: FinancialTransaction = {
       ...txData,
       id: createdId,
+      patientId: txData.patientId || undefined,
+      patientName: txData.patientName || undefined,
+      professionalId: txData.professionalId || undefined,
+      professionalName: txData.professionalName || undefined,
     }
     setTransactions((prev) => [newTx, ...prev])
     return createdId
@@ -2178,12 +2242,12 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         phone: participant.phone,
         message,
         triggerType: "lembrete_manual",
-        scheduleId: schedule.id as any,
+        scheduleId: schedule.id ? String(schedule.id) : undefined,
       })
       return { success: res.success, message: res.errorMessage }
     } catch (err: any) {
       console.warn("Convex sync warning (sendWhatsAppReminder):", err)
-      return { success: true }
+      return { success: false, message: err?.message || "Erro ao comunicar com o gateway WhatsApp" }
     }
   }
 
@@ -2355,6 +2419,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         removeParticipantFromSchedule,
         addRecurringScheduleSeries,
         checkIn,
+        batchCheckIn,
         cancelWithReplacement,
         addParticipantToClass,
         replacementCredits: effectiveReplacementCredits,

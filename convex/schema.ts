@@ -23,6 +23,7 @@ export default defineSchema({
     activeWhatsappInstanceToken: v.optional(v.string()),
     activeReminder24hTemplateId: v.optional(v.id("messageTemplates")),
     activeReminder2hTemplateId: v.optional(v.id("messageTemplates")),
+    activeConfirmationTemplateId: v.optional(v.id("messageTemplates")),
     resendApiKey: v.optional(v.string()),
     resendFromEmail: v.optional(v.string()),
   }),
@@ -405,6 +406,7 @@ export default defineSchema({
     category: v.union(
       v.literal("reminder_24h"),
       v.literal("reminder_2h"),
+      v.literal("booking_confirmation"),
       v.literal("broadcast"),
       v.literal("custom")
     ),

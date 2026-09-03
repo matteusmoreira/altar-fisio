@@ -38,7 +38,11 @@ import {
   UserX,
   AlertTriangle,
   DoorOpen,
+  CheckCheck,
+  FileSpreadsheet,
 } from "lucide-react"
+import { AbsenceModal } from "@/components/classes/AbsenceModal"
+import { AttendanceReportView } from "@/components/classes/AttendanceReportView"
 
 const ROOM_TYPES: Array<{ id: RoomType; label: string }> = [
   { id: "pilates_aparelhos", label: "Pilates em Aparelhos" },
@@ -64,11 +68,43 @@ export const ClassesPage: React.FC = () => {
     deleteSchedule,
     removeParticipantFromSchedule,
     checkIn,
+    batchCheckIn,
   } = useClinicData()
 
-  // Aba ativa
-  const [activeTab, setActiveTab] = useState<"turmas" | "salas" | "reposicoes">("turmas")
+  // Aba ativa (Turmas, Salas, Reposições, Relatório de Frequência)
+  const [activeTab, setActiveTab] = useState<"turmas" | "salas" | "reposicoes" | "relatorio">("turmas")
   const [feedback, setFeedback] = useState<string | null>(null)
+
+  // Estado do Modal de Falta
+  const [absenceModalTarget, setAbsenceModalTarget] = useState<{
+    isOpen: boolean
+    scheduleId: string
+    participantId: string
+    studentName: string
+    studentPhone?: string
+    classNameTitle: string
+    initialNotes?: string
+    initialDebitPackage?: boolean
+  }>({
+    isOpen: false,
+    scheduleId: "",
+    participantId: "",
+    studentName: "",
+    classNameTitle: "",
+  })
+
+  // Ação em Lote: Marcar todos os matriculados como presentes
+  const handleBatchCheckIn = async (scheduleId: string) => {
+    try {
+      const res = await batchCheckIn(scheduleId)
+      if (res?.message) {
+        setFeedback(res.message)
+        setTimeout(() => setFeedback(null), 4000)
+      }
+    } catch (err) {
+      console.error("Erro na chamada em lote:", err)
+    }
+  }
 
   // Filtros de Turmas
   const [searchTerm, setSearchTerm] = useState("")
@@ -442,7 +478,18 @@ export const ClassesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {activeTab !== "relatorio" && (
+            <Button
+              variant="outline"
+              onClick={() => setActiveTab("relatorio")}
+              className="gap-2 shadow-xs text-xs"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Relatório de Frequência</span>
+            </Button>
+          )}
+
           {activeTab === "turmas" && (
             <Button
               onClick={() => {
@@ -468,10 +515,14 @@ export const ClassesPage: React.FC = () => {
 
       {/* Tabs Principais */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid grid-cols-3 max-w-lg w-full">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 max-w-2xl w-full">
           <TabsTrigger value="turmas" className="text-xs gap-1.5">
             <Layers className="h-3.5 w-3.5" />
             <span>Turmas ({classSchedules.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="relatorio" className="text-xs gap-1.5">
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Relatório & Faltas</span>
           </TabsTrigger>
           <TabsTrigger value="salas" className="text-xs gap-1.5">
             <DoorOpen className="h-3.5 w-3.5" />
@@ -638,18 +689,31 @@ export const ClassesPage: React.FC = () => {
                       <CardContent className="p-4 pt-1 space-y-2">
                         <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground pt-1">
                           <span>Alunos Matriculados ({activeParticipants.length}/{schedule.maxCapacity}):</span>
-                          {!isFull && (
-                            <button
-                              onClick={() => {
-                                setSelectedScheduleId(schedule.id)
-                                setSelectedPatientId(patients[0]?.id || "")
-                              }}
-                              className="text-primary hover:underline flex items-center gap-1 text-[11px] font-bold"
-                            >
-                              <UserPlus className="h-3 w-3" />
-                              <span>Matricular</span>
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {activeParticipants.length > 0 && (
+                              <button
+                                onClick={() => handleBatchCheckIn(schedule.id)}
+                                className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 text-[11px] font-bold"
+                                title="Marcar todos os alunos desta turma como presentes com 1 clique"
+                              >
+                                <CheckCheck className="h-3.5 w-3.5" />
+                                <span>Marcar todos presentes</span>
+                              </button>
+                            )}
+
+                            {!isFull && (
+                              <button
+                                onClick={() => {
+                                  setSelectedScheduleId(schedule.id)
+                                  setSelectedPatientId(patients[0]?.id || "")
+                                }}
+                                className="text-primary hover:underline flex items-center gap-1 text-[11px] font-bold"
+                              >
+                                <UserPlus className="h-3 w-3" />
+                                <span>Matricular</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {schedule.participants.length === 0 ? (
@@ -660,20 +724,24 @@ export const ClassesPage: React.FC = () => {
                           <div className="space-y-1.5">
                             {schedule.participants.map((p) => {
                               const isJustified = p.status === "justified_absence"
+                              const isPresent = p.status === "present"
+                              const isAbsence = p.status === "absence"
                               return (
                                 <div
                                   key={p.id}
                                   className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-colors ${
                                     isJustified
                                       ? "bg-muted/30 border-dashed border-border opacity-70"
-                                      : p.status === "present"
+                                      : isPresent
                                       ? "bg-emerald-500/5 border-emerald-500/30"
+                                      : isAbsence
+                                      ? "bg-rose-500/5 border-rose-500/30"
                                       : "bg-card border-border/80"
                                   }`}
                                 >
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-semibold text-foreground">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-foreground truncate">
                                         {p.patientName}
                                       </span>
                                       {p.status === "replacement" && (
@@ -681,12 +749,12 @@ export const ClassesPage: React.FC = () => {
                                           Reposição
                                         </Badge>
                                       )}
-                                      {p.status === "present" && (
+                                      {isPresent && (
                                         <Badge variant="success" className="text-[9px] py-0 px-1.5">
                                           Presente
                                         </Badge>
                                       )}
-                                      {p.status === "absence" && (
+                                      {isAbsence && (
                                         <Badge variant="destructive" className="text-[9px] py-0 px-1.5">
                                           Falta
                                         </Badge>
@@ -698,21 +766,54 @@ export const ClassesPage: React.FC = () => {
                                       )}
                                     </div>
                                     <p className="text-[10px] text-muted-foreground">{p.patientPhone}</p>
+                                    {p.notes && isAbsence && (
+                                      <p className="text-[10px] text-rose-500 dark:text-rose-400 italic truncate max-w-[220px]" title={p.notes}>
+                                        Motivo: {p.notes}
+                                      </p>
+                                    )}
                                   </div>
 
                                   {/* Ações por Aluno */}
                                   <div className="flex items-center gap-1 shrink-0">
+                                    {/* Botão [✓ Presente] */}
                                     <Button
                                       size="sm"
-                                      variant={p.status === "present" ? "default" : "outline"}
-                                      onClick={() => checkIn(schedule.id, p.id, p.status === "present" ? "scheduled" : "present")}
-                                      className="h-7 px-2 text-[11px] gap-1"
-                                      title={p.status === "present" ? "Presença confirmada" : "Confirmar presença"}
+                                      variant={isPresent ? "default" : "outline"}
+                                      onClick={() => checkIn(schedule.id, p.id, isPresent ? "scheduled" : "present")}
+                                      className={`h-7 px-2 text-[11px] gap-1 ${
+                                        isPresent ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""
+                                      }`}
+                                      title={isPresent ? "Presença confirmada (Clique para desfazer)" : "Confirmar presença"}
                                     >
                                       <Check className="h-3 w-3" />
-                                      <span>{p.status === "present" ? "Presente" : "Check-in"}</span>
+                                      <span>{isPresent ? "Presente" : "Check-in"}</span>
                                     </Button>
 
+                                    {/* Botão [✕ Faltou] */}
+                                    <Button
+                                      size="sm"
+                                      variant={isAbsence ? "destructive" : "outline"}
+                                      onClick={() => {
+                                        setAbsenceModalTarget({
+                                          isOpen: true,
+                                          scheduleId: schedule.id,
+                                          participantId: p.id,
+                                          studentName: p.patientName,
+                                          studentPhone: p.patientPhone,
+                                          classNameTitle: schedule.title,
+                                          initialNotes: p.notes,
+                                        })
+                                      }}
+                                      className={`h-7 px-2 text-[11px] gap-1 ${
+                                        isAbsence ? "bg-rose-600 hover:bg-rose-700 text-white" : "hover:text-rose-600 hover:border-rose-300"
+                                      }`}
+                                      title={isAbsence ? "Falta registrada (Clique para ver/editar)" : "Marcar que o aluno faltou"}
+                                    >
+                                      <UserX className="h-3 w-3" />
+                                      <span>{isAbsence ? "Faltou" : "Falta"}</span>
+                                    </Button>
+
+                                    {/* Botão Remover/Desmatricular */}
                                     <Button
                                       size="sm"
                                       variant="ghost"

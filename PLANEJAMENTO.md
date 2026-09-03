@@ -215,12 +215,14 @@ graph TD
   - Integração com a API do **UAZAPI** (instância WhatsApp).
   - Integração com a API do **Resend** (e-mails transacionais com template HTML limpo).
 - [x] **Etapa 7.2**: Gatilhos Automatizados:
+  - **Confirmação Imediata ao Agendar**: Disparo instantâneo no momento da reserva (Portal do Aluno ou Agendamento Online), com modelo interativo personalizável (botões de confirmação e mapas) ou texto padrão da clínica.
   - **Lembrete 24h Antes**: Disparado via cron Convex para todos os alunos do dia seguinte com opção de confirmar ou avisar ausência.
   - **Lembrete 2h Antes**: Aviso curto reforçando o horário e orientações de vestimenta (meias antiderrapantes para Pilates).
   - **Aviso de Crédito de Reposição Gerado**: Notificação imediata quando o paciente cancela com antecedência, informando o prazo de validade.
   - **Envio de Recibo Financeiro**: Disparo automático de e-mail ou mensagem com recibo detalhado após confirmação de pagamento.
-- [x] **Etapa 7.3**: Painel de Monitoramento de Mensagens:
+- [x] **Etapa 7.3**: Painel de Monitoramento de Mensagens & Biblioteca de Modelos:
   - Registro em `notificationLogs` com status de entrega (Enviado, Erro, Em fila) e mensagem de retorno do gateway.
+  - Seletor rápido de modelos de WhatsApp ativos no topo da tela (`Ao Agendar`, `Lembrete 24h` e `Lembrete 2h`).
 
 **Critérios de Aceitação (DoD)**:
 - Disparo de mensagem de teste com sucesso via endpoint da UAZAPI configurado.

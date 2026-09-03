@@ -384,11 +384,13 @@ export const addParticipantToSchedule = mutation({
   },
 })
 
-// Check-in e Presença com Débito Automático de Sessão do Pacote Ativo
+// Check-in e Presença com Débito Automático de Sessão do Pacote Ativo e Controle de Faltas
 export const checkInParticipant = mutation({
   args: {
     participantId: v.id("scheduleParticipants"),
     status: v.union(v.literal("present"), v.literal("absence"), v.literal("scheduled")),
+    notes: v.optional(v.string()),
+    debitPackageOnAbsence: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const participant = await ctx.db.get(args.participantId)
@@ -397,21 +399,22 @@ export const checkInParticipant = mutation({
     const schedule = await ctx.db.get(participant.scheduleId)
     const wasPresent = participant.status === "present"
     const isNowPresent = args.status === "present"
+    const isNowAbsence = args.status === "absence"
+    const isNowScheduled = args.status === "scheduled"
 
     let deductedPackageId = participant.patientPackageId
     let resultMessage = ""
     let hasPackage = false
     let remainingSessions: number | undefined
 
-    // 1. Transição para PRESENTE: Consumir 1 sessão do pacote ativo
-    if (isNowPresent && !wasPresent) {
+    // Helper interno para debitar 1 sessão
+    const debitSessionHelper = async () => {
       let targetPackage = null
-      if (participant.patientPackageId) {
-        targetPackage = await ctx.db.get(participant.patientPackageId)
+      if (deductedPackageId) {
+        targetPackage = await ctx.db.get(deductedPackageId)
       }
 
       if (!targetPackage || targetPackage.status !== "active" || targetPackage.remainingSessions <= 0) {
-        // Buscar pacotes ativos do paciente
         const allPatientPackages = await ctx.db
           .query("patientPackages")
           .withIndex("by_patient", (q) => q.eq("patientId", participant.patientId))
@@ -436,7 +439,6 @@ export const checkInParticipant = mutation({
           }
         }
 
-        // Ordenar pelo que expira mais cedo (Smart FIFO)
         validPackages.sort((a, b) => a.pp.expiryDate.localeCompare(b.pp.expiryDate))
 
         if (validPackages.length > 0) {
@@ -458,36 +460,75 @@ export const checkInParticipant = mutation({
         deductedPackageId = targetPackage._id
         hasPackage = true
         remainingSessions = newRemaining
+        return { success: true, remaining: newRemaining }
+      }
+      return { success: false }
+    }
 
-        const pkgDef = await ctx.db.get(targetPackage.packageId)
-        resultMessage = `Presença confirmada! 1 sessão debitada do plano "${pkgDef?.name || "Pacote"}". Saldo: ${newRemaining} restante(s).`
-      } else {
+    // Helper interno para estornar 1 sessão
+    const refundSessionHelper = async () => {
+      if (deductedPackageId) {
+        const targetPackage = await ctx.db.get(deductedPackageId)
+        if (targetPackage) {
+          const newUsed = Math.max(0, targetPackage.usedSessions - 1)
+          const newRemaining = targetPackage.remainingSessions + 1
+          await ctx.db.patch(targetPackage._id, {
+            usedSessions: newUsed,
+            remainingSessions: newRemaining,
+            status: "active",
+          })
+        }
         deductedPackageId = undefined
-        hasPackage = false
-        resultMessage = "Presença confirmada! Paciente sem pacote ativo (Atendimento Avulso / Pendente)."
       }
     }
 
-    // 2. Revertendo PRESENTE (voltando para scheduled ou absence): Estornar a sessão
-    if (!isNowPresent && wasPresent && participant.patientPackageId) {
-      const targetPackage = await ctx.db.get(participant.patientPackageId)
-      if (targetPackage) {
-        const newUsed = Math.max(0, targetPackage.usedSessions - 1)
-        const newRemaining = targetPackage.remainingSessions + 1
-        await ctx.db.patch(targetPackage._id, {
-          usedSessions: newUsed,
-          remainingSessions: newRemaining,
-          status: "active",
-        })
+    // 1. Transição para PRESENTE
+    if (isNowPresent) {
+      if (!wasPresent) {
+        const deb = await debitSessionHelper()
+        if (deb.success) {
+          resultMessage = `Presença confirmada! 1 sessão debitada do plano. Saldo: ${deb.remaining} restante(s).`
+        } else {
+          resultMessage = "Presença confirmada! Aluno sem pacote ativo (Atendimento Avulso)."
+        }
+      } else {
+        resultMessage = "Presença confirmada mantida."
       }
-      deductedPackageId = undefined
-      resultMessage = "Presença desfeita. 1 sessão estornada ao pacote do paciente."
     }
+
+    // 2. Transição para FALTA
+    else if (isNowAbsence) {
+      if (args.debitPackageOnAbsence === true) {
+        if (!deductedPackageId) {
+          const deb = await debitSessionHelper()
+          if (deb.success) {
+            resultMessage = `Falta registrada com débito de 1 sessão do plano. Saldo: ${deb.remaining} restante(s).`
+          } else {
+            resultMessage = "Falta registrada (aluno sem pacote ativo)."
+          }
+        } else {
+          resultMessage = "Falta registrada mantendo a sessão debitada do plano."
+        }
+      } else {
+        // Falta abonada (não debita ou estorna se estava debitado)
+        await refundSessionHelper()
+        resultMessage = "Falta registrada como abonada (sem débito de créditos do plano)."
+      }
+    }
+
+    // 3. Revertendo para AGENDADO (desfazer)
+    else if (isNowScheduled) {
+      await refundSessionHelper()
+      resultMessage = "Status revertido para Agendado. Sessão estornada ao plano se aplicável."
+    }
+
+    const updatedNotes = args.notes !== undefined ? args.notes : participant.notes
 
     await ctx.db.patch(args.participantId, {
       status: args.status,
       patientPackageId: deductedPackageId,
       checkedInAt: args.status === "present" ? Date.now() : undefined,
+      notes: updatedNotes,
     })
 
     return {
@@ -495,6 +536,85 @@ export const checkInParticipant = mutation({
       hasPackage,
       remainingSessions,
       message: resultMessage,
+    }
+  },
+})
+
+// Chamada em Lote: Marcar Todos os Alunos Matriculados como Presentes
+export const batchCheckInClass = mutation({
+  args: {
+    scheduleId: v.id("schedules"),
+  },
+  handler: async (ctx, args) => {
+    const schedule = await ctx.db.get(args.scheduleId)
+    if (!schedule) throw new Error("Turma não encontrada")
+
+    const participants = await ctx.db
+      .query("scheduleParticipants")
+      .withIndex("by_schedule", (q) => q.eq("scheduleId", args.scheduleId))
+      .collect()
+
+    const todayStr = new Date().toISOString().split("T")[0]
+    let updatedCount = 0
+
+    for (const p of participants) {
+      // Pular se já estiver presente ou se desmarcou com reposição
+      if (p.status === "present" || p.status === "justified_absence") continue
+
+      let deductedPackageId = p.patientPackageId
+
+      if (!deductedPackageId) {
+        const allPatientPackages = await ctx.db
+          .query("patientPackages")
+          .withIndex("by_patient", (q) => q.eq("patientId", p.patientId))
+          .collect()
+
+        const validPackages = []
+        for (const pp of allPatientPackages) {
+          if (pp.status === "active" && pp.remainingSessions > 0 && pp.expiryDate >= todayStr) {
+            const pkgDef = await ctx.db.get(pp.packageId)
+            let matches = true
+            if (pkgDef?.serviceId && schedule) {
+              const svc = await ctx.db.get(pkgDef.serviceId)
+              if (svc && svc.specialty !== schedule.specialty) {
+                matches = false
+              }
+            }
+            if (matches) {
+              validPackages.push(pp)
+            }
+          }
+        }
+
+        validPackages.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+
+        if (validPackages.length > 0) {
+          const targetPackage = validPackages[0]
+          const newUsed = targetPackage.usedSessions + 1
+          const newRemaining = targetPackage.remainingSessions - 1
+          const newStatus = newRemaining <= 0 ? "completed" : "active"
+
+          await ctx.db.patch(targetPackage._id, {
+            usedSessions: newUsed,
+            remainingSessions: newRemaining,
+            status: newStatus,
+          })
+          deductedPackageId = targetPackage._id
+        }
+      }
+
+      await ctx.db.patch(p._id, {
+        status: "present",
+        patientPackageId: deductedPackageId,
+        checkedInAt: Date.now(),
+      })
+      updatedCount++
+    }
+
+    return {
+      success: true,
+      updatedCount,
+      message: `${updatedCount} aluno(s) marcado(s) como presente com sucesso!`,
     }
   },
 })
@@ -786,5 +906,184 @@ export const removeParticipantFromSchedule = mutation({
     return { success: true }
   },
 })
+
+// Relatório Analítico de Frequência, Presenças, Faltas e Reposições
+export const getAttendanceReport = query({
+  args: {
+    startDate: v.string(), // YYYY-MM-DD
+    endDate: v.string(), // YYYY-MM-DD
+    professionalId: v.optional(v.id("professionals")),
+    roomId: v.optional(v.id("rooms")),
+    patientId: v.optional(v.id("patients")),
+    status: v.optional(v.string()), // "all" | "present" | "absence" | "scheduled" | "replacement"
+  },
+  handler: async (ctx, args) => {
+    // 1. Buscar agendamentos no período via índice by_date
+    const schedules = await ctx.db
+      .query("schedules")
+      .withIndex("by_date", (q) => q.gte("date", args.startDate).lte("date", args.endDate))
+      .collect()
+
+    // Caches para evitar consultas N+1 redundantes
+    const roomMap = new Map()
+    const profMap = new Map()
+    const patientMap = new Map()
+    const packageDefMap = new Map()
+
+    const records = []
+
+    for (const schedule of schedules) {
+      if (args.professionalId && schedule.professionalId !== args.professionalId) continue
+      if (args.roomId && schedule.roomId !== args.roomId) continue
+
+      let room = roomMap.get(schedule.roomId)
+      if (!room) {
+        room = await ctx.db.get(schedule.roomId)
+        if (room) roomMap.set(schedule.roomId, room)
+      }
+
+      let prof = profMap.get(schedule.professionalId)
+      if (!prof) {
+        prof = await ctx.db.get(schedule.professionalId)
+        if (prof) profMap.set(schedule.professionalId, prof)
+      }
+
+      const participants = await ctx.db
+        .query("scheduleParticipants")
+        .withIndex("by_schedule", (q) => q.eq("scheduleId", schedule._id))
+        .collect()
+
+      for (const p of participants) {
+        if (args.patientId && p.patientId !== args.patientId) continue
+        if (args.status && args.status !== "all" && p.status !== args.status) continue
+
+        let patient = patientMap.get(p.patientId)
+        if (!patient) {
+          patient = await ctx.db.get(p.patientId)
+          if (patient) patientMap.set(p.patientId, patient)
+        }
+
+        let packageName = undefined
+        if (p.patientPackageId) {
+          const patPkg = await ctx.db.get(p.patientPackageId)
+          if (patPkg) {
+            let pkgDef = packageDefMap.get(patPkg.packageId)
+            if (!pkgDef) {
+              pkgDef = await ctx.db.get(patPkg.packageId)
+              if (pkgDef) packageDefMap.set(patPkg.packageId, pkgDef)
+            }
+            packageName = pkgDef?.name
+          }
+        }
+
+        records.push({
+          participantId: p._id,
+          scheduleId: schedule._id,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          scheduleTitle: schedule.title,
+          scheduleType: schedule.type,
+          specialty: schedule.specialty,
+          roomId: schedule.roomId,
+          roomName: room?.name || "Sala Padrão",
+          professionalId: schedule.professionalId,
+          professionalName: prof?.name || "Instrutor",
+          patientId: p.patientId,
+          patientName: patient?.name || "Aluno",
+          patientPhone: patient?.phone || "",
+          status: p.status,
+          checkedInAt: p.checkedInAt,
+          notes: p.notes,
+          isPackageDebited: !!p.patientPackageId,
+          packageName: packageName || (p.patientPackageId ? "Plano Ativo" : undefined),
+        })
+      }
+    }
+
+    // Ordenar por data e horário decrescente (mais recentes primeiro)
+    records.sort((a, b) => {
+      const cmpDate = b.date.localeCompare(a.date)
+      if (cmpDate !== 0) return cmpDate
+      return b.startTime.localeCompare(a.startTime)
+    })
+
+    // Calcular estatísticas agregadas (KPIs)
+    let totalPresent = 0
+    let totalAbsence = 0
+    let totalJustified = 0
+    let totalScheduled = 0
+    let totalReplacement = 0
+    let totalDebitedAbsences = 0
+    let totalExcusedAbsences = 0
+
+    const patientStatsMap = new Map()
+
+    for (const r of records) {
+      if (r.status === "present") totalPresent++
+      else if (r.status === "absence") {
+        totalAbsence++
+        if (r.isPackageDebited) totalDebitedAbsences++
+        else totalExcusedAbsences++
+      } else if (r.status === "justified_absence") totalJustified++
+      else if (r.status === "replacement") totalReplacement++
+      else if (r.status === "scheduled") totalScheduled++
+
+      let stat = patientStatsMap.get(r.patientId)
+      if (!stat) {
+        stat = {
+          patientId: r.patientId,
+          patientName: r.patientName,
+          patientPhone: r.patientPhone,
+          total: 0,
+          presents: 0,
+          absences: 0,
+          replacements: 0,
+          justified: 0,
+          scheduled: 0,
+        }
+        patientStatsMap.set(r.patientId, stat)
+      }
+      stat.total++
+      if (r.status === "present") stat.presents++
+      else if (r.status === "absence") stat.absences++
+      else if (r.status === "replacement") stat.replacements++
+      else if (r.status === "justified_absence") stat.justified++
+      else if (r.status === "scheduled") stat.scheduled++
+    }
+
+    const totalConcluded = totalPresent + totalAbsence
+    const attendanceRate = totalConcluded > 0 ? Math.round((totalPresent / totalConcluded) * 100) : 0
+
+    const patientSummaries = Array.from(patientStatsMap.values()).map((p: any) => {
+      const concluded = p.presents + p.absences
+      const rate = concluded > 0 ? Math.round((p.presents / concluded) * 100) : (p.presents > 0 ? 100 : 0)
+      return {
+        ...p,
+        concluded,
+        attendanceRate: rate,
+      }
+    })
+
+    patientSummaries.sort((a: any, b: any) => b.total - a.total || b.presents - a.presents)
+
+    return {
+      records,
+      stats: {
+        totalRecords: records.length,
+        totalPresent,
+        totalAbsence,
+        totalJustified,
+        totalScheduled,
+        totalReplacement,
+        totalDebitedAbsences,
+        totalExcusedAbsences,
+        attendanceRate,
+      },
+      patientSummaries,
+    }
+  },
+})
+
 
 

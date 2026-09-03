@@ -189,3 +189,15 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   3. No `vercel.json`, restringir a regra de rewrites SPA para rotas sem extensão e fora da pasta `/assets/` via regex com negative lookahead: `[ { "source": "/((?!assets/|.*\\.[a-zA-Z0-9]+$).*)", "destination": "/" } ]`. Isso força a Vercel a retornar HTTP 404 limpo para assets antigos inexistentes em vez de HTML mascarado.
   4. No `vercel.json`, aplicar `Cache-Control: public, max-age=0, must-revalidate` explicitamente para `/sw.js` e `/index.html`.
   5. No `<head>` de `index.html`, registrar script de auto-recuperação resiliente no capture phase (`window.addEventListener('error', ..., true)`): ao detectar falhas de carregamento de recursos ou MIME errors, o cliente desregistra service workers, purga todos os caches da Cache Storage API e recarrega a página automaticamente uma vez. Adicionar também listener para o evento `vite:preloadError` do Vite.
+
+---
+
+### [2026-09-03] Priorização de Instâncias Ativas UAZAPI, Máscara Dinâmica de Telefone e Resiliência no Simulador de Disparos
+- **Ponto de Fricção**: 
+  1. A query interna `getDefaultInstanceInternal` selecionava cegamente qualquer instância marcada com `isDefault: true`. Quando a instância padrão do banco ficava desconectada (`disconnected`) ou continha um token revogado/antigo enquanto outra instância conectada estava disponível (como a `Altar Tech`), todos os envios continuavam utilizando o token inválido, resultando em erros HTTP 401 ou 503 na UAZAPI.
+  2. O disparador simulado dependia de dados fictícios de grade (`mockSchedule`), repassando IDs locais sintéticos (`s1`) que quebravam a validação de tipo do Convex (`v.id("schedules")`), provocando falha silenciosa capturada em catch com falso retorno positivo.
+  3. O campo de telefone não possuía máscara de entrada para formatação instantânea de celulares brasileiros `(XX) XXXXX-XXXX`, permitindo envio de sequências numéricas cruas ou formatos truncados sem validação de DDD.
+- **Mitigação / Regra**:
+  1. No `convex/whatsapp.ts`, a query `getDefaultInstanceInternal` agora prioriza obrigatoriamente instâncias com `status: "connected"` (primeiro a default conectada, depois qualquer instância com sessão ativa). Se a instância default desconectar, o motor redireciona o tráfego automaticamente para a conexão ativa disponível.
+  2. Implementada a função utilitária `formatPhoneBR` em `src/lib/utils.ts`, com formatação progressiva em tempo real para celulares (11 dígitos) e fixos (10 dígitos), aceitando colagens com ou sem DDI 55.
+  3. Desacoplado o Simulador de Disparos de qualquer entidade de grade: o simulador chama a action diretamente (`sendWhatsAppNotificationAction`), com validação prévia de 10-11 dígitos, banner em tempo real informando se a instância UAZAPI está Online ou Desconectada, e toasts diferenciados visualmente entre sucesso (verde) e falha (vermelho).

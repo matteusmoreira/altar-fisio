@@ -69,7 +69,7 @@ export const MessageTemplateBuilder: React.FC = () => {
   // Estado do Editor
   const [editingTemplateId, setEditingTemplateId] = useState<any | null>(null)
   const [title, setTitle] = useState("")
-  const [category, setCategory] = useState<"reminder_24h" | "reminder_2h" | "broadcast" | "custom">("reminder_24h")
+  const [category, setCategory] = useState<"reminder_24h" | "reminder_2h" | "booking_confirmation" | "broadcast" | "custom">("reminder_24h")
   const [type, setType] = useState<"text" | "button" | "list" | "carousel">("button")
   const [content, setContent] = useState(
     "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}"
@@ -238,11 +238,17 @@ export const MessageTemplateBuilder: React.FC = () => {
     }
   }
 
-  // Vincular a lembretes automáticos
-  const handleAssignReminder = async (target: "reminder_24h" | "reminder_2h", templateId?: any) => {
+  // Vincular a lembretes e confirmações automáticas
+  const handleAssignReminder = async (target: "reminder_24h" | "reminder_2h" | "booking_confirmation", templateId?: any) => {
     try {
       await assignReminderMutation({ target, templateId })
-      showToast(`Template vinculado com sucesso ao ${target === "reminder_24h" ? "Lembrete 24h" : "Lembrete 2h"}!`)
+      const label =
+        target === "reminder_24h"
+          ? "Lembrete 24h"
+          : target === "reminder_2h"
+          ? "Lembrete 2h"
+          : "Confirmação ao Agendar"
+      showToast(`Template vinculado com sucesso ao ${label}!`)
     } catch (err: any) {
       showToast("Erro ao vincular template")
     }
@@ -254,6 +260,9 @@ export const MessageTemplateBuilder: React.FC = () => {
       "{{paciente}}": "Juliana Mendes",
       "{{data}}": "Amanhã (10/09)",
       "{{horario}}": "08:00",
+      "{{horario_fim}}": "09:00",
+      "{{servico}}": "Pilates Studio (Aparelhos)",
+      "{{atividade}}": "Pilates Studio (Aparelhos)",
       "{{profissional}}": "Dra. Camila Duarte",
       "{{sala}}": "Studio Pilates Aparelhos",
       "{{clinica}}": "Altar Fisio",
@@ -319,15 +328,33 @@ export const MessageTemplateBuilder: React.FC = () => {
               Lembretes Automáticos com WhatsApp Interativo
             </h4>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Escolha quais modelos interativos da biblioteca serão disparados automaticamente nas vésperas e antes das sessões.
+              Escolha quais modelos interativos da biblioteca serão disparados automaticamente nas confirmações e lembretes das sessões.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            {/* Confirmação Imediata ao Agendar */}
+            <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
+              <span className="font-medium text-muted-foreground">Ao Agendar:</span>
+              <select
+                className="bg-transparent font-semibold text-blue-700 dark:text-blue-400 outline-none cursor-pointer max-w-[160px] truncate"
+                value={clinicSettings?.activeConfirmationTemplateId || ""}
+                onChange={(e) => handleAssignReminder("booking_confirmation", e.target.value ? (e.target.value as any) : undefined)}
+              >
+                <option value="">Texto Padrão da Clínica</option>
+                {templates.map((t) => (
+                  <option key={t._id} value={t._id}>
+                    {t.title} ({t.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Lembrete 24h */}
             <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
               <span className="font-medium text-muted-foreground">Lembrete 24h:</span>
               <select
-                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer max-w-[160px] truncate"
                 value={clinicSettings?.activeReminder24hTemplateId || ""}
                 onChange={(e) => handleAssignReminder("reminder_24h", e.target.value ? (e.target.value as any) : undefined)}
               >
@@ -340,10 +367,11 @@ export const MessageTemplateBuilder: React.FC = () => {
               </select>
             </div>
 
+            {/* Lembrete 2h */}
             <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
               <span className="font-medium text-muted-foreground">Lembrete 2h:</span>
               <select
-                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-teal-700 dark:text-teal-400 outline-none cursor-pointer max-w-[160px] truncate"
                 value={clinicSettings?.activeReminder2hTemplateId || ""}
                 onChange={(e) => handleAssignReminder("reminder_2h", e.target.value ? (e.target.value as any) : undefined)}
               >
@@ -381,6 +409,7 @@ export const MessageTemplateBuilder: React.FC = () => {
             ) : (
               templates.map((t) => {
                 const isSelected = editingTemplateId === t._id
+                const isConfDefault = clinicSettings?.activeConfirmationTemplateId === t._id
                 const is24hDefault = clinicSettings?.activeReminder24hTemplateId === t._id
                 const is2hDefault = clinicSettings?.activeReminder2hTemplateId === t._id
 
@@ -406,7 +435,10 @@ export const MessageTemplateBuilder: React.FC = () => {
                     </p>
 
                     <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t text-[11px]">
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {isConfDefault && (
+                          <Badge className="bg-blue-600 text-white text-[9px] py-0">Ao Agendar Ativo</Badge>
+                        )}
                         {is24hDefault && (
                           <Badge className="bg-emerald-600 text-white text-[9px] py-0">24h Ativo</Badge>
                         )}
@@ -468,9 +500,23 @@ export const MessageTemplateBuilder: React.FC = () => {
                     <label className="font-semibold text-foreground">Categoria</label>
                     <select
                       value={category}
-                      onChange={(e: any) => setCategory(e.target.value)}
+                      onChange={(e: any) => {
+                        const newCat = e.target.value
+                        setCategory(newCat)
+                        if (newCat === "booking_confirmation" && !editingTemplateId) {
+                          if (!title) setTitle("Confirmação Imediata de Agendamento")
+                          setContent(
+                            "Olá, *{{paciente}}*! 🎉\n\nSeu agendamento na *{{clinica}}* foi realizado com sucesso!\n\n📌 *Atividade:* {{servico}}\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}\n\nEsperamos por você!"
+                          )
+                          setButtons([
+                            { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
+                            { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
+                          ])
+                        }
+                      }}
                       className="w-full h-8 px-2.5 rounded-md border bg-background text-xs outline-none"
                     >
+                      <option value="booking_confirmation">Confirmação ao Agendar (Imediata)</option>
                       <option value="reminder_24h">Lembrete de Véspera (24h)</option>
                       <option value="reminder_2h">Lembrete Imediato (2h)</option>
                       <option value="broadcast">Disparador em Massa</option>
@@ -513,6 +559,7 @@ export const MessageTemplateBuilder: React.FC = () => {
                       { label: "+ Paciente", val: "paciente" },
                       { label: "+ Data", val: "data" },
                       { label: "+ Horário", val: "horario" },
+                      { label: "+ Atividade / Serviço", val: "servico" },
                       { label: "+ Profissional", val: "profissional" },
                       { label: "+ Sala", val: "sala" },
                       { label: "+ Clínica", val: "clinica" },

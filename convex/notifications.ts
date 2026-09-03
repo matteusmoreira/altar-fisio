@@ -31,8 +31,13 @@ export function getBrasiliaDateInfo(offsetDays = 0): {
 
 export function formatBrazilianPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "")
-  if (digits.startsWith("55")) return digits
-  return `55${digits}`
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    return digits
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`
+  }
+  return digits.startsWith("55") ? digits : `55${digits}`
 }
 
 // ============================================================================
@@ -257,12 +262,16 @@ export const logNotificationInternal = internalMutation({
     triggerType: v.string(),
     content: v.string(),
     status: v.union(v.literal("sent"), v.literal("failed"), v.literal("queued")),
-    scheduleId: v.optional(v.id("schedules")),
+    scheduleId: v.optional(v.string()),
     timestamp: v.number(),
     errorMessage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("notificationLogs", args)
+    const validScheduleId = args.scheduleId ? ctx.db.normalizeId("schedules", args.scheduleId) : undefined
+    return await ctx.db.insert("notificationLogs", {
+      ...args,
+      scheduleId: validScheduleId ?? undefined,
+    })
   },
 })
 
@@ -324,7 +333,8 @@ async function sendWhatsAppDirectHelper(
         err?.name === "AbortError" ? "Timeout de 9s na conexão com UAZAPI" : err?.message || "Erro desconhecido"
     }
   } else {
-    errorMessage = "[Modo Sandbox] Disparo simulado com sucesso. Nenhuma instância conectada com token."
+    status = "failed"
+    errorMessage = "Nenhuma instância ativa do WhatsApp conectada. Acesse a Central WhatsApp para conectar seu aparelho via QR Code."
   }
 
   await ctx.runMutation(internal.notifications.logNotificationInternal, {
@@ -336,7 +346,7 @@ async function sendWhatsAppDirectHelper(
     status: status,
     scheduleId: args.scheduleId,
     timestamp: Date.now(),
-    errorMessage: status === "failed" ? errorMessage : (effectiveToken ? undefined : errorMessage),
+    errorMessage: status === "failed" ? errorMessage : undefined,
   })
 
   return {
@@ -426,7 +436,7 @@ export const sendWhatsAppNotificationAction = action({
     phone: v.string(),
     message: v.string(),
     triggerType: v.string(),
-    scheduleId: v.optional(v.id("schedules")),
+    scheduleId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await sendWhatsAppDirectHelper(ctx, args)
@@ -850,14 +860,61 @@ export const sendScheduleConfirmationAction = action({
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
     const clinicName = settings?.clinicName || "Altar Fisio"
     const noticeHours = settings?.cancellationNoticeHours || 2
+    const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
+    const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
-    const message = `Olá, *${args.patientName}*! 🎉\n\nSua aula/sessão foi agendada com sucesso pelo *Portal do Aluno* na *${clinicName}*:\n\n📌 *Atividade:* ${args.serviceName}\n📅 *Data:* ${args.date}\n⏰ *Horário:* ${args.startTime} às ${args.endTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
+    let templateConf: any = null
+    if (settings?.activeConfirmationTemplateId) {
+      templateConf = await ctx.runQuery(internal.whatsapp.getTemplateByIdInternal, {
+        id: settings.activeConfirmationTemplateId,
+      })
+    }
+
+    // Se houver um modelo personalizado ativo vinculado e instância conectada, dispara interativo
+    if (templateConf && effectiveToken) {
+      const vars: Record<string, string> = {
+        paciente: args.patientName,
+        data: args.date,
+        horario: args.startTime,
+        horario_fim: args.endTime,
+        servico: args.serviceName,
+        atividade: args.serviceName,
+        profissional: args.professionalName,
+        sala: args.roomName,
+        clinica: clinicName,
+        regras: `Caso precise desmarcar ou reagendar, faça com no mínimo ${noticeHours}h de antecedência pelo Portal para liberar seu crédito de reposição automático.`,
+        telefone_clinica: settings?.phone || "",
+      }
+
+      const res = await sendUazapiInteractiveMessage(baseUrl, effectiveToken, args.phone, templateConf, vars)
+
+      await ctx.runMutation(internal.notifications.logNotificationInternal, {
+        channel: "whatsapp_uazapi",
+        recipientName: args.patientName,
+        recipientContact: args.phone,
+        triggerType: "confirmacao_agendamento",
+        content: `[Template: ${templateConf.title}]\n${templateConf.content}`,
+        status: res.success ? "sent" : "failed",
+        timestamp: Date.now(),
+        errorMessage: res.success ? undefined : (res.error || "Falha ao enviar confirmação interativa"),
+      })
+
+      return {
+        success: res.success,
+        status: res.success ? "sent" : "failed",
+        errorMessage: res.error,
+      }
+    }
+
+    // Texto Padrão da Clínica
+    const message = `Olá, *${args.patientName}*! 🎉\n\nSua aula/sessão foi agendada com sucesso na *${clinicName}*:\n\n📌 *Atividade:* ${args.serviceName}\n📅 *Data:* ${args.date}\n⏰ *Horário:* ${args.startTime} às ${args.endTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
 
     return await sendWhatsAppDirectHelper(ctx, {
       recipientName: args.patientName,
       phone: args.phone,
       message,
-      triggerType: "confirmacao_agendamento_portal",
+      triggerType: "confirmacao_agendamento",
     })
   },
 })
