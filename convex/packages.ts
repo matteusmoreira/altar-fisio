@@ -108,13 +108,22 @@ export const listPatientPackages = query({
     status: v.optional(v.union(v.literal("active"), v.literal("completed"), v.literal("expired"))),
   },
   handler: async (ctx, args) => {
-    let patientPackages = await ctx.db.query("patientPackages").collect()
-
+    let patientPackages
     if (args.patientId) {
-      patientPackages = patientPackages.filter((p) => p.patientId === args.patientId)
-    }
-    if (args.status) {
-      patientPackages = patientPackages.filter((p) => p.status === args.status)
+      patientPackages = await ctx.db
+        .query("patientPackages")
+        .withIndex("by_patient", (q) => q.eq("patientId", args.patientId!))
+        .collect()
+      if (args.status) {
+        patientPackages = patientPackages.filter((p) => p.status === args.status)
+      }
+    } else if (args.status) {
+      patientPackages = await ctx.db
+        .query("patientPackages")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .collect()
+    } else {
+      patientPackages = await ctx.db.query("patientPackages").order("desc").take(100)
     }
 
     const todayStr = new Date().toISOString().split("T")[0]
@@ -172,8 +181,10 @@ export const listPatientPackages = query({
 // Busca de alertas de renovação (saldo <= 2 ou vence em até 7 dias)
 export const listRenewalAlerts = query({
   handler: async (ctx) => {
-    const all = await ctx.db.query("patientPackages").collect()
-    const active = all.filter((p) => p.status === "active")
+    const active = await ctx.db
+      .query("patientPackages")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect()
     const todayStr = new Date().toISOString().split("T")[0]
 
     const alerts = []

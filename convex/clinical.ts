@@ -95,6 +95,20 @@ export const saveClinicalRecord = mutation({
       .first()
 
     if (existing) {
+      // Limpeza de fotos antigas substituídas no Convex Storage para não estourar o limite de 1 GB
+      if (args.anteriorStorageId && existing.anteriorStorageId && existing.anteriorStorageId !== args.anteriorStorageId) {
+        await ctx.storage.delete(existing.anteriorStorageId).catch(() => {})
+      }
+      if (args.posteriorStorageId && existing.posteriorStorageId && existing.posteriorStorageId !== args.posteriorStorageId) {
+        await ctx.storage.delete(existing.posteriorStorageId).catch(() => {})
+      }
+      if (args.lateralRightStorageId && existing.lateralRightStorageId && existing.lateralRightStorageId !== args.lateralRightStorageId) {
+        await ctx.storage.delete(existing.lateralRightStorageId).catch(() => {})
+      }
+      if (args.lateralLeftStorageId && existing.lateralLeftStorageId && existing.lateralLeftStorageId !== args.lateralLeftStorageId) {
+        await ctx.storage.delete(existing.lateralLeftStorageId).catch(() => {})
+      }
+
       await ctx.db.patch(existing._id, {
         ...args,
         updatedAt: Date.now(),
@@ -215,13 +229,16 @@ export const listAllClinicalOverview = query({
           .withIndex("by_patient", (q) => q.eq("patientId", p._id))
           .first()
 
-        const evolutions = await ctx.db
+        const lastEvo = await ctx.db
           .query("clinicalEvolutions")
           .withIndex("by_patient", (q) => q.eq("patientId", p._id))
           .order("desc")
-          .collect()
+          .first()
 
-        const lastEvo = evolutions[0]
+        const recentEvos = await ctx.db
+          .query("clinicalEvolutions")
+          .withIndex("by_patient", (q) => q.eq("patientId", p._id))
+          .take(50)
 
         return {
           patientId: p._id,
@@ -235,7 +252,7 @@ export const listAllClinicalOverview = query({
           painScaleEva: record?.painScaleEva ?? null,
           clinicalGoals: record?.clinicalGoals || "",
           posturalNotes: record?.posturalNotes || "",
-          evolutionsCount: evolutions.length,
+          evolutionsCount: recentEvos.length,
           lastEvolutionDate: lastEvo?.date || null,
           lastTechnique: lastEvo?.techniqueCategory || null,
           lastPainAfter: lastEvo?.painScaleAfter ?? null,
@@ -285,7 +302,7 @@ export const deleteSoapEvolution = mutation({
   },
 })
 
-// Exclusão de Prontuário Clínico Completo (Anamnese)
+// Exclusão de Prontuário Clínico Completo (Anamnese com limpeza de storage)
 export const deleteClinicalRecord = mutation({
   args: {
     patientId: v.id("patients"),
@@ -297,6 +314,10 @@ export const deleteClinicalRecord = mutation({
       .first()
 
     if (record) {
+      if (record.anteriorStorageId) await ctx.storage.delete(record.anteriorStorageId).catch(() => {})
+      if (record.posteriorStorageId) await ctx.storage.delete(record.posteriorStorageId).catch(() => {})
+      if (record.lateralRightStorageId) await ctx.storage.delete(record.lateralRightStorageId).catch(() => {})
+      if (record.lateralLeftStorageId) await ctx.storage.delete(record.lateralLeftStorageId).catch(() => {})
       await ctx.db.delete(record._id)
       return { success: true, id: record._id }
     }
@@ -321,8 +342,7 @@ export const listClinicalReports = query({
         .order("desc")
         .collect()
     }
-    const all = await ctx.db.query("clinicalReports").collect()
-    return all.sort((a, b) => b.updatedAt - a.updatedAt)
+    return await ctx.db.query("clinicalReports").order("desc").take(100)
   },
 })
 

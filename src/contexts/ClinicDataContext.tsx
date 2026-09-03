@@ -775,17 +775,26 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const convexPatients = useQuery(api.patients.listPatients, {})
   const convexSchedules = useQuery(api.schedules.listSchedulesByDate, { date: selectedDate })
   const convexReplacementCredits = useQuery(api.schedules.listAvailableReplacementCredits, {})
-  const convexTransactions = useQuery(api.finance.listTransactions, {})
-  const convexCashFlow = useQuery(api.finance.getCashFlowSummary, { monthYear: selectedFinanceMonth })
-  const convexCommissions = useQuery(api.finance.calculateProfessionalCommissions, { monthYear: selectedFinanceMonth })
+  const convexTransactions = useQuery(
+    api.finance.listTransactions,
+    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {}
+  )
+  const convexCashFlow = useQuery(
+    api.finance.getCashFlowSummary,
+    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {}
+  )
+  const convexCommissions = useQuery(
+    api.finance.calculateProfessionalCommissions,
+    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : { monthYear: getCurrentMonthString() }
+  )
   const convexClosedCommissions = useQuery(api.finance.listCommissions)
-  const convexLogs = useQuery(api.notifications.listLogs, {})
+  const convexLogs = useQuery(api.notifications.listLogs, { limit: 50 })
   const convexNotificationStats = useQuery(api.notifications.getNotificationStats, {})
   const convexServices = useQuery(api.services.listServices)
   const convexPackages = useQuery(api.packages.listPackages)
   const convexPatientPackages = useQuery(api.packages.listPatientPackages, {})
   const convexRenewalAlerts = useQuery(api.packages.listRenewalAlerts)
-  const convexAuditLogs = useQuery(api.audit.listAuditLogs, {})
+  const convexAuditLogs = useQuery(api.audit.listAuditLogs, { limit: 50 })
   const convexClinicalOverview = useQuery(api.clinical.listAllClinicalOverview)
   const convexClinicalReports = useQuery(api.clinical.listClinicalReports, {})
 

@@ -71,7 +71,15 @@ export default defineSchema({
     notes: v.optional(v.string()),
     active: v.boolean(),
     createdAt: v.number(),
-  }).index("by_cpf", ["documentCpf"]).index("by_name", ["name"]).index("by_active", ["active"]),
+  })
+    .index("by_cpf", ["documentCpf"])
+    .index("by_name", ["name"])
+    .index("by_phone", ["phone"])
+    .index("by_active", ["active"])
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["active"],
+    }),
 
   // Serviços e Atendimentos Oferecidos
   services: defineTable({
@@ -231,7 +239,12 @@ export default defineSchema({
     packageId: v.optional(v.id("packages")),
     receiptIssued: v.boolean(),
     createdAt: v.number(),
-  }).index("by_status_due", ["status", "dueDate"]).index("by_type", ["type"]).index("by_patient", ["patientId"]),
+  })
+    .index("by_status_due", ["status", "dueDate"])
+    .index("by_type", ["type"])
+    .index("by_patient", ["patientId"])
+    .index("by_dueDate", ["dueDate"])
+    .index("by_month_type", ["dueDate", "type"]),
 
   // Fechamento de Repasses e Comissões dos Profissionais
   commissions: defineTable({
@@ -258,7 +271,9 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   }).index("by_timestamp", ["timestamp"])
     .index("by_channel", ["channel", "timestamp"])
-    .index("by_schedule", ["scheduleId", "triggerType"]),
+    .index("by_status", ["status"])
+    .index("by_schedule", ["scheduleId", "triggerType"])
+    .index("by_schedule_recipient", ["scheduleId", "triggerType", "recipientContact"]),
 
   // Usuários do Sistema & Controle de Acesso (RBAC)
   users: defineTable({
@@ -283,7 +298,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_token", ["token"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_expiresAt", ["expiresAt"]),
 
   // Trilha de Auditoria LGPD e COFFITO
   auditLogs: defineTable({
@@ -539,7 +555,8 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_patient", ["patientId"])
-    .index("by_date", ["date"]),
+    .index("by_date", ["date"])
+    .index("by_status_created", ["status", "createdAt"]),
 })
 
 

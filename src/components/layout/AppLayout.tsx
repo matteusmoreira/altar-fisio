@@ -658,6 +658,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
           <div className="flex items-center gap-3">
             <a
+              href="/portal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-xs font-semibold transition-all shadow-2xs"
+              title="Abrir Portal do Aluno / Área do Paciente"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Portal do Aluno</span>
+              <span>/portal</span>
+            </a>
+
+            <a
               href="/agendar"
               target="_blank"
               rel="noopener noreferrer"

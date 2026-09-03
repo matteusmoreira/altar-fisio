@@ -647,13 +647,14 @@ export const listAvailableTurmasForReplacement = query({
     specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
   },
   handler: async (ctx, args) => {
-    // Buscar agendamentos de turmas no intervalo
+    // Buscar agendamentos indexados por intervalo de datas (elimina table scan completo)
     const schedules = await ctx.db
       .query("schedules")
+      .withIndex("by_date", (q) =>
+        q.gte("date", args.startDate).lte("date", args.endDate)
+      )
       .filter((q) =>
         q.and(
-          q.gte(q.field("date"), args.startDate),
-          q.lte(q.field("date"), args.endDate),
           q.eq(q.field("type"), "turma"),
           q.neq(q.field("status"), "cancelled")
         )

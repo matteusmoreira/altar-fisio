@@ -783,7 +783,7 @@ export async function sendUazapiInteractiveMessage(
 
 export const listBroadcastCampaigns = query({
   handler: async (ctx) => {
-    return await ctx.db.query("broadcastCampaigns").order("desc").collect()
+    return await ctx.db.query("broadcastCampaigns").order("desc").take(50)
   },
 })
 
@@ -1049,12 +1049,12 @@ export const dispatchBroadcastCampaignAction = action({
 export const getDueCampaignsInternal = internalQuery({
   args: { now: v.number() },
   handler: async (ctx, args) => {
-    const active = await ctx.db
+    return await ctx.db
       .query("broadcastCampaigns")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .withIndex("by_next_run", (q) =>
+        q.eq("status", "active").lte("nextRunAt", args.now)
+      )
       .collect()
-
-    return active.filter((c) => c.nextRunAt && c.nextRunAt <= args.now)
   },
 })
 

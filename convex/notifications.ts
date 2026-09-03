@@ -46,16 +46,30 @@ export const listLogs = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let logs = await ctx.db
-      .query("notificationLogs")
-      .order("desc")
-      .take(args.limit || 100)
+    const limit = Math.min(args.limit || 50, 100)
+    let logs
 
     if (args.channel) {
-      logs = logs.filter((l) => l.channel === args.channel)
-    }
-    if (args.status) {
-      logs = logs.filter((l) => l.status === args.status)
+      logs = await ctx.db
+        .query("notificationLogs")
+        .withIndex("by_channel", (q) => q.eq("channel", args.channel!))
+        .order("desc")
+        .take(limit)
+      if (args.status) {
+        logs = logs.filter((l) => l.status === args.status)
+      }
+    } else if (args.status) {
+      logs = await ctx.db
+        .query("notificationLogs")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .order("desc")
+        .take(limit)
+    } else {
+      logs = await ctx.db
+        .query("notificationLogs")
+        .withIndex("by_timestamp")
+        .order("desc")
+        .take(limit)
     }
 
     return logs
@@ -64,7 +78,12 @@ export const listLogs = query({
 
 export const getNotificationStats = query({
   handler: async (ctx) => {
-    const logs = await ctx.db.query("notificationLogs").collect()
+    // Amostra recente indexada (até 300 logs) para evitar carregar todo o histórico
+    const logs = await ctx.db
+      .query("notificationLogs")
+      .withIndex("by_timestamp")
+      .order("desc")
+      .take(300)
     const { dateStr } = getBrasiliaDateInfo(0)
 
     let totalSent = 0
@@ -137,14 +156,14 @@ export const getTomorrowCandidatesInternal = internalQuery({
 
         const existingLog = await ctx.db
           .query("notificationLogs")
-          .withIndex("by_schedule", (q) =>
-            q.eq("scheduleId", schedule._id).eq("triggerType", "lembrete_24h")
+          .withIndex("by_schedule_recipient", (q) =>
+            q.eq("scheduleId", schedule._id)
+              .eq("triggerType", "lembrete_24h")
+              .eq("recipientContact", patient.phone)
           )
           .first()
 
-        const alreadySent = existingLog && existingLog.recipientContact === patient.phone
-
-        if (!alreadySent) {
+        if (!existingLog) {
           candidates.push({
             scheduleId: schedule._id,
             patientId: patient._id,
@@ -198,14 +217,14 @@ export const getUpcoming2hCandidatesInternal = internalQuery({
 
         const existingLog = await ctx.db
           .query("notificationLogs")
-          .withIndex("by_schedule", (q) =>
-            q.eq("scheduleId", schedule._id).eq("triggerType", "lembrete_2h")
+          .withIndex("by_schedule_recipient", (q) =>
+            q.eq("scheduleId", schedule._id)
+              .eq("triggerType", "lembrete_2h")
+              .eq("recipientContact", patient.phone)
           )
           .first()
 
-        const alreadySent = existingLog && existingLog.recipientContact === patient.phone
-
-        if (!alreadySent) {
+        if (!existingLog) {
           candidates.push({
             scheduleId: schedule._id,
             patientId: patient._id,

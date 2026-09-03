@@ -1,5 +1,5 @@
 import { cronJobs } from "convex/server"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 
 const crons = cronJobs()
 
@@ -24,6 +24,14 @@ crons.interval(
   "processamento-campanhas-recorrentes",
   { minutes: 30 },
   api.whatsapp.processRecurringCampaignsAction,
+  {}
+)
+
+// 4. Diariamente às 03:00 BRT (06:00 UTC) executa limpeza e manutenção do banco de dados (plano gratuito)
+crons.daily(
+  "manutencao-limpeza-banco",
+  { hourUTC: 6, minuteUTC: 0 },
+  internal.maintenance.runDailyMaintenance,
   {}
 )
 

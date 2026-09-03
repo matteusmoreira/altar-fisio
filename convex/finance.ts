@@ -15,7 +15,23 @@ export const listTransactions = query({
     category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let transactions = await ctx.db.query("financialTransactions").order("desc").collect()
+    let transactions
+    if (args.monthYear) {
+      const start = `${args.monthYear}-01`
+      const end = `${args.monthYear}-31`
+      transactions = await ctx.db
+        .query("financialTransactions")
+        .withIndex("by_dueDate", (q) => q.gte("dueDate", start).lte("dueDate", end))
+        .order("desc")
+        .collect()
+    } else {
+      // Limita a busca a transações recentes quando nenhum mês específico for informado
+      transactions = await ctx.db
+        .query("financialTransactions")
+        .withIndex("by_dueDate")
+        .order("desc")
+        .take(150)
+    }
 
     const todayStr = getTodayStr()
 
@@ -27,12 +43,6 @@ export const listTransactions = query({
     }
     if (args.category) {
       transactions = transactions.filter((t) => t.category.toLowerCase().includes(args.category!.toLowerCase()))
-    }
-    if (args.monthYear) {
-      transactions = transactions.filter((t) => {
-        const refDate = t.paymentDate || t.dueDate
-        return refDate.startsWith(args.monthYear!)
-      })
     }
 
     // Enriquecimento com nomes de pacientes, profissionais e cálculo de atraso
@@ -71,15 +81,22 @@ export const getCashFlowSummary = query({
     monthYear: v.optional(v.string()), // YYYY-MM
   },
   handler: async (ctx, args) => {
-    let transactions = await ctx.db.query("financialTransactions").collect()
-    const todayStr = getTodayStr()
-
+    let transactions
     if (args.monthYear) {
-      transactions = transactions.filter((t) => {
-        const refDate = t.paymentDate || t.dueDate
-        return refDate.startsWith(args.monthYear!)
-      })
+      const start = `${args.monthYear}-01`
+      const end = `${args.monthYear}-31`
+      transactions = await ctx.db
+        .query("financialTransactions")
+        .withIndex("by_dueDate", (q) => q.gte("dueDate", start).lte("dueDate", end))
+        .collect()
+    } else {
+      transactions = await ctx.db
+        .query("financialTransactions")
+        .withIndex("by_dueDate")
+        .order("desc")
+        .take(200)
     }
+    const todayStr = getTodayStr()
 
     let totalIncome = 0
     let totalExpense = 0
@@ -265,13 +282,15 @@ export const calculateProfessionalCommissions = query({
           )
           .first()
 
-        // Busca agendamentos do profissional
-        const allSchedules = await ctx.db
+        // Busca agendamentos do profissional no mês especificado via range indexada (elimina scan)
+        const monthSchedules = await ctx.db
           .query("schedules")
-          .withIndex("by_professional_date", (q) => q.eq("professionalId", prof._id))
+          .withIndex("by_professional_date", (q) =>
+            q.eq("professionalId", prof._id)
+              .gte("date", `${args.monthYear}-01`)
+              .lte("date", `${args.monthYear}-31`)
+          )
           .collect()
-
-        const monthSchedules = allSchedules.filter((s) => s.date.startsWith(args.monthYear))
 
         let totalAttendedCount = 0
         let totalGrossRevenue = 0

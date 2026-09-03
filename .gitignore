@@ -25,3 +25,6 @@ Convex.txt
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*

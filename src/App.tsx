@@ -20,6 +20,7 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ de
 const PublicBookingPage = lazy(() => import("@/pages/PublicBookingPage").then((m) => ({ default: m.PublicBookingPage })))
 const OnlineBookingsPage = lazy(() => import("@/pages/OnlineBookingsPage").then((m) => ({ default: m.OnlineBookingsPage })))
 const BookingBuilderPage = lazy(() => import("@/pages/BookingBuilderPage").then((m) => ({ default: m.BookingBuilderPage })))
+const PatientPortalPage = lazy(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })))
 
 
 function PageLoadingFallback() {
@@ -42,6 +43,31 @@ function AppContent() {
   const [currentSection, setCurrentSection] = useState<NavSection>("dashboard")
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined)
 
+  // Proteção de rotas RBAC: redireciona para o dashboard caso o perfil atual não tenha permissão na seção
+  useEffect(() => {
+    if (isAuthenticated && !canAccessSection(currentSection)) {
+      setCurrentSection("dashboard")
+    }
+  }, [isAuthenticated, currentSection, canAccessSection, user?.role])
+
+  // Detecção de Rota do Portal do Paciente / Aluno (/portal, /meus-agendamentos, /aluno, /cliente ou ?mode=portal)
+  const isPatientPortalRoute =
+    typeof window !== "undefined" &&
+    (window.location.pathname.startsWith("/portal") ||
+      window.location.pathname.startsWith("/meus-agendamentos") ||
+      window.location.pathname.startsWith("/aluno") ||
+      window.location.pathname.startsWith("/cliente") ||
+      window.location.search.includes("mode=portal") ||
+      window.location.hash.includes("portal"))
+
+  if (isPatientPortalRoute) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <PatientPortalPage />
+      </Suspense>
+    )
+  }
+
   // Detecção de Rota Pública de Agendamento (/agendar, /agendamento ou ?mode=agendar)
   const isPublicBookingRoute =
     typeof window !== "undefined" &&
@@ -57,13 +83,6 @@ function AppContent() {
       </Suspense>
     )
   }
-
-  // Proteção de rotas RBAC: redireciona para o dashboard caso o perfil atual não tenha permissão na seção
-  useEffect(() => {
-    if (isAuthenticated && !canAccessSection(currentSection)) {
-      setCurrentSection("dashboard")
-    }
-  }, [isAuthenticated, currentSection, canAccessSection, user?.role])
 
   if (isLoading) {
     return (

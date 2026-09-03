@@ -124,3 +124,24 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-02] Roteamento SPA e Rewrites no Vercel CLI com Vite
 - **Ponto de Fricção**: A presença de `"version": 2` e `"cleanUrls": true` com `destination: "/index.html"` no `vercel.json` faz a CDN da Vercel retornar 404 NOT_FOUND em rotas internas do Single Page Application acessadas diretamente (como `/agendamento` e `/login`).
 - **Mitigação / Regra**: Utilizar configuração moderna sem `version` nem `cleanUrls`, com a regra canônica de rewrites SPA: `[ { "source": "/(.*)", "destination": "/" } ]`. Isso delega qualquer rota dinâmica ao `index.html` do Vite com retorno HTTP 200 garantido.
+
+---
+
+### [2026-09-02] Criação de Novos Arquivos de Código no Workspace via Scratch & Copy-Item
+- **Ponto de Fricção**: A ferramenta nativa de criação de arquivos exige caminhos sob o diretório de artefatos (`<appDataDir>/brain/<id>/...`), enquanto o PowerShell inline sofre com limites de buffer e conflito de escaping de template literals e JSX.
+- **Mitigação / Regra**: Criar o arquivo de código diretamente no subdiretório `scratch/` do diretório de artefatos com `write_to_file` (que preserva 100% da codificação UTF-8 sem BOM e suporta qualquer caractere sem escaping) e, em seguida, copiá-lo para o destino no workspace com `Copy-Item -Path "..." -Destination "..." -Force`. Isso garante geração instantânea e à prova de falhas de componentes extensos.
+
+---
+
+### [2026-09-02] Nomenclatura de Retornos de useMutation e Regras de Hooks no React (Oxlint)
+- **Ponto de Fricção**: Nomear variáveis que recebem retornos do `useMutation(...)` com o prefixo `use` (por exemplo: `const useReplacementCreditMutation = useMutation(...)`) faz o linter e o React Hooks Rules interpretarem que uma chamada posterior `await useReplacementCreditMutation(...)` dentro de um callback/evento é uma chamada ilegal de Custom Hook fora do corpo principal do componente (`react-hooks/rules-of-hooks`).
+- **Mitigação / Regra**: Sempre nomear funções mutadoras usando verbos de ação e sufixo descritivo sem o prefixo `use` (ex: `bookReplacementCreditMutation`, `cancelAppointmentMutation`, `deletePatientMutation`).
+
+---
+
+### [2026-09-02] Otimização Extrema de Banco Convex para Plano Gratuito (Hobby)
+- **Ponto de Fricção**: O plano gratuito do Convex limita o banco a 1 GB de armazenamento, 10 GB de bandwidth de leitura mensal e 1.000.000 de chamadas de função. Consultas sem índice com `.collect()` ou `.filter()` realizam varreduras de tabela inteira (*table scans*), N+1 queries baixam payloads textuais maciços repetidamente, e ausência de retenção de logs estoura o armazenamento silenciosamente.
+- **Mitigação / Regra**:
+  1. Em tabelas com grande crescimento temporal (`schedules`, `financialTransactions`, `notificationLogs`), indexar por data (`by_dueDate`, `by_date`) e utilizar range queries (`.gte("dueDate", start).lte("dueDate", end)`) com `.take(limit)` para carregar estritamente o mês em visualização.
+  2. Em consultas agregadas como prontuários (`listAllClinicalOverview`), buscar apenas a última evolução (`.order("desc").first()`) e limitar contagens amostrais, evitando baixar parágrafos SOAP de todas as sessões anteriores.
+  3. Registrar rotina diária de manutenção (`convex/maintenance.ts` em `convex/crons.ts`) para purgar sessões expiradas, expurgar logs com mais de 60 dias e marcar créditos vencidos, além de deletar arquivos do `ctx.storage` quando fotos forem substituídas ou prontuários/pacientes forem excluídos.

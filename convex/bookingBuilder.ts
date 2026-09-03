@@ -572,14 +572,19 @@ export const listPublicBookings = query({
     ),
   },
   handler: async (ctx, args) => {
-    let bookings = await ctx.db.query("publicBookings").collect()
-
+    let bookings
     if (args.status && args.status !== "all") {
-      bookings = bookings.filter((b) => b.status === args.status)
+      bookings = await ctx.db
+        .query("publicBookings")
+        .withIndex("by_status_created", (q) => q.eq("status", args.status as any))
+        .order("desc")
+        .take(50)
+    } else {
+      bookings = await ctx.db
+        .query("publicBookings")
+        .order("desc")
+        .take(50)
     }
-
-    // Ordena do mais recente para o mais antigo
-    bookings.sort((a, b) => b.createdAt - a.createdAt)
 
     const enriched = await Promise.all(
       bookings.map(async (b) => {
