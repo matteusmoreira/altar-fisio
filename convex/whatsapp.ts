@@ -9,6 +9,35 @@ import { v } from "convex/values"
 const DEFAULT_SERVER_URL = "https://whatpress.uazapi.com"
 const DEFAULT_ADMIN_TOKEN = "jJRMdT508DTwShzdWcuxSHvIEiSDdyuIQXwj3j6XRqr5uktfV7"
 
+export function sanitizeUazapiEndpoint(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== "string") return DEFAULT_SERVER_URL
+  let clean = rawUrl.trim()
+  if (!clean) return DEFAULT_SERVER_URL
+
+  // Se o endpoint legado ou placeholder api.uazapi.com foi informado, substitui pelo servidor oficial
+  if (clean.includes("api.uazapi.com")) {
+    return DEFAULT_SERVER_URL
+  }
+
+  // Remove barras e sufixos de rota como /v1, /api, /instance etc.
+  clean = clean.replace(/\/+$/, "")
+  clean = clean.replace(/\/(v1|api|instance(\/.*)?)$/i, "")
+  clean = clean.replace(/\/+$/, "")
+
+  if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+    clean = `https://${clean}`
+  }
+
+  return clean
+}
+
+export function sanitizeAdminToken(rawToken?: string): string {
+  if (!rawToken || typeof rawToken !== "string" || !rawToken.trim()) {
+    return DEFAULT_ADMIN_TOKEN
+  }
+  return rawToken.trim()
+}
+
 export function formatBrazilianPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "")
   if (digits.startsWith("55")) return digits
@@ -278,8 +307,8 @@ export const createInstanceAction = action({
   args: { name: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean; instance?: any; error?: string }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
-    const adminToken = settings?.uazapiAdminToken || DEFAULT_ADMIN_TOKEN
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+    const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
 
     // 1. Cria a instância via POST /instance/create
     const createRes = await fetchUazapi(`${baseUrl}/instance/create`, {
@@ -342,6 +371,46 @@ export const createInstanceAction = action({
   },
 })
 
+export const listServerInstancesAction = action({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; instances?: any[]; error?: string }> => {
+    const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+    const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
+
+    const res = await fetchUazapi(`${baseUrl}/instance/all`, {
+      headers: { admintoken: adminToken },
+    })
+
+    if (!res.ok || !Array.isArray(res.data)) {
+      return {
+        success: false,
+        error: res.error || "Falha ao listar instâncias do servidor UAZAPI",
+      }
+    }
+
+    // Identifica quais já estão cadastradas localmente
+    const localInstances: any[] = await ctx.runQuery(internal.whatsapp.getInstancesInternal, {})
+    const localTokenSet = new Set(localInstances.map((i) => i.token))
+
+    const mapped = res.data.map((inst: any) => ({
+      id: inst.id,
+      name: inst.name,
+      token: inst.token,
+      status: inst.status === "connected" ? "connected" : inst.status === "connecting" ? "connecting" : "disconnected",
+      owner: inst.owner,
+      profileName: inst.profileName,
+      profilePicUrl: inst.profilePicUrl,
+      isLinkedLocally: localTokenSet.has(inst.token),
+    }))
+
+    return {
+      success: true,
+      instances: mapped,
+    }
+  },
+})
+
 export const connectExistingTokenAction = action({
   args: {
     name: v.optional(v.string()),
@@ -349,26 +418,57 @@ export const connectExistingTokenAction = action({
   },
   handler: async (ctx, args): Promise<{ success: boolean; instance?: any; error?: string }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
-    const cleanToken = args.token.trim()
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+    const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
+    const rawInput = args.token.trim()
 
-    // 1. Valida o token e busca dados da instância via GET /instance/status
-    const statusRes = await fetchUazapi(`${baseUrl}/instance/status`, {
-      headers: { token: cleanToken },
+    let effectiveToken = rawInput
+    let instanceName = args.name?.trim()
+
+    // 1. Tenta validar diretamente como token via GET /instance/status
+    let statusRes = await fetchUazapi(`${baseUrl}/instance/status`, {
+      headers: { token: effectiveToken },
     })
+
+    // 2. Se falhar (ex: usuário digitou nome da instância "drmarcelo", ID "raf314..." ou token com divergência),
+    // consulta a lista oficial de instâncias do servidor via admintoken para encontrar a instância correspondente
+    if (!statusRes.ok) {
+      const allRes = await fetchUazapi(`${baseUrl}/instance/all`, {
+        headers: { admintoken: adminToken },
+      })
+
+      if (allRes.ok && Array.isArray(allRes.data)) {
+        const found = allRes.data.find(
+          (inst: any) =>
+            inst.token === rawInput ||
+            inst.id === rawInput ||
+            inst.name?.toLowerCase() === rawInput.toLowerCase() ||
+            (inst.token && rawInput.length >= 8 && inst.token.includes(rawInput)) ||
+            (inst.name && rawInput.length >= 3 && inst.name.toLowerCase().includes(rawInput.toLowerCase()))
+        )
+
+        if (found && found.token) {
+          effectiveToken = found.token
+          if (!instanceName) instanceName = found.name
+          statusRes = await fetchUazapi(`${baseUrl}/instance/status`, {
+            headers: { token: effectiveToken },
+          })
+        }
+      }
+    }
 
     if (!statusRes.ok) {
       return {
         success: false,
-        error: `Token inválido ou não autorizado pela Uazapi (HTTP ${statusRes.status})`,
+        error: `Não foi possível localizar ou autenticar a instância na UAZAPI (HTTP ${statusRes.status}). Verifique o token ou selecione diretamente na lista de instâncias disponíveis do servidor.`,
       }
     }
 
     const info = statusRes.data?.instance || {}
     const conn = statusRes.data?.status || {}
 
-    const instanceName = args.name?.trim() || info.name || "Instância WhatsApp"
-    const instanceId = info.id || "inst_" + cleanToken.slice(0, 8)
+    const resolvedName = instanceName || info.name || "Instância WhatsApp"
+    const instanceId = info.id || "inst_" + effectiveToken.slice(0, 8)
     const isConnected = conn.connected === true || conn.loggedIn === true || info.status === "connected"
     let status: "connected" | "disconnected" | "connecting" = isConnected ? "connected" : "disconnected"
     let qrcode = info.qrcode || ""
@@ -377,20 +477,20 @@ export const connectExistingTokenAction = action({
     if (!isConnected) {
       const connRes = await fetchUazapi(`${baseUrl}/instance/connect`, {
         method: "POST",
-        headers: { token: cleanToken },
+        headers: { token: effectiveToken },
         body: {},
       })
       if (connRes.ok && connRes.data) {
-        qrcode = connRes.data.qrcode || connRes.data.base64 || qrcode
+        qrcode = connRes.data.qrcode || connRes.data.base64 || connRes.data.instance?.qrcode || qrcode
         status = "connecting"
       }
     }
 
     // Salva ou atualiza no banco
     await ctx.runMutation(internal.whatsapp.upsertInstanceInternal, {
-      name: instanceName,
+      name: resolvedName,
       instanceId,
-      token: cleanToken,
+      token: effectiveToken,
       status,
       profileName: info.profileName,
       profilePicUrl: info.profilePicUrl,
@@ -401,8 +501,8 @@ export const connectExistingTokenAction = action({
     return {
       success: true,
       instance: {
-        name: instanceName,
-        token: cleanToken,
+        name: resolvedName,
+        token: effectiveToken,
         status,
         profileName: info.profileName,
         profilePicUrl: info.profilePicUrl,
@@ -413,12 +513,86 @@ export const connectExistingTokenAction = action({
   },
 })
 
+export const checkInstanceStatusAction = action({
+  args: { token: v.string() },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    success: boolean
+    connected: boolean
+    status: string
+    profileName?: string
+    profilePicUrl?: string
+    owner?: string
+  }> => {
+    const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+
+    const res = await fetchUazapi(`${baseUrl}/instance/status`, {
+      headers: { token: args.token },
+    })
+
+    if (!res.ok || !res.data) {
+      return { success: false, connected: false, status: "error" }
+    }
+
+    const info = res.data.instance || {}
+    const conn = res.data.status || {}
+    const isConnected = conn.connected === true || conn.loggedIn === true || info.status === "connected"
+    const status = isConnected ? "connected" : "disconnected"
+
+    await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
+      token: args.token,
+      status,
+      qrcode: isConnected ? "" : info.qrcode,
+      profileName: info.profileName,
+      profilePicUrl: info.profilePicUrl,
+      ownerNumber: info.owner,
+    })
+
+    return {
+      success: true,
+      connected: isConnected,
+      status,
+      profileName: info.profileName,
+      profilePicUrl: info.profilePicUrl,
+      owner: info.owner,
+    }
+  },
+})
+
 export const getQrCodeAction = action({
   args: { token: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean; qrcode?: string; status?: string; error?: string }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
+    // 1. Primeiro verifica se já conectou
+    const statusCheck = await fetchUazapi(`${baseUrl}/instance/status`, {
+      headers: { token: args.token },
+    })
+    if (statusCheck.ok && statusCheck.data) {
+      const conn = statusCheck.data.status || {}
+      const info = statusCheck.data.instance || {}
+      if (conn.connected === true || conn.loggedIn === true || info.status === "connected") {
+        await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
+          token: args.token,
+          status: "connected",
+          qrcode: "",
+          profileName: info.profileName,
+          profilePicUrl: info.profilePicUrl,
+          ownerNumber: info.owner,
+        })
+        return {
+          success: true,
+          status: "connected",
+          qrcode: "",
+        }
+      }
+    }
+
+    // 2. Dispara conexão para gerar novo QR Code
     const connRes = await fetchUazapi(`${baseUrl}/instance/connect`, {
       method: "POST",
       headers: { token: args.token },
@@ -430,7 +604,8 @@ export const getQrCodeAction = action({
     }
 
     const qrcode = connRes.data.qrcode || connRes.data.base64 || connRes.data.instance?.qrcode
-    const status = connRes.data.status === "connected" ? "connected" : "connecting"
+    const isConn = connRes.data.status === "connected" || connRes.data.loggedIn === true
+    const status = isConn ? "connected" : "connecting"
 
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
       token: args.token,
@@ -450,7 +625,7 @@ export const syncAllInstancesStatusAction = action({
   args: {},
   handler: async (ctx): Promise<{ count: number }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
     const instances: any[] = await ctx.runQuery(internal.whatsapp.getInstancesInternal, {})
 
     let count = 0
@@ -484,7 +659,7 @@ export const disconnectInstanceAction = action({
   args: { token: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     const res = await fetchUazapi(`${baseUrl}/instance/disconnect`, {
       method: "POST",
@@ -506,7 +681,7 @@ export const deleteInstanceAction = action({
   args: { token: v.string() },
   handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     // 1. Deleta na Uazapi
     const res = await fetchUazapi(`${baseUrl}/instance`, {
@@ -937,7 +1112,7 @@ export const dispatchBroadcastCampaignAction = action({
     if (!campaign) return { success: false, sent: 0, failed: 0, error: "Campanha não encontrada" }
 
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
     const defaultInstance: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
 
     if (!defaultInstance || !defaultInstance.token) {
@@ -1067,7 +1242,7 @@ export const processRecurringCampaignsAction = action({
     for (const c of dueCampaigns) {
       // Dispara helper diretamente sem recursão
       const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-      const baseUrl = settings?.uazapiEndpoint || DEFAULT_SERVER_URL
+      const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
       const defaultInstance: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
 
       if (!defaultInstance || !defaultInstance.token) continue

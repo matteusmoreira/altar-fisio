@@ -15,7 +15,7 @@ export const seedInitialData = mutation({
         address: "Av. Paulista, 1000 - Bela Vista, São Paulo - SP",
         cancellationNoticeHours: 2,
         replacementExpiryDays: 30,
-        uazapiEndpoint: "https://api.uazapi.com/v1",
+        uazapiEndpoint: "https://whatpress.uazapi.com",
         uazapiToken: "demo_token_uazapi",
         uazapiInstanceId: "altar_fisio_inst",
         resendApiKey: "re_demo_resend_api_key",

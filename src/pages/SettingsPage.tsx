@@ -44,7 +44,7 @@ export const SettingsPage: React.FC = () => {
   const [expiryDays, setExpiryDays] = useState(30)
 
   // Chaves de API & Endpoints
-  const [uazapiEndpoint, setUazapiEndpoint] = useState("https://api.uazapi.com")
+  const [uazapiEndpoint, setUazapiEndpoint] = useState("https://whatpress.uazapi.com")
   const [uazapiToken, setUazapiToken] = useState("")
   const [uazapiInstanceId, setUazapiInstanceId] = useState("altar_fisio_live")
   const [resendApiKey, setResendApiKey] = useState("")
@@ -100,7 +100,9 @@ export const SettingsPage: React.FC = () => {
         address,
         cancellationNoticeHours: noticeHours,
         replacementExpiryDays: expiryDays,
-        uazapiEndpoint,
+        uazapiEndpoint: uazapiEndpoint.trim().includes("api.uazapi.com")
+          ? "https://whatpress.uazapi.com"
+          : (uazapiEndpoint.trim().replace(/\/+$/, "").replace(/\/(v1|api)$/i, "") || "https://whatpress.uazapi.com"),
         uazapiToken,
         uazapiInstanceId,
         resendApiKey,
@@ -375,7 +377,7 @@ export const SettingsPage: React.FC = () => {
                 <Input
                   value={uazapiEndpoint}
                   onChange={(e) => setUazapiEndpoint(e.target.value)}
-                  placeholder="https://api.uazapi.com"
+                  placeholder="https://whatpress.uazapi.com"
                   className="font-mono text-xs"
                 />
               </div>

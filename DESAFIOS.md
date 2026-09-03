@@ -168,3 +168,13 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   3. No frontend, adicionar auto-recuperação de sessão: se `patientId` estiver presente no estado mas a query de dados retornar `null`, limpar automaticamente o `localStorage` e resetar a tela de login.
   4. Envolver páginas do portal com `ErrorBoundary` dedicado que expurga dados corrompidos do `localStorage` e exibe opção de recarregamento suave.
   5. Incluir `<meta name="mobile-web-app-capable" content="yes" />` no `index.html`.
+
+---
+
+### [2026-09-02] UAZAPI (uazapiGO v2.0): Sanitização de Endpoint Base, Vinculação por Nome/ID e Live QR Detection
+- **Ponto de Fricção**: A documentação legada e formulários continham referências a `https://api.uazapi.com` ou `https://api.uazapi.com/v1`, que não possuem os endpoints do uazapiGO e retornavam HTTP 404 em todas as chamadas de `/instance/status`. Além disso, usuários frequentemente tentam conectar informando o nome da instância (ex: `drmarcelo`) em vez do UUID de 36 caracteres, resultando em erro de autorização. No frontend, os QR Codes da Uazapi expiram após 20-30 segundos sem que houvesse contagem regressiva ou auto-refresh, e após o escaneamento no celular, a tela não detectava a conexão automaticamente.
+- **Mitigação / Regra**:
+  1. Centralizar a função `sanitizeUazapiEndpoint` em `convex/whatsapp.ts`, garantindo que qualquer endpoint legado (`api.uazapi.com`), sufixos de rota (`/v1`, `/api`) ou barras finais sejam normalizados para o host oficial `https://whatpress.uazapi.com`.
+  2. Implementar a action `listServerInstancesAction`, permitindo que o frontend liste todas as instâncias existentes no servidor UAZAPI e que o usuário vincule qualquer instância com apenas 1 clique.
+  3. No `connectExistingTokenAction`, implementar busca com tolerância a falhas: caso o input informado seja um nome de instância (ex: `drmarcelo`) ou ID curto (`raf314...`), o backend consulta a listagem administrativa com o `admintoken` para resolver automaticamente o UUID real da instância.
+  4. No modal de pareamento de QR Code (`WhatsAppInstanceManager.tsx`), implementar polling ativo a cada 3.5s (`checkInstanceStatusAction`), fechando o modal e emitindo aviso de sucesso assim que o celular conclui a leitura, e auto-refresh compulsório do QR Code a cada 20 segundos com indicador visual de contagem regressiva.

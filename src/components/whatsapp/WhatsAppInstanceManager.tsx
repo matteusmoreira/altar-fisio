@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useQuery, useAction, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -29,12 +29,16 @@ import {
   Loader2,
   ShieldCheck,
   Info,
+  Server,
+  Check,
 } from "lucide-react"
 
 export const WhatsAppInstanceManager: React.FC = () => {
   const instances = useQuery(api.whatsapp.listInstances) || []
   const createInstanceAction = useAction(api.whatsapp.createInstanceAction)
   const connectExistingTokenAction = useAction(api.whatsapp.connectExistingTokenAction)
+  const listServerInstancesAction = useAction(api.whatsapp.listServerInstancesAction)
+  const checkInstanceStatusAction = useAction(api.whatsapp.checkInstanceStatusAction)
   const getQrCodeAction = useAction(api.whatsapp.getQrCodeAction)
   const syncAllAction = useAction(api.whatsapp.syncAllInstancesStatusAction)
   const disconnectAction = useAction(api.whatsapp.disconnectInstanceAction)
@@ -52,9 +56,16 @@ export const WhatsAppInstanceManager: React.FC = () => {
   const [tokenInput, setTokenInput] = useState("")
   const [tokenInstanceName, setTokenInstanceName] = useState("")
 
+  // Instâncias disponíveis no servidor Uazapi
+  const [serverInstances, setServerInstances] = useState<any[]>([])
+  const [isLoadingServerInstances, setIsLoadingServerInstances] = useState(false)
+  const [connectTab, setConnectTab] = useState<"server" | "manual">("server")
+
   // Instância selecionada para QR ou Exclusão
   const [selectedInstance, setSelectedInstance] = useState<any | null>(null)
   const [currentQrCode, setCurrentQrCode] = useState<string | null>(null)
+  const [qrCountdown, setQrCountdown] = useState(20)
+  const [isJustConnected, setIsJustConnected] = useState(false)
 
   // Loadings
   const [isLoading, setIsLoading] = useState(false)
@@ -65,6 +76,71 @@ export const WhatsAppInstanceManager: React.FC = () => {
     setFeedback({ type, message })
     setTimeout(() => setFeedback(null), 4500)
   }
+
+  // Carrega lista de instâncias disponíveis no servidor UAZAPI
+  const loadServerInstances = async () => {
+    setIsLoadingServerInstances(true)
+    try {
+      const res = await listServerInstancesAction({})
+      if (res.success && res.instances) {
+        setServerInstances(res.instances)
+      } else if (res.error) {
+        console.error("Erro ao listar instâncias:", res.error)
+      }
+    } catch (err: any) {
+      console.error(err)
+    } finally {
+      setIsLoadingServerInstances(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isConnectTokenModalOpen) {
+      loadServerInstances()
+    }
+  }, [isConnectTokenModalOpen])
+
+  // Polling em tempo real e auto-refresh do QR Code enquanto o modal estiver aberto
+  useEffect(() => {
+    if (!isQrModalOpen || !selectedInstance?.token || isJustConnected) return
+
+    setQrCountdown(20)
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await checkInstanceStatusAction({ token: selectedInstance.token })
+        if (res.success && res.connected) {
+          setIsJustConnected(true)
+          showToast(`WhatsApp "${selectedInstance.name}" conectado com sucesso!`, "success")
+          setTimeout(() => {
+            setIsQrModalOpen(false)
+            setIsJustConnected(false)
+          }, 1800)
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 3500)
+
+    const timerInterval = setInterval(() => {
+      setQrCountdown((prev) => {
+        if (prev <= 1) {
+          getQrCodeAction({ token: selectedInstance.token }).then((res) => {
+            if (res.success && res.qrcode) {
+              setCurrentQrCode(res.qrcode)
+            }
+          })
+          return 20
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => {
+      clearInterval(pollInterval)
+      clearInterval(timerInterval)
+    }
+  }, [isQrModalOpen, selectedInstance?.token, isJustConnected])
 
   // 1. Criar Nova Instância
   const handleCreateInstance = async (e: React.FormEvent) => {
@@ -123,6 +199,34 @@ export const WhatsAppInstanceManager: React.FC = () => {
       }
     } catch (err: any) {
       showToast(err?.message || "Falha ao validar token", "error")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 2.1 Vincular Instância Selecionada do Servidor com 1 Clique
+  const handleLinkServerInstance = async (inst: any) => {
+    setIsLoading(true)
+    try {
+      const res = await connectExistingTokenAction({
+        token: inst.token,
+        name: inst.name,
+      })
+
+      if (res.success && res.instance) {
+        showToast(`Instância "${inst.name}" vinculada com sucesso!`)
+        setIsConnectTokenModalOpen(false)
+
+        if (res.instance.qrcode && res.instance.status !== "connected") {
+          setSelectedInstance(res.instance)
+          setCurrentQrCode(res.instance.qrcode)
+          setIsQrModalOpen(true)
+        }
+      } else {
+        showToast(res.error || "Erro ao vincular instância", "error")
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Falha ao vincular instância", "error")
     } finally {
       setIsLoading(false)
     }
@@ -474,50 +578,177 @@ export const WhatsAppInstanceManager: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: CONECTAR POR TOKEN EXISTENTE */}
+      {/* MODAL 2: CONECTAR / VINCULAR INSTÂNCIA EXISTENTE */}
       <Dialog open={isConnectTokenModalOpen} onOpenChange={setIsConnectTokenModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Key className="w-5 h-5 text-amber-500" />
-              Conectar Instância Existente por Token
+              Vincular Instância do WhatsApp
             </DialogTitle>
             <DialogDescription>
-              Se você já possui uma instância criada no painel Uazapi, informe o token para importá-la para o sistema.
+              Vincule linhas já criadas no servidor Uazapi à clínica com 1 clique ou informe o nome/token da instância.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleConnectByToken} className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Token da Instância (Obrigatório)</label>
-              <Input
-                placeholder="Ex: 283f70c2-5b39-4718-87ca-f5955632e32c"
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-                required
-                className="font-mono text-xs"
-              />
-            </div>
+          {/* Abas de Conexão */}
+          <div className="flex border-b border-border/80 mt-1 mb-3">
+            <button
+              type="button"
+              onClick={() => setConnectTab("server")}
+              className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+                connectTab === "server"
+                  ? "border-emerald-600 text-emerald-700 dark:text-emerald-400"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Server className="w-3.5 h-3.5" />
+              Instâncias no Servidor ({serverInstances.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setConnectTab("manual")}
+              className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+                connectTab === "manual"
+                  ? "border-emerald-600 text-emerald-700 dark:text-emerald-400"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Key className="w-3.5 h-3.5" />
+              Digitar Nome / Token
+            </button>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold">Nome de Exibição (Opcional)</label>
-              <Input
-                placeholder="Ex: WhatsApp Comercial"
-                value={tokenInstanceName}
-                onChange={(e) => setTokenInstanceName(e.target.value)}
-              />
-            </div>
+          {connectTab === "server" ? (
+            <div className="space-y-3 py-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Linhas detectadas no servidor Uazapi:
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadServerInstances}
+                  disabled={isLoadingServerInstances}
+                  className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingServerInstances ? "animate-spin" : ""}`} />
+                  Recarregar
+                </Button>
+              </div>
 
-            <DialogFooter className="pt-3">
-              <Button type="button" variant="outline" onClick={() => setIsConnectTokenModalOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isLoading} className="bg-emerald-600 text-white gap-2">
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Validar e Conectar
-              </Button>
-            </DialogFooter>
-          </form>
+              {isLoadingServerInstances ? (
+                <div className="py-8 text-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
+                  <p className="text-xs text-muted-foreground">Consultando servidor Uazapi...</p>
+                </div>
+              ) : serverInstances.length === 0 ? (
+                <div className="py-6 text-center border border-dashed rounded-xl space-y-2 bg-muted/20">
+                  <Server className="w-6 h-6 text-muted-foreground mx-auto" />
+                  <p className="text-xs text-muted-foreground">
+                    Nenhuma instância encontrada no servidor ou timeout de resposta.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConnectTab("manual")}
+                    className="text-xs"
+                  >
+                    Digitar manualmente
+                  </Button>
+                </div>
+              ) : (
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  {serverInstances.map((inst) => {
+                    const isConn = inst.status === "connected"
+                    return (
+                      <div
+                        key={inst.token || inst.id}
+                        className="p-3 rounded-xl border bg-card/60 hover:bg-card flex items-center justify-between gap-3 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-foreground truncate">
+                              {inst.name}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] px-1.5 py-0 h-4 ${
+                                isConn
+                                  ? "border-emerald-500 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30"
+                                  : "border-zinc-400 text-zinc-600 bg-zinc-50 dark:bg-zinc-800"
+                              }`}
+                            >
+                              {isConn ? "Online" : "Offline"}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {inst.profileName || (inst.owner ? `+${inst.owner}` : "Aguardando pareamento")}
+                          </p>
+                        </div>
+
+                        {inst.isLinkedLocally ? (
+                          <Badge variant="outline" className="text-[11px] text-emerald-700 border-emerald-300 bg-emerald-50/80 gap-1 h-7 px-2">
+                            <Check className="w-3 h-3 text-emerald-600" /> Vinculada
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleLinkServerInstance(inst)}
+                            disabled={isLoading}
+                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3"
+                          >
+                            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Vincular"}
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <DialogFooter className="pt-2 border-t">
+                <Button type="button" variant="outline" onClick={() => setIsConnectTokenModalOpen(false)}>
+                  Fechar
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={handleConnectByToken} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Nome, ID ou Token da Instância</label>
+                <Input
+                  placeholder="Ex: drmarcelo, Altar Tech, ou token UUID..."
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  required
+                  className="font-mono text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Você pode digitar o nome exato da instância no servidor (ex: <b>drmarcelo</b>), o ID ou o token de 36 caracteres.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Nome de Exibição na Clínica (Opcional)</label>
+                <Input
+                  placeholder="Ex: WhatsApp Dr. Marcelo, Recepção"
+                  value={tokenInstanceName}
+                  onChange={(e) => setTokenInstanceName(e.target.value)}
+                />
+              </div>
+
+              <DialogFooter className="pt-3">
+                <Button type="button" variant="outline" onClick={() => setIsConnectTokenModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isLoading} className="bg-emerald-600 text-white gap-2">
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Localizar e Vincular
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -535,7 +766,19 @@ export const WhatsAppInstanceManager: React.FC = () => {
           </DialogHeader>
 
           <div className="py-4 flex flex-col items-center justify-center space-y-4">
-            {isLoading ? (
+            {isJustConnected ? (
+              <div className="w-64 h-64 border rounded-2xl flex flex-col items-center justify-center gap-3 bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30 p-6 text-center animate-in zoom-in-90">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <h4 className="font-bold text-base text-emerald-800 dark:text-emerald-200">
+                  WhatsApp Conectado!
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  A linha foi sincronizada e já está operacional para a clínica.
+                </p>
+              </div>
+            ) : isLoading ? (
               <div className="w-64 h-64 border rounded-2xl flex flex-col items-center justify-center gap-3 bg-muted/40">
                 <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
                 <p className="text-xs text-muted-foreground">Carregando QR Code oficial...</p>
@@ -565,10 +808,12 @@ export const WhatsAppInstanceManager: React.FC = () => {
               </div>
             )}
 
-            <div className="text-xs text-muted-foreground max-w-xs text-center flex items-center gap-1.5 justify-center">
-              <Info className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-              O QR Code é atualizado automaticamente a cada 20 segundos pela Uazapi.
-            </div>
+            {!isJustConnected && (
+              <div className="text-xs text-muted-foreground max-w-xs text-center flex items-center gap-1.5 justify-center">
+                <Info className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <span>Atualização automática em <b>{qrCountdown}s</b></span>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="sm:justify-between">
@@ -576,11 +821,11 @@ export const WhatsAppInstanceManager: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => selectedInstance && handleOpenQrCode(selectedInstance)}
-              disabled={isLoading}
+              disabled={isLoading || isJustConnected}
               className="gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar QR
+              Atualizar QR Agora
             </Button>
             <Button size="sm" onClick={() => setIsQrModalOpen(false)}>
               Fechar

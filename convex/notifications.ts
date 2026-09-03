@@ -1,7 +1,7 @@
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
-import { sendUazapiInteractiveMessage, normalizeWhatsAppText } from "./whatsapp"
+import { sendUazapiInteractiveMessage, normalizeWhatsAppText, sanitizeUazapiEndpoint } from "./whatsapp"
 
 // ============================================================================
 // HELPERS DE DATA E FORMATAÇÃO (Fuso Horário de Brasília UTC-3)
@@ -283,7 +283,7 @@ async function sendWhatsAppDirectHelper(
   const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
   const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
   const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
-  const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
+  const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
   const formattedPhone = formatBrazilianPhone(args.phone)
   const cleanMessage = normalizeWhatsAppText(args.message)
 
@@ -465,7 +465,7 @@ export const checkAndSendDailyReminders24hAction = action({
     const noticeHours = settings?.cancellationNoticeHours || 2
     const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
     const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
-    const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     let template24: any = null
     if (settings?.activeReminder24hTemplateId) {
@@ -551,7 +551,7 @@ export const checkAndSendUpcomingReminders2hAction = action({
     const clinicName = settings?.clinicName || "Altar Fisio"
     const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
     const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
-    const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
+    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     let template2h: any = null
     if (settings?.activeReminder2hTemplateId) {
