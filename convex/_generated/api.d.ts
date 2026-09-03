@@ -10,6 +10,7 @@
 
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as availability from "../availability.js";
 import type * as bookingBuilder from "../bookingBuilder.js";
 import type * as clinic from "../clinic.js";
 import type * as clinical from "../clinical.js";
@@ -37,6 +38,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auth: typeof auth;
+  availability: typeof availability;
   bookingBuilder: typeof bookingBuilder;
   clinic: typeof clinic;
   clinical: typeof clinical;

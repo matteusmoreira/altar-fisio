@@ -44,6 +44,7 @@ import {
 import { AbsenceModal } from "@/components/classes/AbsenceModal"
 import { AttendanceReportView } from "@/components/classes/AttendanceReportView"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
+import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
 
 const ROOM_TYPES: Array<{ id: RoomType; label: string }> = [
   { id: "pilates_aparelhos", label: "Pilates em Aparelhos" },
@@ -103,6 +104,17 @@ export const ClassesPage: React.FC = () => {
     studentName: "",
     classNameTitle: "",
   })
+
+  // Modal de Gestão de Horários & Disponibilidade de Atendimento
+  const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false)
+  const [availabilityTargetRoomId, setAvailabilityTargetRoomId] = useState<string | undefined>(undefined)
+  const [availabilityTargetProfId, setAvailabilityTargetProfId] = useState<string | undefined>(undefined)
+
+  const handleOpenAvailabilityModal = (profId?: string, roomId?: string) => {
+    setAvailabilityTargetProfId(profId)
+    setAvailabilityTargetRoomId(roomId)
+    setIsAvailabilityModalOpen(true)
+  }
 
   // Ação em Lote: Marcar todos os matriculados como presentes
   const handleBatchCheckIn = async (scheduleId: string) => {
@@ -516,10 +528,20 @@ export const ClassesPage: React.FC = () => {
           )}
 
           {activeTab === "salas" && (
-            <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm">
-              <Plus className="h-4 w-4" />
-              <span>Nova Sala / Box</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleOpenAvailabilityModal()}
+                className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+              >
+                <Clock className="h-4 w-4" />
+                <span>Horários de Atendimento & Escalas</span>
+              </Button>
+              <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm">
+                <Plus className="h-4 w-4" />
+                <span>Nova Sala / Box</span>
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -924,18 +946,29 @@ export const ClassesPage: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => handleOpenAvailabilityModal(undefined, room.id)}
+                          className="text-xs h-8 px-2.5 gap-1.5 text-foreground border-border hover:border-primary/40 hover:bg-primary/5"
+                          title="Gerenciar horários de atendimento desta sala"
+                        >
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          <span>Horários</span>
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleOpenEditRoom(room)}
-                          className="text-xs h-8 px-3 gap-1.5 text-primary border-primary/30 hover:bg-primary/5"
+                          className="text-xs h-8 px-2.5 gap-1 text-primary border-primary/30 hover:bg-primary/5"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
-                          <span>Editar Sala</span>
+                          <span>Editar</span>
                         </Button>
 
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setDeletingRoom(room)}
-                          className="text-xs h-8 px-2.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                          className="text-xs h-8 px-2 text-destructive border-destructive/30 hover:bg-destructive/10"
                           title="Excluir sala"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1618,6 +1651,14 @@ export const ClassesPage: React.FC = () => {
             setTimeout(() => setFeedback(null), 4000)
           }
         }}
+      />
+
+      {/* Modal Unificado de Gestão de Horários & Disponibilidade */}
+      <AvailabilityManagerModal
+        isOpen={isAvailabilityModalOpen}
+        onClose={() => setIsAvailabilityModalOpen(false)}
+        initialRoomId={availabilityTargetRoomId}
+        initialProfessionalId={availabilityTargetProfId}
       />
     </div>
   )

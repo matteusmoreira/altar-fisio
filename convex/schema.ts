@@ -560,6 +560,38 @@ export default defineSchema({
     .index("by_patient", ["patientId"])
     .index("by_date", ["date"])
     .index("by_status_created", ["status", "createdAt"]),
+
+  // Regras de Disponibilidade Semanal Recorrente por Profissional e Sala
+  availabilityRules: defineTable({
+    professionalId: v.id("professionals"),
+    roomId: v.id("rooms"),
+    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    dayOfWeek: v.number(), // 0 = Domingo, 1 = Segunda, 2 = Terça, 3 = Quarta, 4 = Quinta, 5 = Sexta, 6 = Sábado
+    startTime: v.string(), // "08:00"
+    endTime: v.string(), // "12:00"
+    slotDurationMinutes: v.optional(v.number()), // ex: 50
+    breakMinutes: v.optional(v.number()), // ex: 10
+    isActive: v.boolean(),
+  })
+    .index("by_professional", ["professionalId"])
+    .index("by_room", ["roomId"])
+    .index("by_day_specialty", ["dayOfWeek", "specialty"])
+    .index("by_professional_day", ["professionalId", "dayOfWeek"]),
+
+  // Exceções Pontuais de Disponibilidade (Bloqueios de Folga/Férias e Plantões Extras)
+  availabilityOverrides: defineTable({
+    professionalId: v.id("professionals"),
+    roomId: v.optional(v.id("rooms")),
+    date: v.string(), // YYYY-MM-DD
+    type: v.union(v.literal("block"), v.literal("extra")), // "block" = folga/bloqueio; "extra" = atendimento avulso
+    startTime: v.optional(v.string()), // Se omitido, dia inteiro
+    endTime: v.optional(v.string()),
+    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    reason: v.optional(v.string()), // Ex: "Férias", "Congresso", "Atestado", "Plantão Extra"
+    createdAt: v.number(),
+  })
+    .index("by_date", ["date"])
+    .index("by_professional_date", ["professionalId", "date"]),
 })
 
 

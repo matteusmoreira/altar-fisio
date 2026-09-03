@@ -484,3 +484,110 @@ export const seedFinanceRecords = mutation({
     return { success: true, count: seedTxs.length, message: "Transações financeiras iniciais semeadas com sucesso!" }
   },
 })
+
+// 12. Semear Regras de Disponibilidade Padrão (Dr. Marcelo na Fisio e Dra. Camila no Pilates)
+export const seedDefaultAvailability = mutation({
+  handler: async (ctx) => {
+    const existingRules = await ctx.db.query("availabilityRules").collect()
+    if (existingRules.length > 0) {
+      return { success: true, count: existingRules.length, message: "Regras de disponibilidade já configuradas." }
+    }
+
+    const professionals = await ctx.db.query("professionals").collect()
+    const rooms = await ctx.db.query("rooms").collect()
+
+    const drMarcelo = professionals.find((p) => p.name.toLowerCase().includes("marcelo")) || professionals[0]
+    const draCamila = professionals.find((p) => p.name.toLowerCase().includes("camila")) || professionals[1]
+
+    const fisioRoom =
+      rooms.find((r) => r.type === "fisioterapia" || r.name.toLowerCase().includes("fisioterapia")) || rooms[0]
+    const pilatesRoom =
+      rooms.find((r) => r.type === "pilates_aparelhos" || r.name.toLowerCase().includes("pilates")) || rooms[0]
+
+    const rulesToInsert = []
+
+    if (drMarcelo && fisioRoom) {
+      // Dr. Marcelo na Fisioterapia: Terças e Quintas (08:00 às 12:00 e 14:00 às 18:00)
+      rulesToInsert.push({
+        professionalId: drMarcelo._id,
+        roomId: fisioRoom._id,
+        specialty: "fisioterapia" as const,
+        dayOfWeek: 2, // Terça
+        startTime: "08:00",
+        endTime: "12:00",
+        slotDurationMinutes: 50,
+        breakMinutes: 10,
+        isActive: true,
+      })
+      rulesToInsert.push({
+        professionalId: drMarcelo._id,
+        roomId: fisioRoom._id,
+        specialty: "fisioterapia" as const,
+        dayOfWeek: 2, // Terça
+        startTime: "14:00",
+        endTime: "18:00",
+        slotDurationMinutes: 50,
+        breakMinutes: 10,
+        isActive: true,
+      })
+      rulesToInsert.push({
+        professionalId: drMarcelo._id,
+        roomId: fisioRoom._id,
+        specialty: "fisioterapia" as const,
+        dayOfWeek: 4, // Quinta
+        startTime: "08:00",
+        endTime: "12:00",
+        slotDurationMinutes: 50,
+        breakMinutes: 10,
+        isActive: true,
+      })
+      rulesToInsert.push({
+        professionalId: drMarcelo._id,
+        roomId: fisioRoom._id,
+        specialty: "fisioterapia" as const,
+        dayOfWeek: 4, // Quinta
+        startTime: "14:00",
+        endTime: "18:00",
+        slotDurationMinutes: 50,
+        breakMinutes: 10,
+        isActive: true,
+      })
+    }
+
+    if (draCamila && pilatesRoom) {
+      // Dra. Camila no Pilates: Segundas e Quartas (07:00 às 12:00)
+      rulesToInsert.push({
+        professionalId: draCamila._id,
+        roomId: pilatesRoom._id,
+        specialty: "pilates" as const,
+        dayOfWeek: 1, // Segunda
+        startTime: "07:00",
+        endTime: "12:00",
+        slotDurationMinutes: 60,
+        breakMinutes: 0,
+        isActive: true,
+      })
+      rulesToInsert.push({
+        professionalId: draCamila._id,
+        roomId: pilatesRoom._id,
+        specialty: "pilates" as const,
+        dayOfWeek: 3, // Quarta
+        startTime: "07:00",
+        endTime: "12:00",
+        slotDurationMinutes: 60,
+        breakMinutes: 0,
+        isActive: true,
+      })
+    }
+
+    for (const rule of rulesToInsert) {
+      await ctx.db.insert("availabilityRules", rule)
+    }
+
+    return {
+      success: true,
+      count: rulesToInsert.length,
+      message: `${rulesToInsert.length} regras padrão de atendimento semeadas com sucesso!`,
+    }
+  },
+})

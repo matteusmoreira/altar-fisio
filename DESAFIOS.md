@@ -236,3 +236,11 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   2. **Garantia de Gap Mínimo**: Em contêineres `flex justify-between`, sempre declarar um `gap-2.5` ou `gap-3` explícito com `min-w-0` no bloco textual e `shrink-0` nas badges/ícones, impedindo colisão sob qualquer largura.
   3. **Respiro Vertical e Micro-Tipografia**: Utilizar `leading-tight` com `mt-1` a `mt-1.5` entre títulos e legendas (`text-[11px] font-medium`), e normalizar badges com padding equilibrado (`px-2.5 py-1 text-[10px] font-extrabold tracking-wide`) e ícones de 3x3 ou 3.5x3.5.
   4. **Divisores Reativos ao Estado**: Em cards selecionados ou com fundo contrastante, aplicar bordas contextuais `${isSelected ? "border-white/20" : "border-border/60"}` para preservar elegância e nitidez.
+
+---
+
+### [2026-09-03] Tipagem de União Universal no `ctx.db.get` do Convex e Fatiamento Dinâmico de Slots
+- **Ponto de Fricção**: Quando o argumento de ID passado para `ctx.db.get(id)` possui tipo `any` ou união genérica sem identificador de tabela específico, o compilador do TypeScript no Convex infere o retorno como a união discriminada de todas as tabelas do schema (Doc<"users"> | Doc<"auditLogs"> | ...). Ao acessar campos comuns de entidades de negócio como `.name` ou `.capacity`, o TypeScript acusa erro TS2339 porque tabelas de logs ou sessões não possuem esses campos. Além disso, a CLI do Convex no Windows pode disparar aviso de libuv (`!(handle->flags & UV_HANDLE_CLOSING)`) após a execução de comandos `run`, embora as mutações e queries persistam 100% no banco.
+- **Mitigação / Regra**: 
+  1. Tipar a variável capturada como `any` (`const room: any = await ctx.db.get(slot.roomId)`) ou usar asserção explícita de tipo (`Doc<"rooms"> | null`).
+  2. Para fatiamento dinâmico de horários sem poluir o banco com dezenas de milhares de registros, manter as tabelas enxutas de `availabilityRules` e `availabilityOverrides` e fatiar os slots sob demanda na query com `sliceTimeWindowIntoSlots`.

@@ -433,3 +433,37 @@ export interface PatientConsent {
   notes?: string
 }
 
+export interface AvailabilityRule {
+  id: string
+  professionalId: string
+  professionalName?: string
+  professionalSpecialties?: string[]
+  roomId: string
+  roomName?: string
+  roomColor?: string
+  roomCapacity?: number
+  specialty: "fisioterapia" | "pilates" | "rpg"
+  dayOfWeek: number // 0 = Domingo, 1 = Segunda, ... 6 = Sábado
+  startTime: string // "08:00"
+  endTime: string // "12:00"
+  slotDurationMinutes?: number
+  breakMinutes?: number
+  isActive: boolean
+}
+
+export interface AvailabilityOverride {
+  id: string
+  professionalId: string
+  professionalName?: string
+  roomId?: string
+  roomName?: string
+  date: string // YYYY-MM-DD
+  type: "block" | "extra"
+  startTime?: string
+  endTime?: string
+  specialty?: "fisioterapia" | "pilates" | "rpg"
+  reason?: string
+  createdAt: number
+}
+
+

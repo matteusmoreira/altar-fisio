@@ -30,9 +30,11 @@ import {
   UserX,
   Sparkles,
   AlertTriangle,
+  Clock,
 } from "lucide-react"
 
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
+import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
 
 const ALL_SPECIALTIES: Specialty[] = ["Fisioterapia", "Pilates", "RPG"]
 
@@ -71,6 +73,15 @@ export const ProfessionalsPage: React.FC = () => {
   // Modal de Exclusão
   const [deletingProf, setDeletingProf] = useState<Professional | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Modal de Gestão de Horários & Disponibilidade de Atendimento
+  const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false)
+  const [availabilityTargetProfId, setAvailabilityTargetProfId] = useState<string | undefined>(undefined)
+
+  const handleOpenAvailabilityModal = (profId?: string) => {
+    setAvailabilityTargetProfId(profId)
+    setIsAvailabilityModalOpen(true)
+  }
 
   const showToast = (msg: string) => {
     setFeedback(msg)
@@ -231,10 +242,20 @@ export const ProfessionalsPage: React.FC = () => {
           </p>
         </div>
 
-        <Button onClick={handleOpenCreate} className="gap-2 self-start sm:self-auto shadow-sm">
-          <Plus className="h-4 w-4" />
-          <span>Cadastrar Profissional</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            onClick={() => handleOpenAvailabilityModal()}
+            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+          >
+            <Clock className="h-4 w-4" />
+            <span>Horários & Escalas</span>
+          </Button>
+          <Button onClick={handleOpenCreate} className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" />
+            <span>Cadastrar Profissional</span>
+          </Button>
+        </div>
       </div>
 
       {/* Cards de Métricas */}
@@ -464,6 +485,17 @@ export const ProfessionalsPage: React.FC = () => {
                     <Button
                       size="sm"
                       variant="outline"
+                      onClick={() => handleOpenAvailabilityModal(prof.id)}
+                      className="text-xs h-8 px-2 gap-1 text-foreground border-border hover:border-primary/40 hover:bg-primary/5"
+                      title="Configurar horários de atendimento deste profissional"
+                    >
+                      <Clock className="h-3.5 w-3.5 text-primary" />
+                      <span>Horários</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => handleOpenEdit(prof)}
                       className="text-xs h-8 px-2.5 gap-1 text-primary hover:bg-primary/5 border-primary/30"
                     >
@@ -600,6 +632,16 @@ export const ProfessionalsPage: React.FC = () => {
                         <Button
                           size="icon"
                           variant="ghost"
+                          onClick={() => handleOpenAvailabilityModal(prof.id)}
+                          className="h-8 w-8 text-primary hover:bg-primary/10"
+                          title="Gerenciar Horários e Agenda"
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           onClick={() => handleOpenEdit(prof)}
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
                           title="Editar Profissional"
@@ -701,6 +743,16 @@ export const ProfessionalsPage: React.FC = () => {
                         <span>Ativar</span>
                       </>
                     )}
+                  </Button>
+
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => handleOpenAvailabilityModal(prof.id)}
+                    className="h-8 w-8 text-primary border-primary/30 shrink-0"
+                    title="Horários de Atendimento"
+                  >
+                    <Clock className="h-3.5 w-3.5" />
                   </Button>
 
                   <Button
@@ -916,6 +968,13 @@ export const ProfessionalsPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Unificado de Gestão de Horários & Disponibilidade */}
+      <AvailabilityManagerModal
+        isOpen={isAvailabilityModalOpen}
+        onClose={() => setIsAvailabilityModalOpen(false)}
+        initialProfessionalId={availabilityTargetProfId}
+      />
     </div>
   )
 }

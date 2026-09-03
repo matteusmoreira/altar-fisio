@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server"
 import { api } from "./_generated/api"
 import { v } from "convex/values"
+import { sliceTimeWindowIntoSlots } from "./availability"
 
 export const DEFAULT_BOOKING_STEPS = [
   {
@@ -301,7 +302,163 @@ export const listPublicAvailableSlots = query({
       })
     )
 
-    // Horários padrão de atendimento da clínica (07:00 até 20:00)
+    // Busca regras de disponibilidade configuradas na clínica
+    const allConfiguredRules = await ctx.db.query("availabilityRules").collect()
+    const activeClinicRules = allConfiguredRules.filter((r) => r.isActive)
+
+    // Se houver regras cadastradas na clínica, gera os horários dinamicamente a partir delas
+    if (activeClinicRules.length > 0) {
+      const dateObj = new Date(`${args.date}T12:00:00-03:00`)
+      const dayOfWeek = dateObj.getDay()
+
+      let rulesForDay = activeClinicRules.filter((r) => r.dayOfWeek === dayOfWeek)
+      if (args.specialty) {
+        rulesForDay = rulesForDay.filter((r) => r.specialty === args.specialty)
+      }
+      if (args.professionalId) {
+        rulesForDay = rulesForDay.filter((r) => r.professionalId === args.professionalId)
+      }
+
+      // Exceções do dia (bloqueios e extras)
+      const overrides = await ctx.db
+        .query("availabilityOverrides")
+        .withIndex("by_date", (q) => q.eq("date", args.date))
+        .collect()
+
+      const blocks = overrides.filter((o) => o.type === "block")
+      const extras = overrides.filter((o) => o.type === "extra")
+
+      // Mapeamento de slots calculados a partir das regras
+      const timeSlotsMap = new Map<
+        string,
+        { start: string; end: string; ruleRooms: Set<any>; ruleProfs: Set<any> }
+      >()
+
+      for (const rule of rulesForDay) {
+        // Bloqueio de dia inteiro
+        const isFullDayBlocked = blocks.some(
+          (b) =>
+            b.professionalId === rule.professionalId &&
+            (!b.roomId || b.roomId === rule.roomId) &&
+            !b.startTime &&
+            !b.endTime
+        )
+        if (isFullDayBlocked) continue
+
+        const slices = sliceTimeWindowIntoSlots(
+          rule.startTime,
+          rule.endTime,
+          rule.slotDurationMinutes || 50,
+          rule.breakMinutes || 10
+        )
+
+        for (const slice of slices) {
+          const isTimeBlocked = blocks.some(
+            (b) =>
+              b.professionalId === rule.professionalId &&
+              (!b.roomId || b.roomId === rule.roomId) &&
+              b.startTime &&
+              b.endTime &&
+              slice.start < b.endTime &&
+              b.startTime < slice.end
+          )
+          if (isTimeBlocked) continue
+
+          const key = slice.start
+          if (!timeSlotsMap.has(key)) {
+            timeSlotsMap.set(key, {
+              start: slice.start,
+              end: slice.end,
+              ruleRooms: new Set([rule.roomId]),
+              ruleProfs: new Set([rule.professionalId]),
+            })
+          } else {
+            const entry = timeSlotsMap.get(key)!
+            entry.ruleRooms.add(rule.roomId)
+            entry.ruleProfs.add(rule.professionalId)
+          }
+        }
+      }
+
+      // Adiciona plantões extras
+      for (const extra of extras) {
+        if (args.specialty && extra.specialty && extra.specialty !== args.specialty) continue
+        if (args.professionalId && extra.professionalId !== args.professionalId) continue
+        if (extra.startTime && extra.endTime && extra.roomId) {
+          const slices = sliceTimeWindowIntoSlots(extra.startTime, extra.endTime, 50, 10)
+          for (const slice of slices) {
+            const key = slice.start
+            if (!timeSlotsMap.has(key)) {
+              timeSlotsMap.set(key, {
+                start: slice.start,
+                end: slice.end,
+                ruleRooms: new Set([extra.roomId]),
+                ruleProfs: new Set([extra.professionalId]),
+              })
+            } else {
+              const entry = timeSlotsMap.get(key)!
+              entry.ruleRooms.add(extra.roomId)
+              entry.ruleProfs.add(extra.professionalId)
+            }
+          }
+        }
+      }
+
+      const sortedSlots = Array.from(timeSlotsMap.values()).sort((a, b) =>
+        a.start.localeCompare(b.start)
+      )
+
+      return sortedSlots.map((slot) => {
+        const schedulesAtTime = schedulesWithParticipants.filter(
+          (s) => s.startTime === slot.start && s.status !== "cancelled"
+        )
+
+        const compatibleRooms = rooms.filter((r) => slot.ruleRooms.has(r._id))
+        const availableRoomsWithSpots = compatibleRooms.map((room) => {
+          const scheduleInRoom = schedulesAtTime.find((s) => s.roomId === room._id)
+          if (!scheduleInRoom) {
+            return {
+              roomId: room._id,
+              roomName: room.name,
+              capacity: room.capacity,
+              occupied: 0,
+              availableSpots: room.capacity,
+              existingScheduleId: null,
+            }
+          }
+          const occupied = scheduleInRoom.currentParticipantsCount
+          const spots = Math.max(0, room.capacity - occupied)
+          return {
+            roomId: room._id,
+            roomName: room.name,
+            capacity: room.capacity,
+            occupied,
+            availableSpots: spots,
+            existingScheduleId: scheduleInRoom._id,
+          }
+        })
+
+        const totalSpots = availableRoomsWithSpots.reduce((acc, r) => acc + r.availableSpots, 0)
+        const hasRoomAvailable = availableRoomsWithSpots.some((r) => r.availableSpots > 0)
+        const compatibleProfs = professionals.filter((p) => slot.ruleProfs.has(p._id))
+        const hasProfAvailable = compatibleProfs.length > 0
+
+        return {
+          startTime: slot.start,
+          endTime: slot.end,
+          isAvailable: hasRoomAvailable && hasProfAvailable && totalSpots > 0,
+          totalAvailableSpots: totalSpots,
+          rooms: availableRoomsWithSpots.filter((r) => r.availableSpots > 0),
+          availableProfessionals: compatibleProfs.map((p) => ({
+            id: p._id,
+            name: p.name,
+            specialties: p.specialties,
+          })),
+        }
+      })
+    }
+
+    // Fallback gracioso: Horários padrão de atendimento da clínica (07:00 até 20:00)
     const timeSlots = [
       { start: "07:00", end: "07:55" },
       { start: "08:00", end: "08:55" },

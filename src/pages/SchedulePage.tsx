@@ -39,6 +39,7 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
+import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
 
 export const SchedulePage: React.FC = () => {
   const { user, isProfessional } = useAuth()
@@ -71,6 +72,7 @@ export const SchedulePage: React.FC = () => {
     isProfessional && user?.professionalId ? user.professionalId : "all"
   )
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
+  const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   // Form State para Novo Agendamento (Único ou Recorrente)
@@ -268,10 +270,22 @@ export const SchedulePage: React.FC = () => {
           </p>
         </div>
 
-        <Button onClick={() => setIsNewModalOpen(true)} className="gap-2 self-start sm:self-auto">
-          <Plus className="h-4 w-4" />
-          <span>Novo Agendamento / Turma</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            onClick={() => setIsAvailabilityModalOpen(true)}
+            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+            title="Configurar horários de atendimento, salas e folgas"
+          >
+            <Clock className="h-4 w-4" />
+            <span>{isProfessional ? "Minha Disponibilidade" : "Escalas & Horários"}</span>
+          </Button>
+
+          <Button onClick={() => setIsNewModalOpen(true)} className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" />
+            <span>Novo Agendamento / Turma</span>
+          </Button>
+        </div>
       </div>
 
       {/* Barra de Navegação de Data & Filtros */}
@@ -1136,6 +1150,13 @@ export const SchedulePage: React.FC = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Modal Unificado de Gestão de Horários & Disponibilidade */}
+      <AvailabilityManagerModal
+        isOpen={isAvailabilityModalOpen}
+        onClose={() => setIsAvailabilityModalOpen(false)}
+        initialProfessionalId={isProfessional && user?.professionalId ? user.professionalId : undefined}
+      />
     </div>
   )
 }
