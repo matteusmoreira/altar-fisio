@@ -540,6 +540,30 @@ export const listPublicAvailableSlots = query({
   },
 })
 
+// 4.1 Listar Pacotes e Planos Ativos para Agendamento Público
+export const listPublicPackages = query({
+  handler: async (ctx) => {
+    const packages = await ctx.db.query("packages").collect()
+    const activePublicPackages = packages.filter(
+      (pkg) => pkg.active && pkg.showInPublicBooking !== false
+    )
+
+    return await Promise.all(
+      activePublicPackages.map(async (pkg) => {
+        const service = await ctx.db.get(pkg.serviceId)
+        return {
+          ...pkg,
+          serviceName: service?.name || "Serviço",
+          modality: service?.modality || "turma",
+          specialty: service?.specialty || "pilates",
+          durationMinutes: service?.durationMinutes || 55,
+          pricePerSession: pkg.sessionCount > 0 ? Number((pkg.price / pkg.sessionCount).toFixed(2)) : 0,
+        }
+      })
+    )
+  },
+})
+
 // 5. Submeter Agendamento Público (Realizado pelo Paciente na Página /agendar)
 export const submitPublicBooking = mutation({
   args: {
@@ -549,6 +573,13 @@ export const submitPublicBooking = mutation({
     email: v.optional(v.string()),
     birthDate: v.string(),
     serviceId: v.optional(v.id("services")),
+    packageId: v.optional(v.id("packages")),
+    packageName: v.optional(v.string()),
+    hasHealthInsurance: v.optional(v.boolean()),
+    healthInsuranceName: v.optional(v.string()),
+    selectedPrice: v.optional(v.number()),
+    selectedPaymentMethod: v.optional(v.string()), // "pix" | "cartao"
+    pricingDetails: v.optional(v.string()),
     professionalId: v.optional(v.id("professionals")),
     roomId: v.optional(v.id("rooms")),
     date: v.string(), // YYYY-MM-DD
@@ -576,6 +607,10 @@ export const submitPublicBooking = mutation({
       .withIndex("by_cpf", (q) => q.eq("documentCpf", cleanCpf))
       .first()
 
+    const insuranceToSave = args.hasHealthInsurance
+      ? args.healthInsuranceName || "Com Convênio"
+      : "Particular"
+
     if (!patient) {
       const patientId = await ctx.db.insert("patients", {
         name: args.name.trim(),
@@ -583,11 +618,19 @@ export const submitPublicBooking = mutation({
         phone: cleanPhone,
         email: args.email?.trim() || undefined,
         birthDate: args.birthDate,
+        healthInsurance: insuranceToSave,
         active: true,
         notes: `Cadastrado via Agendamento Online em ${new Date(now).toLocaleDateString("pt-BR")}. ${args.notes || ""}`,
         createdAt: now,
       })
       patient = await ctx.db.get(patientId)
+    } else {
+      // Atualiza o convênio do paciente se informado
+      if (args.hasHealthInsurance !== undefined) {
+        await ctx.db.patch(patient._id, {
+          healthInsurance: insuranceToSave,
+        })
+      }
     }
 
     if (!patient) {
@@ -639,14 +682,18 @@ export const submitPublicBooking = mutation({
             scheduleId: existingSchedule._id,
             patientId: patient._id,
             status: "scheduled",
-            notes: "Agendamento realizado via Portal Público",
+            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
           })
         } else {
           // Cria novo agendamento
           const specialty = args.specialty || "fisioterapia"
           const room = await ctx.db.get(roomId)
           const newScheduleId = await ctx.db.insert("schedules", {
-            title: specialty === "pilates" ? "Pilates Studio (Online)" : "Atendimento Fisioterapia (Online)",
+            title: args.packageName
+              ? `${args.packageName} (Online)`
+              : specialty === "pilates"
+              ? "Pilates Studio (Online)"
+              : "Atendimento Fisioterapia (Online)",
             type: specialty === "pilates" ? "turma" : "individual",
             specialty,
             roomId,
@@ -663,7 +710,7 @@ export const submitPublicBooking = mutation({
             scheduleId: newScheduleId,
             patientId: patient._id,
             status: "scheduled",
-            notes: "Agendamento online",
+            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
           })
 
           assignedScheduleId = newScheduleId
@@ -677,6 +724,13 @@ export const submitPublicBooking = mutation({
       scheduleId: assignedScheduleId,
       status: initialStatus,
       serviceId: args.serviceId,
+      packageId: args.packageId,
+      packageName: args.packageName,
+      hasHealthInsurance: args.hasHealthInsurance,
+      healthInsuranceName: args.healthInsuranceName,
+      selectedPrice: args.selectedPrice,
+      selectedPaymentMethod: args.selectedPaymentMethod,
+      pricingDetails: args.pricingDetails,
       professionalId: args.professionalId,
       roomId: args.roomId,
       date: args.date,
@@ -688,12 +742,16 @@ export const submitPublicBooking = mutation({
     })
 
     // 5. Cria log/alerta interno para a recepção da clínica
+    const planInfo = args.packageName
+      ? `Plano: ${args.packageName} | ${args.hasHealthInsurance ? "Convênio: " + (args.healthInsuranceName || "Sim") : "Particular"} | Valor: R$ ${args.selectedPrice ?? "0,00"}`
+      : `Especialidade: ${args.specialty || "Fisioterapia"}`
+
     await ctx.db.insert("notificationLogs", {
       channel: "whatsapp_uazapi",
       recipientName: "Recepção Altar Fisio",
       recipientContact: args.phone,
       triggerType: "agendamento_online",
-      content: `O paciente ${args.name} (${args.phone}) agendou para ${args.date} às ${args.startTime}. Status: ${initialStatus}`,
+      content: `O paciente ${args.name} (${args.phone}) agendou para ${args.date} às ${args.startTime}. ${planInfo}. Status: ${initialStatus}`,
       status: "sent",
       timestamp: now,
     })

@@ -17,6 +17,79 @@ export function parseDateTimeToMs(dateStr: string, timeStr: string): number {
   return new Date(`${dateStr}T${timeStr}:00-03:00`).getTime()
 }
 
+// Helper para enriquecer agendamento com sala, profissional e participantes
+export async function enrichSchedule(ctx: any, schedule: any) {
+  const room = await ctx.db.get(schedule.roomId)
+  const professional = await ctx.db.get(schedule.professionalId)
+  const participants = await ctx.db
+    .query("scheduleParticipants")
+    .withIndex("by_schedule", (q: any) => q.eq("scheduleId", schedule._id))
+    .collect()
+
+  const todayStr = new Date().toISOString().split("T")[0]
+
+  const enrichedParticipants = await Promise.all(
+    participants.map(async (p: any) => {
+      const patient = await ctx.db.get(p.patientId)
+
+      // Buscar se o paciente tem pacote ativo correspondente à especialidade
+      const patientPkgs = await ctx.db
+        .query("patientPackages")
+        .withIndex("by_patient", (q: any) => q.eq("patientId", p.patientId))
+        .collect()
+
+      const validPkgs = []
+      for (const item of patientPkgs) {
+        if (item.status === "active" && item.remainingSessions > 0 && item.expiryDate >= todayStr) {
+          const pkgDef = await ctx.db.get(item.packageId)
+          let matchesSpecialty = true
+          if (pkgDef?.serviceId) {
+            const svc = await ctx.db.get(pkgDef.serviceId)
+            if (svc && svc.specialty !== schedule.specialty) {
+              matchesSpecialty = false
+            }
+          }
+          if (matchesSpecialty) {
+            validPkgs.push({
+              ...item,
+              packageName: pkgDef?.name || "Pacote",
+            })
+          }
+        }
+      }
+
+      validPkgs.sort((a: any, b: any) => a.expiryDate.localeCompare(b.expiryDate))
+      const primaryPkg = validPkgs[0]
+
+      return {
+        ...p,
+        patientName: patient?.name || "Paciente",
+        patientPhone: patient?.phone || "",
+        hasActivePackage: !!primaryPkg,
+        activePackageName: primaryPkg?.packageName,
+        remainingSessions: primaryPkg?.remainingSessions,
+        totalSessions: primaryPkg?.totalSessions,
+      }
+    })
+  )
+
+  // Vagas consideram apenas participantes ativos (ausências justificadas liberam a vaga)
+  const activeCount = participants.filter(
+    (p: any) => p.status !== "justified_absence"
+  ).length
+
+  return {
+    ...schedule,
+    roomName: room?.name || "Sala",
+    roomColor: room?.color || "#10b981",
+    roomCapacity: room?.capacity || 4,
+    professionalName: professional?.name || "Profissional",
+    participants: enrichedParticipants,
+    activeCount,
+    vacanciesLeft: Math.max(0, schedule.maxCapacity - activeCount),
+  }
+}
+
 export const listSchedulesByDate = query({
   args: { date: v.string() }, // YYYY-MM-DD
   handler: async (ctx, args) => {
@@ -25,83 +98,45 @@ export const listSchedulesByDate = query({
       .withIndex("by_date", (q) => q.eq("date", args.date))
       .collect()
 
-    // Enriquecer com dados de sala, profissional e participantes ativos
-    const enriched = await Promise.all(
-      schedules.map(async (schedule) => {
-        const room = await ctx.db.get(schedule.roomId)
-        const professional = await ctx.db.get(schedule.professionalId)
-        const participants = await ctx.db
-          .query("scheduleParticipants")
-          .withIndex("by_schedule", (q) => q.eq("scheduleId", schedule._id))
-          .collect()
-
-        const todayStr = new Date().toISOString().split("T")[0]
-
-        const enrichedParticipants = await Promise.all(
-          participants.map(async (p) => {
-            const patient = await ctx.db.get(p.patientId)
-
-            // Buscar se o paciente tem pacote ativo correspondente à especialidade
-            const patientPkgs = await ctx.db
-              .query("patientPackages")
-              .withIndex("by_patient", (q) => q.eq("patientId", p.patientId))
-              .collect()
-
-            const validPkgs = []
-            for (const item of patientPkgs) {
-              if (item.status === "active" && item.remainingSessions > 0 && item.expiryDate >= todayStr) {
-                const pkgDef = await ctx.db.get(item.packageId)
-                let matchesSpecialty = true
-                if (pkgDef?.serviceId) {
-                  const svc = await ctx.db.get(pkgDef.serviceId)
-                  if (svc && svc.specialty !== schedule.specialty) {
-                    matchesSpecialty = false
-                  }
-                }
-                if (matchesSpecialty) {
-                  validPkgs.push({
-                    ...item,
-                    packageName: pkgDef?.name || "Pacote",
-                  })
-                }
-              }
-            }
-
-            validPkgs.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
-            const primaryPkg = validPkgs[0]
-
-            return {
-              ...p,
-              patientName: patient?.name || "Paciente",
-              patientPhone: patient?.phone || "",
-              hasActivePackage: !!primaryPkg,
-              activePackageName: primaryPkg?.packageName,
-              remainingSessions: primaryPkg?.remainingSessions,
-              totalSessions: primaryPkg?.totalSessions,
-            }
-          })
-        )
-
-        // Vagas consideram apenas participantes ativos (ausências justificadas liberam a vaga)
-        const activeCount = participants.filter(
-          (p) => p.status !== "justified_absence"
-        ).length
-
-        return {
-          ...schedule,
-          roomName: room?.name || "Sala",
-          roomColor: room?.color || "#10b981",
-          roomCapacity: room?.capacity || 4,
-          professionalName: professional?.name || "Profissional",
-          participants: enrichedParticipants,
-          activeCount,
-          vacanciesLeft: Math.max(0, schedule.maxCapacity - activeCount),
-        }
-      })
-    )
+    const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s)))
 
     // Ordenar por horário de início
     return enriched.sort((a, b) => a.startTime.localeCompare(b.startTime))
+  },
+})
+
+// Query Otimizada por Faixa de Datas (Semana / Mês) com Suporte a Filtros
+export const listSchedulesByDateRange = query({
+  args: {
+    startDate: v.string(), // YYYY-MM-DD
+    endDate: v.string(),   // YYYY-MM-DD
+    roomId: v.optional(v.string()),
+    professionalId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const schedules = await ctx.db
+      .query("schedules")
+      .withIndex("by_date", (q) =>
+        q.gte("date", args.startDate).lte("date", args.endDate)
+      )
+      .collect()
+
+    let filtered = schedules
+    if (args.roomId && args.roomId !== "all") {
+      filtered = filtered.filter((s) => s.roomId === args.roomId)
+    }
+    if (args.professionalId && args.professionalId !== "all") {
+      filtered = filtered.filter((s) => s.professionalId === args.professionalId)
+    }
+
+    const enriched = await Promise.all(filtered.map((s) => enrichSchedule(ctx, s)))
+
+    // Ordenar por data e por horário de início
+    return enriched.sort((a, b) => {
+      const dateCmp = a.date.localeCompare(b.date)
+      if (dateCmp !== 0) return dateCmp
+      return a.startTime.localeCompare(b.startTime)
+    })
   },
 })
 

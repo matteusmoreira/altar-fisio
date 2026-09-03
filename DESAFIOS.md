@@ -244,3 +244,24 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 - **Mitigação / Regra**: 
   1. Tipar a variável capturada como `any` (`const room: any = await ctx.db.get(slot.roomId)`) ou usar asserção explícita de tipo (`Doc<"rooms"> | null`).
   2. Para fatiamento dinâmico de horários sem poluir o banco com dezenas de milhares de registros, manter as tabelas enxutas de `availabilityRules` e `availabilityOverrides` e fatiar os slots sob demanda na query com `sliceTimeWindowIntoSlots`.
+
+---
+
+### [2026-09-03] Arquitetura Hierárquica em Cards de Grade e Eliminação de CTAs Duplicados em Fluxos Multi-Step
+- **Ponto de Fricção**: Posicionar na mesma linha horizontal o ícone do período, os dígitos do horário e uma badge de status/vagas expandida ("✓ ESCOLHIDO") em contêineres com colunas restritas (~210px) causa colisão física direta com o texto do horário. Além disso, a discrepância entre a largura máxima do cabeçalho (`max-w-4xl`) e do corpo principal (`max-w-3xl`) estrangula as colunas de grade desnecessariamente, e incluir botões de ação redundantes ("Confirmar e Continuar" dentro do banner de resumo e "Continuar para Próxima Etapa" no rodapé fixo) polui o campo visual e confunde o usuário.
+- **Mitigação / Regra**:
+  1. **Anatomia em 3 Camadas no Card**:
+     - **Linha Superior (Cabeçalho)**: Ícone do período com rótulo amigável à esquerda (ex: "Tarde") e Badge de Vagas ou Status à direita (ex: `✓ Selecionado`), garantindo amplo respiro (>100px) sem competição.
+     - **Linha Central (Corpo)**: Horário principal em destaque exclusivo e isolado (`text-2xl sm:text-[26px] font-black leading-none`) e subtítulo temporal (`até HH:MM`). Nenhum elemento divide a horizontal com o horário.
+     - **Linha Inferior (Base)**: Divisor limpo com o nome semântico da sala (limpo de subtítulos excessivos para evitar truncamento prematuro) e duração da sessão.
+  2. **Harmonização de Largura de Container**: Manter alinhamento rigoroso entre a navbar/header e o corpo principal em `max-w-4xl`, permitindo colunas confortáveis no desktop.
+  3. **CTA Único por Etapa**: Banners de seleção ativa devem funcionar como feedback visual enriquecido com opção de desmarcar ("Trocar horário"), mantendo o call-to-action principal concentrado exclusivamente no botão do rodapé da etapa.
+
+---
+
+### [2026-09-03] Range Queries Reativas no Convex, Queries Condicionais com "skip" e Visualização Semanal/Mensal
+- **Ponto de Fricção**: Ao implementar múltiplos modos de visualização temporal (Dia, Semana, Mês), consultar o banco de forma ingênua ou disparar queries simultâneas para dezenas de dias sobrecarrega a rede e estoura os limites do plano gratuito do Convex. Além disso, executar queries que não pertencem ao período ativo gera requisições desnecessárias. Em dispositivos móveis (< 640px), renderizar 7 colunas simultâneas resulta em cards esmagados (~45px de largura) e textos ilegíveis.
+- **Mitigação / Regra**:
+  1. Centralizar consultas por período na query indexada `listSchedulesByDateRange` com `.withIndex("by_date", q => q.gte("date", start).lte("date", end))`, mantendo complexidade $O(K)$ sem *table scans*.
+  2. No React/Convex, utilizar o modificador `"skip"` em `useQuery` quando a modalidade ativa for diferente (ex: `schedulePeriodMode === "day" ? { date } : "skip"`), desativando subscrições WebSocket ociosas.
+  3. No mobile para a Visão Semanal, adotar seletor em pílulas horizontais dos dias da semana (`[Seg 31] [Ter 01]...`) com indicação numérica e contadores de agendamentos, exibindo os cards do dia selecionado em largura total confortável. Para a Visão Mensal, utilizar Drawer lateral responsivo que resume as sessões do dia com um clique e atalho para a visão diária.

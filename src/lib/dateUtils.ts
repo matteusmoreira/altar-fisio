@@ -268,3 +268,194 @@ export const addDaysSafe = (dateStr: string, days: number): string => {
 export const isToday = (dateStr: string): boolean => {
   return dateStr === getTodayDateString()
 }
+
+/**
+ * Retorna o intervalo da semana (Segunda a Domingo) para uma data YYYY-MM-DD.
+ */
+export const getWeekRange = (dateStr: string) => {
+  if (!dateStr || !dateStr.includes("-")) {
+    dateStr = getTodayDateString()
+  }
+
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const dt = new Date(y, m - 1, d, 12, 0, 0)
+  const dayOfWeek = dt.getDay() // 0: Dom, 1: Seg, ..., 6: Sab
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+
+  const mondayStr = addDaysSafe(dateStr, diffToMonday)
+  const days: string[] = []
+  for (let i = 0; i < 7; i++) {
+    days.push(addDaysSafe(mondayStr, i))
+  }
+
+  return {
+    startDate: days[0], // Segunda-feira
+    endDate: days[6],   // Domingo
+    days,
+  }
+}
+
+/**
+ * Avança ou retrocede semanas de forma segura.
+ */
+export const addWeeksSafe = (dateStr: string, weeks: number): string => {
+  return addDaysSafe(dateStr, weeks * 7)
+}
+
+/**
+ * Retorna os dados do mês contendo a data YYYY-MM-DD.
+ */
+export const getMonthRange = (dateStr: string) => {
+  if (!dateStr || !dateStr.includes("-")) {
+    dateStr = getTodayDateString()
+  }
+
+  const [y, m] = dateStr.split("-").map(Number)
+  const startDate = `${y}-${String(m).padStart(2, "0")}-01`
+  const lastDay = new Date(y, m, 0, 12, 0, 0).getDate()
+  const endDate = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
+
+  return {
+    startDate,
+    endDate,
+    year: y,
+    month: m,
+    daysInMonth: lastDay,
+  }
+}
+
+/**
+ * Avança ou retrocede meses de forma pura e segura contra overflow de dias (ex: 31 Jan -> 28 Fev).
+ */
+export const addMonthsSafe = (dateStr: string, months: number): string => {
+  if (!dateStr || !dateStr.includes("-")) {
+    dateStr = getTodayDateString()
+  }
+
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const target = new Date(y, m - 1 + months, 1, 12, 0, 0)
+  const targetYear = target.getFullYear()
+  const targetMonth = target.getMonth() + 1
+  const maxDay = new Date(targetYear, targetMonth, 0, 12, 0, 0).getDate()
+  const finalDay = Math.min(d, maxDay)
+
+  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(finalDay).padStart(2, "0")}`
+}
+
+/**
+ * Formata o período de uma semana: "31/08 a 06/09/2026"
+ */
+export const formatWeekRangeBR = (startDate: string, endDate: string): string => {
+  if (!startDate || !endDate) return ""
+  const [sy, sm, sd] = startDate.split("-")
+  const [ey, em, ed] = endDate.split("-")
+
+  if (sy === ey && sm === em) {
+    return `${sd} a ${ed}/${em}/${ey}`
+  }
+  if (sy === ey) {
+    return `${sd}/${sm} a ${ed}/${em}/${ey}`
+  }
+  return `${sd}/${sm}/${sy} a ${ed}/${em}/${ey}`
+}
+
+/**
+ * Formata mês e ano por extenso capitalizado: "Setembro de 2026"
+ */
+export const formatMonthYearBR = (dateStr: string): string => {
+  if (!dateStr || !dateStr.includes("-")) return ""
+  const [y, m] = dateStr.split("-").map(Number)
+  const dt = new Date(y, m - 1, 1, 12, 0, 0)
+
+  const formatted = dt.toLocaleDateString("pt-BR", {
+    timeZone: CLINIC_TIMEZONE,
+    month: "long",
+    year: "numeric",
+  })
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+export interface CalendarDayCell {
+  date: string
+  dayNumber: number
+  isCurrentMonth: boolean
+  isToday: boolean
+  isWeekend: boolean
+}
+
+/**
+ * Constrói a matriz completa de células (Seg-Dom) para renderizar a grade mensal com 35 ou 42 dias.
+ */
+export const getMonthCalendarGrid = (dateStr: string): CalendarDayCell[] => {
+  if (!dateStr || !dateStr.includes("-")) {
+    dateStr = getTodayDateString()
+  }
+
+  const [y, m] = dateStr.split("-").map(Number)
+  const todayStr = getTodayDateString()
+  const daysInMonth = new Date(y, m, 0, 12, 0, 0).getDate()
+
+  // Dia da semana do 1º dia do mês (0: Dom, 1: Seg, ..., 6: Sab)
+  const firstDayOfWeek = new Date(y, m - 1, 1, 12, 0, 0).getDay()
+  // No padrão Segunda a Domingo: Segunda = 0, ..., Domingo = 6
+  const leadingDays = (firstDayOfWeek + 6) % 7
+
+  const cells: CalendarDayCell[] = []
+
+  // Dias do mês anterior para completar a primeira semana
+  const prevMonthDate = new Date(y, m - 2, 1, 12, 0, 0)
+  const prevMonthYear = prevMonthDate.getFullYear()
+  const prevMonthMonth = prevMonthDate.getMonth() + 1
+  const prevMonthTotalDays = new Date(prevMonthYear, prevMonthMonth, 0, 12, 0, 0).getDate()
+
+  for (let i = leadingDays - 1; i >= 0; i--) {
+    const dayNum = prevMonthTotalDays - i
+    const dStr = `${prevMonthYear}-${String(prevMonthMonth).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+    const dt = new Date(prevMonthYear, prevMonthMonth - 1, dayNum, 12, 0, 0)
+    const dow = dt.getDay()
+    cells.push({
+      date: dStr,
+      dayNumber: dayNum,
+      isCurrentMonth: false,
+      isToday: dStr === todayStr,
+      isWeekend: dow === 0 || dow === 6,
+    })
+  }
+
+  // Dias do mês atual
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    const dt = new Date(y, m - 1, d, 12, 0, 0)
+    const dow = dt.getDay()
+    cells.push({
+      date: dStr,
+      dayNumber: d,
+      isCurrentMonth: true,
+      isToday: dStr === todayStr,
+      isWeekend: dow === 0 || dow === 6,
+    })
+  }
+
+  // Dias do próximo mês para fechar a última linha (múltiplo de 7: 35 ou 42)
+  const nextMonthDate = new Date(y, m, 1, 12, 0, 0)
+  const nextMonthYear = nextMonthDate.getFullYear()
+  const nextMonthMonth = nextMonthDate.getMonth() + 1
+
+  const remainingDays = (7 - (cells.length % 7)) % 7
+  for (let d = 1; d <= remainingDays; d++) {
+    const dStr = `${nextMonthYear}-${String(nextMonthMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    const dt = new Date(nextMonthYear, nextMonthMonth - 1, d, 12, 0, 0)
+    const dow = dt.getDay()
+    cells.push({
+      date: dStr,
+      dayNumber: d,
+      isCurrentMonth: false,
+      isToday: dStr === todayStr,
+      isWeekend: dow === 0 || dow === 6,
+    })
+  }
+
+  return cells
+}
+

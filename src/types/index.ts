@@ -50,6 +50,8 @@ export interface Patient {
 
 export type ScheduleStatus = "scheduled" | "in_progress" | "completed" | "cancelled"
 
+export type SchedulePeriodMode = "day" | "week" | "month"
+
 export type AttendanceStatus =
   | "scheduled"
   | "present"
@@ -324,7 +326,14 @@ export interface ClinicPackage {
   specialty?: "fisioterapia" | "pilates" | "rpg"
   sessionCount: number
   validityDays: number
-  price: number
+  price: number // Preço Cartão Particular
+  pricePix?: number // Valor à vista no Pix (Particular)
+  cardInstallments?: number // Parcelas máximas no Cartão (Particular)
+  insurancePrice?: number // Valor no Cartão com Plano de Saúde
+  insurancePricePix?: number // Valor no Pix com Plano de Saúde
+  insuranceCardInstallments?: number // Parcelas com Plano de Saúde
+  groupDetails?: string // Detalhes da Turma / Modalidade (ex: "Grupo de até 8 Pessoas")
+  showInPublicBooking?: boolean // Exibir no agendamento público
   pricePerSession?: number
   description?: string
   active: boolean

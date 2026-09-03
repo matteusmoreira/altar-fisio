@@ -11,6 +11,11 @@ import {
   formatDateBR,
   formatDateWithWeekdayBR,
   addDaysSafe,
+  addWeeksSafe,
+  addMonthsSafe,
+  getWeekRange,
+  formatWeekRangeBR,
+  formatMonthYearBR,
   getTodayDateString,
 } from "@/lib/dateUtils"
 import {
@@ -41,6 +46,11 @@ import {
 } from "lucide-react"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
+import { SchedulePeriodToggle } from "@/components/schedule/SchedulePeriodToggle"
+import { ScheduleMetricsBar } from "@/components/schedule/ScheduleMetricsBar"
+import { WeeklyScheduleView } from "@/components/schedule/WeeklyScheduleView"
+import { MonthlyScheduleView } from "@/components/schedule/MonthlyScheduleView"
+import { ScheduleDetailModal } from "@/components/schedule/ScheduleDetailModal"
 
 export const SchedulePage: React.FC = () => {
   const { user, isProfessional } = useAuth()
@@ -52,6 +62,8 @@ export const SchedulePage: React.FC = () => {
     replacementCredits,
     selectedDate,
     setSelectedDate,
+    schedulePeriodMode,
+    setSchedulePeriodMode,
     addSchedule,
     addRecurringScheduleSeries,
     addParticipantToClass,
@@ -151,17 +163,29 @@ export const SchedulePage: React.FC = () => {
   const [forceExemption, setForceExemption] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
 
-  // Navegação de datas
+  // Modal de Detalhes do Agendamento (Semana / Mês)
+  const [selectedDetailSchedule, setSelectedDetailSchedule] = useState<Schedule | null>(null)
+
+  // Navegação de datas adaptativa ao período ativo
   const handleDateChange = (offset: number) => {
-    setSelectedDate(addDaysSafe(selectedDate, offset))
+    if (schedulePeriodMode === "day") {
+      setSelectedDate(addDaysSafe(selectedDate, offset))
+    } else if (schedulePeriodMode === "week") {
+      setSelectedDate(addWeeksSafe(selectedDate, offset))
+    } else if (schedulePeriodMode === "month") {
+      setSelectedDate(addMonthsSafe(selectedDate, offset))
+    }
   }
 
-  // Filtragem
+  // Filtragem por Sala e Profissional
   const filteredSchedules = schedules.filter((s) => {
     const matchRoom = selectedRoom === "all" || s.roomId === selectedRoom
     const matchProf = selectedProf === "all" || s.professionalId === selectedProf
     return matchRoom && matchProf
   })
+
+  // Agendamentos do dia selecionado (para a Visão Diária)
+  const dayFilteredSchedules = filteredSchedules.filter((s) => s.date === selectedDate)
 
   const toggleDayOfWeek = (day: number) => {
     setDaysOfWeek((prev) =>
@@ -362,7 +386,7 @@ export const SchedulePage: React.FC = () => {
       {/* Barra de Navegação de Data & Filtros */}
       <Card className="p-4 bg-card shadow-xs border-border">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Seletor do Dia */}
+          {/* Seletor de Período / Data */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5">
               <Button
@@ -370,7 +394,13 @@ export const SchedulePage: React.FC = () => {
                 size="icon"
                 onClick={() => handleDateChange(-1)}
                 className="h-10 w-10 rounded-xl"
-                title="Dia anterior"
+                title={
+                  schedulePeriodMode === "day"
+                    ? "Dia anterior"
+                    : schedulePeriodMode === "week"
+                    ? "Semana anterior"
+                    : "Mês anterior"
+                }
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -378,9 +408,19 @@ export const SchedulePage: React.FC = () => {
               <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl border border-input bg-background shadow-2xs">
                 <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
                 <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  type={schedulePeriodMode === "month" ? "month" : "date"}
+                  value={
+                    schedulePeriodMode === "month"
+                      ? selectedDate.slice(0, 7)
+                      : selectedDate
+                  }
+                  onChange={(e) => {
+                    if (schedulePeriodMode === "month") {
+                      setSelectedDate(`${e.target.value}-01`)
+                    } else {
+                      setSelectedDate(e.target.value)
+                    }
+                  }}
                   className="bg-transparent text-sm font-semibold text-foreground focus:outline-none cursor-pointer"
                 />
               </div>
@@ -390,7 +430,13 @@ export const SchedulePage: React.FC = () => {
                 size="icon"
                 onClick={() => handleDateChange(1)}
                 className="h-10 w-10 rounded-xl"
-                title="Próximo dia"
+                title={
+                  schedulePeriodMode === "day"
+                    ? "Próximo dia"
+                    : schedulePeriodMode === "week"
+                    ? "Próxima semana"
+                    : "Próximo mês"
+                }
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -405,13 +451,33 @@ export const SchedulePage: React.FC = () => {
               Hoje
             </Button>
 
+            {/* Rótulo Descritivo do Período */}
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border text-xs text-foreground">
-              <span className="font-semibold">{formatDateWithWeekdayBR(selectedDate)}</span>
-              <span className="text-primary font-bold">({formatDateBR(selectedDate)})</span>
+              {schedulePeriodMode === "day" ? (
+                <>
+                  <span className="font-semibold">{formatDateWithWeekdayBR(selectedDate)}</span>
+                  <span className="text-primary font-bold">({formatDateBR(selectedDate)})</span>
+                </>
+              ) : schedulePeriodMode === "week" ? (
+                <>
+                  <span className="font-semibold">Semana:</span>
+                  <span className="text-primary font-bold">
+                    {formatWeekRangeBR(
+                      getWeekRange(selectedDate).startDate,
+                      getWeekRange(selectedDate).endDate
+                    )}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">Mês de</span>
+                  <span className="text-primary font-bold">{formatMonthYearBR(selectedDate)}</span>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Filtros de Sala e Profissional */}
+          {/* Filtros de Sala, Profissional e Modo de Período */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Filter className="h-3.5 w-3.5" />
@@ -419,7 +485,7 @@ export const SchedulePage: React.FC = () => {
             </div>
 
             {/* Filtro por Sala */}
-            <div className="w-40 sm:w-44">
+            <div className="w-36 sm:w-44">
               <Select
                 value={selectedRoom}
                 onChange={(e) => setSelectedRoom(e.target.value)}
@@ -434,7 +500,7 @@ export const SchedulePage: React.FC = () => {
             </div>
 
             {/* Filtro por Profissional */}
-            <div className="w-44 sm:w-48">
+            <div className="w-40 sm:w-48">
               <Select
                 value={selectedProf}
                 onChange={(e) => setSelectedProf(e.target.value)}
@@ -448,13 +514,53 @@ export const SchedulePage: React.FC = () => {
               </Select>
             </div>
 
-            <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+            {/* Alternador de Período [ Dia | Semana | Mês ] */}
+            <SchedulePeriodToggle
+              period={schedulePeriodMode}
+              onChange={setSchedulePeriodMode}
+            />
+
+            {/* Alternador Grade/Lista (Apenas no Modo Dia) */}
+            {schedulePeriodMode === "day" && (
+              <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+            )}
           </div>
         </div>
       </Card>
 
-      {/* Lista de Horários / Grade */}
-      {filteredSchedules.length === 0 ? (
+      {/* Barra de Métricas Resumo da Semana ou do Mês */}
+      {schedulePeriodMode !== "day" && (
+        <ScheduleMetricsBar schedules={filteredSchedules} />
+      )}
+
+      {/* VISÃO DA AGENDA: SEMANA, MÊS OU DIA */}
+      {schedulePeriodMode === "week" ? (
+        <WeeklyScheduleView
+          currentDate={selectedDate}
+          schedules={filteredSchedules}
+          onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
+          onCreateScheduleAtDate={(date) => {
+            setSelectedDate(date)
+            setIsNewModalOpen(true)
+          }}
+          onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
+        />
+      ) : schedulePeriodMode === "month" ? (
+        <MonthlyScheduleView
+          currentDate={selectedDate}
+          schedules={filteredSchedules}
+          onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
+          onCreateScheduleAtDate={(date) => {
+            setSelectedDate(date)
+            setIsNewModalOpen(true)
+          }}
+          onNavigateToDay={(date) => {
+            setSelectedDate(date)
+            setSchedulePeriodMode("day")
+          }}
+          onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
+        />
+      ) : dayFilteredSchedules.length === 0 ? (
         <Card className="p-12 text-center border-border shadow-xs">
           <CalendarIcon className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-foreground">Nenhum agendamento encontrado</h3>
@@ -474,7 +580,7 @@ export const SchedulePage: React.FC = () => {
       ) : viewMode === "grid" ? (
         /* MODO GRADE (MOSAICO MULTI-COLUNA) */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5 animate-fade-in">
-          {filteredSchedules.map((schedule) => {
+          {dayFilteredSchedules.map((schedule) => {
             const occupied = schedule.participants.filter(
               (p) => p.status !== "justified_absence"
             ).length
@@ -673,7 +779,7 @@ export const SchedulePage: React.FC = () => {
       ) : (
         /* MODO LISTA (TIMELINE LINEAR CRONOLÓGICA) */
         <div className="space-y-4 animate-fade-in">
-          {filteredSchedules.map((schedule) => {
+          {dayFilteredSchedules.map((schedule) => {
             const occupied = schedule.participants.filter(
               (p) => p.status !== "justified_absence"
             ).length
@@ -1489,6 +1595,23 @@ export const SchedulePage: React.FC = () => {
         isOpen={isAvailabilityModalOpen}
         onClose={() => setIsAvailabilityModalOpen(false)}
         initialProfessionalId={isProfessional && user?.professionalId ? user.professionalId : undefined}
+      />
+
+      {/* Modal Detalhado de Agendamento (Interatividade das visões Semana e Mês) */}
+      <ScheduleDetailModal
+        schedule={selectedDetailSchedule}
+        isOpen={!!selectedDetailSchedule}
+        onClose={() => setSelectedDetailSchedule(null)}
+        onCheckIn={checkIn}
+        onSendWhatsApp={sendWhatsAppReminder}
+        onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
+        onOpenCancel={(sch, p) =>
+          setCancelTarget({ schedule: sch, participant: p })
+        }
+        onNavigateToDay={(date) => {
+          setSelectedDate(date)
+          setSchedulePeriodMode("day")
+        }}
       />
     </div>
   )

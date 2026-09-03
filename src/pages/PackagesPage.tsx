@@ -72,6 +72,13 @@ export const PackagesPage: React.FC = () => {
   const [pkgSessionCount, setPkgSessionCount] = useState(8)
   const [pkgValidityDays, setPkgValidityDays] = useState(30)
   const [pkgPrice, setPkgPrice] = useState(380)
+  const [pkgPricePix, setPkgPricePix] = useState<number | "">("")
+  const [pkgCardInstallments, setPkgCardInstallments] = useState(2)
+  const [pkgInsurancePrice, setPkgInsurancePrice] = useState<number | "">("")
+  const [pkgInsurancePricePix, setPkgInsurancePricePix] = useState<number | "">("")
+  const [pkgInsuranceCardInstallments, setPkgInsuranceCardInstallments] = useState(2)
+  const [pkgGroupDetails, setPkgGroupDetails] = useState("Grupo de até 8 Pessoas")
+  const [pkgShowInPublicBooking, setPkgShowInPublicBooking] = useState(true)
   const [pkgDescription, setPkgDescription] = useState("")
   const [isSubmittingPkg, setIsSubmittingPkg] = useState(false)
 
@@ -82,6 +89,13 @@ export const PackagesPage: React.FC = () => {
   const [editSessionCount, setEditSessionCount] = useState(8)
   const [editValidityDays, setEditValidityDays] = useState(30)
   const [editPrice, setEditPrice] = useState(380)
+  const [editPricePix, setEditPricePix] = useState<number | "">("")
+  const [editCardInstallments, setEditCardInstallments] = useState(2)
+  const [editInsurancePrice, setEditInsurancePrice] = useState<number | "">("")
+  const [editInsurancePricePix, setEditInsurancePricePix] = useState<number | "">("")
+  const [editInsuranceCardInstallments, setEditInsuranceCardInstallments] = useState(2)
+  const [editGroupDetails, setEditGroupDetails] = useState("")
+  const [editShowInPublicBooking, setEditShowInPublicBooking] = useState(true)
   const [editDescription, setEditDescription] = useState("")
   const [editActive, setEditActive] = useState(true)
   const [isSubmittingEditPkg, setIsSubmittingEditPkg] = useState(false)
@@ -166,6 +180,13 @@ export const PackagesPage: React.FC = () => {
         sessionCount: Number(pkgSessionCount),
         validityDays: Number(pkgValidityDays),
         price: Number(pkgPrice),
+        pricePix: pkgPricePix !== "" ? Number(pkgPricePix) : undefined,
+        cardInstallments: Number(pkgCardInstallments) || 1,
+        insurancePrice: pkgInsurancePrice !== "" ? Number(pkgInsurancePrice) : undefined,
+        insurancePricePix: pkgInsurancePricePix !== "" ? Number(pkgInsurancePricePix) : undefined,
+        insuranceCardInstallments: Number(pkgInsuranceCardInstallments) || 1,
+        groupDetails: pkgGroupDetails.trim() || undefined,
+        showInPublicBooking: pkgShowInPublicBooking,
         description: pkgDescription,
         active: true,
       })
@@ -175,6 +196,13 @@ export const PackagesPage: React.FC = () => {
       setPkgName("")
       setPkgDescription("")
       setPkgPrice(380)
+      setPkgPricePix("")
+      setPkgCardInstallments(2)
+      setPkgInsurancePrice("")
+      setPkgInsurancePricePix("")
+      setPkgInsuranceCardInstallments(2)
+      setPkgGroupDetails("Grupo de até 8 Pessoas")
+      setPkgShowInPublicBooking(true)
       setPkgSessionCount(8)
     } catch (err: any) {
       alert("Erro ao criar pacote: " + (err?.message || "Tente novamente."))
@@ -191,6 +219,13 @@ export const PackagesPage: React.FC = () => {
     setEditSessionCount(pkg.sessionCount)
     setEditValidityDays(pkg.validityDays)
     setEditPrice(pkg.price)
+    setEditPricePix(pkg.pricePix !== undefined ? pkg.pricePix : "")
+    setEditCardInstallments(pkg.cardInstallments || 1)
+    setEditInsurancePrice(pkg.insurancePrice !== undefined ? pkg.insurancePrice : "")
+    setEditInsurancePricePix(pkg.insurancePricePix !== undefined ? pkg.insurancePricePix : "")
+    setEditInsuranceCardInstallments(pkg.insuranceCardInstallments || 1)
+    setEditGroupDetails(pkg.groupDetails || "")
+    setEditShowInPublicBooking(pkg.showInPublicBooking !== false)
     setEditDescription(pkg.description || "")
     setEditActive(pkg.active)
   }
@@ -208,6 +243,13 @@ export const PackagesPage: React.FC = () => {
         sessionCount: Number(editSessionCount),
         validityDays: Number(editValidityDays),
         price: Number(editPrice),
+        pricePix: editPricePix !== "" ? Number(editPricePix) : undefined,
+        cardInstallments: Number(editCardInstallments) || 1,
+        insurancePrice: editInsurancePrice !== "" ? Number(editInsurancePrice) : undefined,
+        insurancePricePix: editInsurancePricePix !== "" ? Number(editInsurancePricePix) : undefined,
+        insuranceCardInstallments: Number(editInsuranceCardInstallments) || 1,
+        groupDetails: editGroupDetails.trim() || undefined,
+        showInPublicBooking: editShowInPublicBooking,
         description: editDescription,
         active: editActive,
       })
@@ -576,13 +618,49 @@ export const PackagesPage: React.FC = () => {
                 </CardHeader>
 
                 <CardContent className="p-4 pt-0 space-y-3">
-                  <div className="border-t border-border/60 pt-2">
-                    <div className="text-xl font-bold text-foreground">
-                      R$ {pkg.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <div className="border-t border-border/60 pt-2 space-y-1.5">
+                    <div className="flex items-baseline justify-between">
+                      <div className="text-xl font-bold text-foreground">
+                        R$ {pkg.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </div>
+                      {pkg.pricePix && (
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                          R$ {pkg.pricePix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} Pix
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      R$ {pricePerSession} por sessão ({pkg.sessionCount} sessões)
-                    </p>
+
+                    <div className="text-[10px] text-muted-foreground flex flex-wrap items-center gap-1.5">
+                      <span>{pkg.cardInstallments && pkg.cardInstallments > 1 ? `Até ${pkg.cardInstallments}x no Cartão` : "Cartão 1x"}</span>
+                      <span>•</span>
+                      <span>R$ {pricePerSession}/sessão ({pkg.sessionCount}x)</span>
+                    </div>
+
+                    {/* Preço com Plano de Saúde se configurado */}
+                    {(pkg.insurancePrice || pkg.insurancePricePix) && (
+                      <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-700 dark:text-sky-300 flex items-center justify-between">
+                        <span className="font-semibold">Com Convênio:</span>
+                        <span className="font-bold">
+                          {pkg.insurancePricePix
+                            ? `R$ ${pkg.insurancePricePix.toFixed(2)} Pix`
+                            : `R$ ${(pkg.insurancePrice || 0).toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Detalhes de Turma / Grupo */}
+                    {pkg.groupDetails && (
+                      <div className="text-[10px] font-medium text-foreground/80 bg-muted/60 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span>👥 {pkg.groupDetails}</span>
+                      </div>
+                    )}
+
+                    {pkg.showInPublicBooking !== false && (
+                      <div className="text-[9px] font-bold text-primary flex items-center gap-1">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        <span>Visível no Agendamento Online</span>
+                      </div>
+                    )}
                   </div>
 
                   <Button
@@ -853,28 +931,145 @@ export const PackagesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Preço Total de Tabela (R$) *</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={pkgPrice}
-                  onChange={(e) => setPkgPrice(Number(e.target.value))}
-                  required
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Média de R$ {(pkgPrice / (pkgSessionCount || 1)).toFixed(2)} por sessão.
+              {/* SEÇÃO 1: PREÇOS TABELA PARTICULAR */}
+              <div className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <span>👤 Tabela Particular</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Pacientes sem convênio</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Valor Cartão (R$) *</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={pkgPrice}
+                      onChange={(e) => setPkgPrice(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Parcelas Cartão *</label>
+                    <Select
+                      value={String(pkgCardInstallments)}
+                      onChange={(e) => setPkgCardInstallments(Number(e.target.value))}
+                    >
+                      <option value="1">1x (À vista)</option>
+                      <option value="2">Até 2x</option>
+                      <option value="3">Até 3x</option>
+                      <option value="4">Até 4x</option>
+                      <option value="5">Até 5x</option>
+                      <option value="6">Até 6x</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5">Valor no Pix (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={pkgPricePix}
+                      onChange={(e) => setPkgPricePix(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 350.00"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  Média de R$ {(pkgPrice / (pkgSessionCount || 1)).toFixed(2)} por sessão no cartão
+                  {pkgPricePix ? ` e R$ ${(Number(pkgPricePix) / (pkgSessionCount || 1)).toFixed(2)} no Pix.` : "."}
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Descrição (Opcional)</label>
-                <Input
-                  value={pkgDescription}
-                  onChange={(e) => setPkgDescription(e.target.value)}
-                  placeholder="Ex: Inclui avaliação postural e acesso ao estúdio."
-                />
+              {/* SEÇÃO 2: PREÇOS TABELA PLANO DE SAÚDE / CONVÊNIO */}
+              <div className="p-3.5 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+                    <span>🏥 Tabela com Plano de Saúde (Convênio)</span>
+                  </span>
+                  <span className="text-[10px] text-sky-700/80 dark:text-sky-300/80">Com emissão de recibo</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Valor Cartão (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={pkgInsurancePrice}
+                      onChange={(e) => setPkgInsurancePrice(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 420.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Parcelas Cartão</label>
+                    <Select
+                      value={String(pkgInsuranceCardInstallments)}
+                      onChange={(e) => setPkgInsuranceCardInstallments(Number(e.target.value))}
+                    >
+                      <option value="1">1x (À vista)</option>
+                      <option value="2">Até 2x</option>
+                      <option value="3">Até 3x</option>
+                      <option value="4">Até 4x</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5">Valor no Pix (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={pkgInsurancePricePix}
+                      onChange={(e) => setPkgInsurancePricePix(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 300.00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SEÇÃO 3: TURMA E EXIBIÇÃO PÚBLICA */}
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">
+                    Detalhes da Turma / Informações de Capacidade
+                  </label>
+                  <Input
+                    value={pkgGroupDetails}
+                    onChange={(e) => setPkgGroupDetails(e.target.value)}
+                    placeholder="Ex: Grupo de até 8 Pessoas, 2X na Semana, 1 Hora de Aula..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Descrição Adicional (Opcional)</label>
+                  <Input
+                    value={pkgDescription}
+                    onChange={(e) => setPkgDescription(e.target.value)}
+                    placeholder="Ex: Inclui avaliação postural e materiais."
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl border border-border bg-card flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="pkg-public-booking"
+                    checked={pkgShowInPublicBooking}
+                    onChange={(e) => setPkgShowInPublicBooking(e.target.checked)}
+                    className="rounded border-input text-primary h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="pkg-public-booking" className="font-medium text-foreground cursor-pointer text-xs select-none">
+                    Exibir este plano no Agendamento Público Online para os pacientes (/agendar)
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -971,37 +1166,152 @@ export const PackagesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Preço Total (R$) *</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  value={editPrice}
-                  onChange={(e) => setEditPrice(Number(e.target.value))}
-                  required
-                />
+              {/* SEÇÃO 1: PREÇOS TABELA PARTICULAR */}
+              <div className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <span>👤 Tabela Particular</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Pacientes sem convênio</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Valor Cartão (R$) *</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Parcelas Cartão *</label>
+                    <Select
+                      value={String(editCardInstallments)}
+                      onChange={(e) => setEditCardInstallments(Number(e.target.value))}
+                    >
+                      <option value="1">1x (À vista)</option>
+                      <option value="2">Até 2x</option>
+                      <option value="3">Até 3x</option>
+                      <option value="4">Até 4x</option>
+                      <option value="5">Até 5x</option>
+                      <option value="6">Até 6x</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5">Valor no Pix (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={editPricePix}
+                      onChange={(e) => setEditPricePix(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 350.00"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Descrição</label>
-                <Input
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                />
+              {/* SEÇÃO 2: PREÇOS TABELA PLANO DE SAÚDE / CONVÊNIO */}
+              <div className="p-3.5 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+                    <span>🏥 Tabela com Plano de Saúde (Convênio)</span>
+                  </span>
+                  <span className="text-[10px] text-sky-700/80 dark:text-sky-300/80">Com emissão de recibo</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Valor Cartão (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={editInsurancePrice}
+                      onChange={(e) => setEditInsurancePrice(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 420.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Parcelas Cartão</label>
+                    <Select
+                      value={String(editInsuranceCardInstallments)}
+                      onChange={(e) => setEditInsuranceCardInstallments(Number(e.target.value))}
+                    >
+                      <option value="1">1x (À vista)</option>
+                      <option value="2">Até 2x</option>
+                      <option value="3">Até 3x</option>
+                      <option value="4">Até 4x</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5">Valor no Pix (R$)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={editInsurancePricePix}
+                      onChange={(e) => setEditInsurancePricePix(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="Ex: 300.00"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="p-3.5 rounded-xl border border-border bg-muted/20 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="pkg-active"
-                  checked={editActive}
-                  onChange={(e) => setEditActive(e.target.checked)}
-                  className="rounded border-input text-primary h-4 w-4 cursor-pointer"
-                />
-                <label htmlFor="pkg-active" className="font-medium text-foreground cursor-pointer text-xs select-none">
-                  Plano ativo para novas vendas
-                </label>
+              {/* SEÇÃO 3: TURMA E EXIBIÇÃO PÚBLICA */}
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">
+                    Detalhes da Turma / Informações de Capacidade
+                  </label>
+                  <Input
+                    value={editGroupDetails}
+                    onChange={(e) => setEditGroupDetails(e.target.value)}
+                    placeholder="Ex: Grupo de até 8 Pessoas, 2X na Semana, 1 Hora de Aula..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Descrição</label>
+                  <Input
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl border border-border bg-card flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="edit-pkg-public-booking"
+                    checked={editShowInPublicBooking}
+                    onChange={(e) => setEditShowInPublicBooking(e.target.checked)}
+                    className="rounded border-input text-primary h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="edit-pkg-public-booking" className="font-medium text-foreground cursor-pointer text-xs select-none">
+                    Exibir este plano no Agendamento Público Online para os pacientes (/agendar)
+                  </label>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-border bg-muted/20 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="pkg-active"
+                    checked={editActive}
+                    onChange={(e) => setEditActive(e.target.checked)}
+                    className="rounded border-input text-primary h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="pkg-active" className="font-medium text-foreground cursor-pointer text-xs select-none">
+                    Plano ativo para novas vendas
+                  </label>
+                </div>
               </div>
             </div>
 

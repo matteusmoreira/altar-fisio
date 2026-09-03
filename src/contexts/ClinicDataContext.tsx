@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react"
 import { useQuery, useMutation, useAction } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -28,6 +28,7 @@ import type {
   PatientConsent,
   ClinicalOverviewItem,
   ClinicalReport,
+  SchedulePeriodMode,
 } from "@/types"
 import {
   getTodayDateString,
@@ -35,9 +36,9 @@ import {
   formatDateBR,
   addDaysSafe,
   formatDateISOInTz,
+  getWeekRange,
+  getMonthRange,
 } from "@/lib/dateUtils"
-
-
 
 interface ClinicDataContextType {
   // Rooms
@@ -62,6 +63,8 @@ interface ClinicDataContextType {
   schedules: Schedule[]
   selectedDate: string
   setSelectedDate: (date: string) => void
+  schedulePeriodMode: SchedulePeriodMode
+  setSchedulePeriodMode: (mode: SchedulePeriodMode) => void
   addSchedule: (schedule: Omit<Schedule, "id" | "participants">) => Promise<string>
   updateSchedule: (id: string, data: Partial<Schedule>) => Promise<void>
   deleteSchedule: (id: string, deleteSeries?: boolean) => Promise<void>
@@ -349,6 +352,183 @@ const initialPatients: Patient[] = [
 const todayStr = getTodayDateString()
 
 const initialSchedules: Schedule[] = [
+  // Segunda-feira
+  {
+    id: "sch_seg1",
+    title: "Turma Pilates Aparelhos Manhã",
+    type: "turma",
+    specialty: "pilates",
+    roomId: "r1",
+    roomName: "Studio Pilates Aparelhos",
+    roomColor: "#10b981",
+    roomCapacity: 4,
+    professionalId: "prof2",
+    professionalName: "Dra. Camila Duarte",
+    date: addDaysSafe(todayStr, -3),
+    startTime: "08:00",
+    endTime: "08:55",
+    maxCapacity: 4,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_seg1",
+        patientId: "pat1",
+        patientName: "Juliana Mendes da Silva",
+        patientPhone: "(11) 98877-6655",
+        status: "present",
+      },
+      {
+        id: "part_seg2",
+        patientId: "pat3",
+        patientName: "Beatriz Nogueira Lopes",
+        patientPhone: "(11) 99881-2233",
+        status: "present",
+      },
+    ],
+  },
+  {
+    id: "sch_seg2",
+    title: "Atendimento RPG Postural",
+    type: "individual",
+    specialty: "rpg",
+    roomId: "r2",
+    roomName: "Sala de Postura & RPG",
+    roomColor: "#6366f1",
+    roomCapacity: 2,
+    professionalId: "prof1",
+    professionalName: "Dr. Marcelo Henrique",
+    date: addDaysSafe(todayStr, -3),
+    startTime: "14:00",
+    endTime: "15:00",
+    maxCapacity: 1,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_seg3",
+        patientId: "pat4",
+        patientName: "Lucas Alencar Moreira",
+        patientPhone: "(11) 98112-3344",
+        status: "present",
+      },
+    ],
+  },
+
+  // Terça-feira
+  {
+    id: "sch_ter1",
+    title: "Fisioterapia Ortopédica - Ombro",
+    type: "individual",
+    specialty: "fisioterapia",
+    roomId: "r3",
+    roomName: "Consultório 1 - Fisio",
+    roomColor: "#0284c7",
+    roomCapacity: 1,
+    professionalId: "prof1",
+    professionalName: "Dr. Marcelo Henrique",
+    date: addDaysSafe(todayStr, -2),
+    startTime: "09:30",
+    endTime: "10:20",
+    maxCapacity: 1,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_ter1",
+        patientId: "pat2",
+        patientName: "Roberto Fernandes Costa",
+        patientPhone: "(11) 97788-9900",
+        status: "present",
+      },
+    ],
+  },
+  {
+    id: "sch_ter2",
+    title: "Turma Pilates Aparelhos Tarde",
+    type: "turma",
+    specialty: "pilates",
+    roomId: "r1",
+    roomName: "Studio Pilates Aparelhos",
+    roomColor: "#10b981",
+    roomCapacity: 4,
+    professionalId: "prof2",
+    professionalName: "Dra. Camila Duarte",
+    date: addDaysSafe(todayStr, -2),
+    startTime: "16:00",
+    endTime: "16:55",
+    maxCapacity: 4,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_ter2",
+        patientId: "pat1",
+        patientName: "Juliana Mendes da Silva",
+        patientPhone: "(11) 98877-6655",
+        status: "present",
+      },
+    ],
+  },
+
+  // Quarta-feira
+  {
+    id: "sch_qua1",
+    title: "Turma Pilates Aparelhos Manhã",
+    type: "turma",
+    specialty: "pilates",
+    roomId: "r1",
+    roomName: "Studio Pilates Aparelhos",
+    roomColor: "#10b981",
+    roomCapacity: 4,
+    professionalId: "prof2",
+    professionalName: "Dra. Camila Duarte",
+    date: addDaysSafe(todayStr, -1),
+    startTime: "08:00",
+    endTime: "08:55",
+    maxCapacity: 4,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_qua1",
+        patientId: "pat1",
+        patientName: "Juliana Mendes da Silva",
+        patientPhone: "(11) 98877-6655",
+        status: "present",
+      },
+      {
+        id: "part_qua2",
+        patientId: "pat3",
+        patientName: "Beatriz Nogueira Lopes",
+        patientPhone: "(11) 99881-2233",
+        status: "present",
+      },
+    ],
+  },
+  {
+    id: "sch_qua2",
+    title: "Atendimento RPG Postural",
+    type: "individual",
+    specialty: "rpg",
+    roomId: "r2",
+    roomName: "Sala de Postura & RPG",
+    roomColor: "#6366f1",
+    roomCapacity: 2,
+    professionalId: "prof1",
+    professionalName: "Dr. Marcelo Henrique",
+    date: addDaysSafe(todayStr, -1),
+    startTime: "11:00",
+    endTime: "12:00",
+    maxCapacity: 1,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_qua3",
+        patientId: "pat4",
+        patientName: "Lucas Alencar Moreira",
+        patientPhone: "(11) 98112-3344",
+        status: "present",
+      },
+    ],
+  },
+
+  // Quinta-feira (Hoje)
   {
     id: "sch1",
     title: "Turma Pilates Aparelhos Manhã",
@@ -461,6 +641,109 @@ const initialSchedules: Schedule[] = [
       },
       {
         id: "part6",
+        patientId: "pat3",
+        patientName: "Beatriz Nogueira Lopes",
+        patientPhone: "(11) 99881-2233",
+        status: "scheduled",
+      },
+    ],
+  },
+
+  // Sexta-feira
+  {
+    id: "sch_sex1",
+    title: "Turma Pilates Aparelhos Manhã",
+    type: "turma",
+    specialty: "pilates",
+    roomId: "r1",
+    roomName: "Studio Pilates Aparelhos",
+    roomColor: "#10b981",
+    roomCapacity: 4,
+    professionalId: "prof2",
+    professionalName: "Dra. Camila Duarte",
+    date: addDaysSafe(todayStr, 1),
+    startTime: "08:00",
+    endTime: "08:55",
+    maxCapacity: 4,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_sex1",
+        patientId: "pat1",
+        patientName: "Juliana Mendes da Silva",
+        patientPhone: "(11) 98877-6655",
+        status: "scheduled",
+      },
+      {
+        id: "part_sex2",
+        patientId: "pat3",
+        patientName: "Beatriz Nogueira Lopes",
+        patientPhone: "(11) 99881-2233",
+        status: "scheduled",
+      },
+      {
+        id: "part_sex3",
+        patientId: "pat4",
+        patientName: "Lucas Alencar Moreira",
+        patientPhone: "(11) 98112-3344",
+        status: "scheduled",
+      },
+    ],
+  },
+  {
+    id: "sch_sex2",
+    title: "Fisioterapia Avançada",
+    type: "individual",
+    specialty: "fisioterapia",
+    roomId: "r3",
+    roomName: "Consultório 1 - Fisio",
+    roomColor: "#0284c7",
+    roomCapacity: 1,
+    professionalId: "prof1",
+    professionalName: "Dr. Marcelo Henrique",
+    date: addDaysSafe(todayStr, 1),
+    startTime: "14:00",
+    endTime: "14:50",
+    maxCapacity: 1,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_sex4",
+        patientId: "pat2",
+        patientName: "Roberto Fernandes Costa",
+        patientPhone: "(11) 97788-9900",
+        status: "scheduled",
+      },
+    ],
+  },
+
+  // Sábado
+  {
+    id: "sch_sab1",
+    title: "Turma Especial Pilates Sábado",
+    type: "turma",
+    specialty: "pilates",
+    roomId: "r1",
+    roomName: "Studio Pilates Aparelhos",
+    roomColor: "#10b981",
+    roomCapacity: 4,
+    professionalId: "prof2",
+    professionalName: "Dra. Camila Duarte",
+    date: addDaysSafe(todayStr, 2),
+    startTime: "09:00",
+    endTime: "09:55",
+    maxCapacity: 4,
+    status: "scheduled",
+    participants: [
+      {
+        id: "part_sab1",
+        patientId: "pat1",
+        patientName: "Juliana Mendes da Silva",
+        patientPhone: "(11) 98877-6655",
+        status: "scheduled",
+      },
+      {
+        id: "part_sab2",
         patientId: "pat3",
         patientName: "Beatriz Nogueira Lopes",
         patientPhone: "(11) 99881-2233",
@@ -731,6 +1014,19 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
 
+  const [schedulePeriodMode, setSchedulePeriodMode] = useState<SchedulePeriodMode>(() => {
+    const s = localStorage.getItem("altar_schedule_period_mode")
+    return s === "week" || s === "month" || s === "day" ? s : "day"
+  })
+
+  const handleSetSchedulePeriodMode = (mode: SchedulePeriodMode) => {
+    setSchedulePeriodMode(mode)
+    localStorage.setItem("altar_schedule_period_mode", mode)
+  }
+
+  const weekRange = useMemo(() => getWeekRange(selectedDate), [selectedDate])
+  const monthRange = useMemo(() => getMonthRange(selectedDate), [selectedDate])
+
   const [replacementCredits, setReplacementCredits] = useState<ReplacementCredit[]>(() => {
     const s = localStorage.getItem("altar_replacement_credits")
     return s ? JSON.parse(s) : []
@@ -782,7 +1078,19 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const convexRooms = useQuery(api.rooms.listRooms)
   const convexProfessionals = useQuery(api.professionals.listProfessionals)
   const convexPatients = useQuery(api.patients.listPatients, {})
-  const convexSchedules = useQuery(api.schedules.listSchedulesByDate, { date: selectedDate })
+  const convexSchedulesDay = useQuery(
+    api.schedules.listSchedulesByDate,
+    schedulePeriodMode === "day" ? { date: selectedDate } : "skip"
+  )
+  const convexSchedulesRange = useQuery(
+    api.schedules.listSchedulesByDateRange,
+    schedulePeriodMode !== "day"
+      ? {
+          startDate: schedulePeriodMode === "week" ? weekRange.startDate : monthRange.startDate,
+          endDate: schedulePeriodMode === "week" ? weekRange.endDate : monthRange.endDate,
+        }
+      : "skip"
+  )
   const convexReplacementCredits = useQuery(api.schedules.listAvailableReplacementCredits, {})
   const convexTransactions = useQuery(
     api.finance.listTransactions,
@@ -917,13 +1225,31 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     ? convexPatients.map((p: any) => ({ ...p, id: p._id }))
     : patients
 
-  const effectiveSchedules = (convexSchedules && convexSchedules.length > 0)
-    ? convexSchedules.map((s: any) => ({
-        ...s,
-        id: s._id,
-        participants: (s.participants || []).map((p: any) => ({ ...p, id: p._id })),
-      }))
-    : schedules
+  const rawSchedules = schedulePeriodMode === "day" ? convexSchedulesDay : convexSchedulesRange
+
+  const localFilteredSchedules = useMemo(() => {
+    if (schedulePeriodMode === "day") {
+      return schedules.filter((s) => s.date === selectedDate)
+    }
+    if (schedulePeriodMode === "week") {
+      return schedules.filter(
+        (s) => s.date >= weekRange.startDate && s.date <= weekRange.endDate
+      )
+    }
+    return schedules.filter(
+      (s) => s.date >= monthRange.startDate && s.date <= monthRange.endDate
+    )
+  }, [schedules, schedulePeriodMode, selectedDate, weekRange, monthRange])
+
+  const effectiveSchedules = (rawSchedules !== undefined && rawSchedules !== null)
+    ? (rawSchedules.length > 0
+        ? rawSchedules.map((s: any) => ({
+            ...s,
+            id: s._id,
+            participants: (s.participants || []).map((p: any) => ({ ...p, id: p._id })),
+          }))
+        : [])
+    : localFilteredSchedules
 
   const effectiveReplacementCredits = (convexReplacementCredits && convexReplacementCredits.length > 0)
     ? convexReplacementCredits.map((c: any) => ({
@@ -1523,6 +1849,13 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sessionCount: pkgData.sessionCount,
         validityDays: pkgData.validityDays,
         price: pkgData.price,
+        pricePix: pkgData.pricePix,
+        cardInstallments: pkgData.cardInstallments,
+        insurancePrice: pkgData.insurancePrice,
+        insurancePricePix: pkgData.insurancePricePix,
+        insuranceCardInstallments: pkgData.insuranceCardInstallments,
+        groupDetails: pkgData.groupDetails,
+        showInPublicBooking: pkgData.showInPublicBooking ?? true,
         description: pkgData.description,
         active: pkgData.active,
       })
@@ -1561,6 +1894,13 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sessionCount: data.sessionCount,
         validityDays: data.validityDays,
         price: data.price,
+        pricePix: data.pricePix,
+        cardInstallments: data.cardInstallments,
+        insurancePrice: data.insurancePrice,
+        insurancePricePix: data.insurancePricePix,
+        insuranceCardInstallments: data.insuranceCardInstallments,
+        groupDetails: data.groupDetails,
+        showInPublicBooking: data.showInPublicBooking,
         description: data.description,
         active: data.active,
       })
@@ -2416,6 +2756,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         schedules: effectiveSchedules,
         selectedDate,
         setSelectedDate,
+        schedulePeriodMode,
+        setSchedulePeriodMode: handleSetSchedulePeriodMode,
         addSchedule,
         updateSchedule,
         deleteSchedule,

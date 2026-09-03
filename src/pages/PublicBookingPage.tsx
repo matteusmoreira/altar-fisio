@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
@@ -34,6 +34,7 @@ import {
   Flame,
   Check,
   Award,
+  RotateCcw,
 } from "lucide-react"
 import { formatDateBR, formatDateWithWeekdayBR, addDaysSafe, getTodayDateString } from "@/lib/dateUtils"
 
@@ -49,6 +50,7 @@ const MONTHS_SHORT = [
 export const PublicBookingPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
   const clinicSettings = useQuery(api.clinic.getSettings)
+  const publicPackages = useQuery(api.bookingBuilder.listPublicPackages)
   const submitBooking = useMutation(api.bookingBuilder.submitPublicBooking)
 
   // Rastreia especialidade da URL se houver (ex: ?servico=pilates)
@@ -63,10 +65,46 @@ export const PublicBookingPage: React.FC = () => {
   const [answers, setAnswers] = useState<AnswerMap>({})
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
 
+  // Estado da Tabela de Preços e Convênio
+  const [patientBillingType, setPatientBillingType] = useState<"particular" | "convenio">("particular")
+  const [selectedHealthInsurance, setSelectedHealthInsurance] = useState("Unimed")
+  const [customHealthInsurance, setCustomHealthInsurance] = useState("")
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
+
   // Estado da Escolha da Sessão
   const [selectedSpecialty, setSelectedSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">(
     initialSpecialty
   )
+
+  // Helper para obter preços dinâmicos conforme perfil (Particular vs Convênio)
+  const getPackagePricing = (pkg: any, isConvenio: boolean) => {
+    const pixPrice = isConvenio
+      ? pkg.insurancePricePix ?? pkg.pricePix ?? pkg.price
+      : pkg.pricePix ?? pkg.price
+    const cardPrice = isConvenio
+      ? pkg.insurancePrice ?? pkg.price
+      : pkg.price
+    const cardInstallments = isConvenio
+      ? pkg.insuranceCardInstallments ?? pkg.cardInstallments ?? 1
+      : pkg.cardInstallments ?? 1
+
+    return {
+      pixPrice: Number(pixPrice) || 0,
+      cardPrice: Number(cardPrice) || 0,
+      cardInstallments: Number(cardInstallments) || 1,
+      hasDiscountPix: pixPrice < cardPrice,
+      savingsPix: Math.max(0, cardPrice - pixPrice),
+    }
+  }
+
+  // Auto-seleciona pacote inicial correspondente à especialidade
+  useEffect(() => {
+    if (publicPackages && publicPackages.length > 0 && !selectedPackageId) {
+      const match = publicPackages.find((p) => p.specialty === selectedSpecialty) || publicPackages[0]
+      if (match) setSelectedPackageId(match._id)
+    }
+  }, [publicPackages, selectedPackageId, selectedSpecialty])
+
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = getTodayDateString()
     // Se for domingo, pula para segunda
@@ -230,6 +268,9 @@ export const PublicBookingPage: React.FC = () => {
         }
       })
     } else if (currentStep.type === "slot_picker") {
+      if (publicPackages && publicPackages.length > 0 && !selectedPackageId) {
+        errors.package = "Por favor, selecione um plano ou pacote acima para continuar."
+      }
       if (!selectedSlot) {
         errors.slot = "Por favor, escolha um horário na grade abaixo para continuar."
       }
@@ -284,6 +325,16 @@ export const PublicBookingPage: React.FC = () => {
         }
       })
 
+      const chosenPkg = publicPackages?.find((p) => p._id === selectedPackageId)
+      const isConvenio = patientBillingType === "convenio"
+      const effectiveInsuranceName = isConvenio
+        ? selectedHealthInsurance === "Outro"
+          ? customHealthInsurance.trim() || "Convênio Informado"
+          : selectedHealthInsurance
+        : undefined
+
+      const pricing = chosenPkg ? getPackagePricing(chosenPkg, isConvenio) : null
+
       const res = await submitBooking({
         name: patientName,
         documentCpf: patientCpf,
@@ -294,6 +345,15 @@ export const PublicBookingPage: React.FC = () => {
         startTime: selectedSlot?.startTime || "08:00",
         endTime: selectedSlot?.endTime || "08:55",
         specialty: selectedSpecialty,
+        packageId: chosenPkg?._id,
+        packageName: chosenPkg?.name,
+        hasHealthInsurance: isConvenio,
+        healthInsuranceName: effectiveInsuranceName,
+        selectedPrice: pricing?.pixPrice ?? pricing?.cardPrice,
+        selectedPaymentMethod: "presencial",
+        pricingDetails: pricing
+          ? `Pix: R$ ${pricing.pixPrice.toFixed(2)} | Cartão: R$ ${pricing.cardPrice.toFixed(2)} (${pricing.cardInstallments}x)`
+          : undefined,
         roomId: selectedSlot?.roomId as any,
         professionalId: selectedSlot?.professionalId as any,
         answers: answersArray,
@@ -304,6 +364,13 @@ export const PublicBookingPage: React.FC = () => {
         ...res,
         specialty: selectedSpecialty,
         roomName: selectedSlot?.roomName,
+        packageName: chosenPkg?.name,
+        isConvenio,
+        healthInsuranceName: effectiveInsuranceName,
+        pixPrice: pricing?.pixPrice,
+        cardPrice: pricing?.cardPrice,
+        installments: pricing?.cardInstallments,
+        groupDetails: chosenPkg?.groupDetails,
       })
       window.scrollTo({ top: 0, behavior: "smooth" })
     } catch (err: any) {
@@ -433,6 +500,60 @@ export const PublicBookingPage: React.FC = () => {
                       {selectedSlot?.startTime} às {selectedSlot?.endTime}
                     </span>
                   </div>
+
+                  {bookingSuccessData.packageName && (
+                    <div className="col-span-2 pt-3 border-t border-border/70">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-card border border-border">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                            Plano / Pacote Selecionado
+                          </span>
+                          <span className="text-sm font-black text-foreground">
+                            {bookingSuccessData.packageName}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                              {bookingSuccessData.isConvenio
+                                ? `Convênio: ${bookingSuccessData.healthInsuranceName || "Plano de Saúde"}`
+                                : "Tabela Particular"}
+                            </Badge>
+                            {bookingSuccessData.groupDetails && (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                • {bookingSuccessData.groupDetails}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {(bookingSuccessData.pixPrice || bookingSuccessData.cardPrice) && (
+                          <div className="text-right sm:self-center shrink-0">
+                            {bookingSuccessData.pixPrice && (
+                              <div className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                                R$ {bookingSuccessData.pixPrice.toFixed(2)} Pix
+                              </div>
+                            )}
+                            {bookingSuccessData.cardPrice && (
+                              <div className="text-[11px] text-muted-foreground font-medium">
+                                ou R$ {bookingSuccessData.cardPrice.toFixed(2)}
+                                {bookingSuccessData.installments && bookingSuccessData.installments > 1
+                                  ? ` em até ${bookingSuccessData.installments}x Cartão`
+                                  : " no Cartão"}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Informação sobre Acerto na Recepção */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
+                <CreditCard className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong className="block font-bold mb-0.5">Pagamento Presencial na Recepção:</strong>
+                  O acerto do pacote ou sessão é realizado diretamente na clínica no dia do seu atendimento. Aceitamos Pix com desconto e Cartão de Crédito/Débito.
                 </div>
               </div>
 
@@ -559,7 +680,7 @@ export const PublicBookingPage: React.FC = () => {
       </header>
 
       {/* Container Central */}
-      <main className="max-w-3xl mx-auto px-4 py-8 sm:py-10">
+      <main className="max-w-4xl mx-auto px-4 py-8 sm:py-10">
         {/* Banner de Apresentação */}
         <div className="text-center space-y-2.5 mb-8">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary uppercase tracking-wider shadow-sm">
@@ -789,109 +910,272 @@ export const PublicBookingPage: React.FC = () => {
             {/* ================= ETAPA: SELETOR DE MODALIDADE, DATA E HORÁRIO ================= */}
             {currentStep?.type === "slot_picker" && (
               <div className="space-y-8">
-                {/* 1. SELEÇÃO DE ESPECIALIDADE COM CARDS E ÍCONES PREMIUM */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" />
-                      <span>1. Escolha a Especialidade</span>
-                    </label>
-                    <span className="text-[11px] text-muted-foreground font-medium">
-                      Atendimento personalizado
-                    </span>
+                {/* 1. SELEÇÃO DE MODALIDADE, PLANO & TABELA DE PREÇOS */}
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-primary" />
+                        <span>1. Escolha seu Plano ou Sessão</span>
+                      </label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Valores transparentes com desconto no Pix e parcelamento no cartão.
+                      </p>
+                    </div>
+
+                    {/* Alternador Particular vs Plano de Saúde */}
+                    <div className="inline-flex p-1 bg-muted/60 rounded-xl border border-border/80 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setPatientBillingType("particular")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          patientBillingType === "particular"
+                            ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <User className="h-3.5 w-3.5 text-primary" />
+                        <span>Particular</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPatientBillingType("convenio")}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          patientBillingType === "convenio"
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <HeartPulse className="h-3.5 w-3.5" />
+                        <span>Tenho Plano de Saúde</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {/* Seção Expansível: Seleção de Convênio */}
+                  {patientBillingType === "convenio" && (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-card border border-sky-500/25 space-y-3 animate-fade-in">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                            <HeartPulse className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                            <span>Qual é o seu Plano de Saúde ou Convênio?</span>
+                          </span>
+                          <p className="text-[11px] text-muted-foreground">
+                            Emitimos recibo oficial detalhado para você solicitar o reembolso integral ou parcial no seu plano.
+                          </p>
+                        </div>
+
+                        <div className="w-full sm:w-64 shrink-0">
+                          <Select
+                            value={selectedHealthInsurance}
+                            onChange={(e) => setSelectedHealthInsurance(e.target.value)}
+                            className="h-10 text-xs bg-card border-border rounded-xl"
+                          >
+                            <option value="Unimed">Unimed</option>
+                            <option value="Bradesco Saúde">Bradesco Saúde</option>
+                            <option value="SulAmérica">SulAmérica</option>
+                            <option value="Amil">Amil</option>
+                            <option value="NotreDame Intermédica">NotreDame Intermédica</option>
+                            <option value="Porto Seguro Saúde">Porto Seguro Saúde</option>
+                            <option value="Omint">Omint</option>
+                            <option value="Cassi">Cassi</option>
+                            <option value="Allianz Saúde">Allianz Saúde</option>
+                            <option value="Outro">Outro Convênio...</option>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {selectedHealthInsurance === "Outro" && (
+                        <div className="pt-1">
+                          <Input
+                            placeholder="Digite o nome do seu plano de saúde..."
+                            value={customHealthInsurance}
+                            onChange={(e) => setCustomHealthInsurance(e.target.value)}
+                            className="h-10 text-xs bg-card border-border rounded-xl"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Filtro de Especialidade das Opções */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                     {[
-                      {
-                        id: "pilates",
-                        label: "Studio Pilates",
-                        desc: "Aparelhos & Solo",
-                        badge: "Máx. 4 alunos",
-                        icon: Activity,
-                        gradient: "from-emerald-500/10 to-teal-500/5",
-                        borderColor: "hover:border-emerald-500/40",
-                      },
-                      {
-                        id: "fisioterapia",
-                        label: "Fisioterapia",
-                        desc: "Ortopedia & Coluna",
-                        badge: "Sessão Individual",
-                        icon: HeartPulse,
-                        gradient: "from-teal-500/10 to-primary/5",
-                        borderColor: "hover:border-teal-500/40",
-                      },
-                      {
-                        id: "rpg",
-                        label: "RPG Souchard",
-                        desc: "Postura & Cadeias",
-                        badge: "Reeducação Global",
-                        icon: Compass,
-                        gradient: "from-emerald-600/10 to-emerald-500/5",
-                        borderColor: "hover:border-emerald-600/40",
-                      },
-                    ].map((spec) => {
-                      const isSelected = selectedSpecialty === spec.id
-                      const IconComponent = spec.icon
+                      { id: "all", label: "Todas as Modalidades" },
+                      { id: "pilates", label: "Studio Pilates" },
+                      { id: "fisioterapia", label: "Fisioterapia" },
+                      { id: "rpg", label: "RPG Souchard" },
+                    ].map((tab) => {
+                      const isActive =
+                        tab.id === "all"
+                          ? !["pilates", "fisioterapia", "rpg"].includes(selectedSpecialty)
+                          : selectedSpecialty === tab.id
 
                       return (
                         <button
-                          key={spec.id}
+                          key={tab.id}
                           type="button"
                           onClick={() => {
-                            setSelectedSpecialty(spec.id as any)
-                            setSelectedSlot(null)
+                            if (tab.id !== "all") {
+                              setSelectedSpecialty(tab.id as any)
+                              setSelectedSlot(null)
+                              // Seleciona o primeiro pacote correspondente se houver
+                              const match = publicPackages?.find((p) => p.specialty === tab.id)
+                              if (match) setSelectedPackageId(match._id)
+                            }
                           }}
-                          className={`group relative p-4 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between ${
-                            isSelected
-                              ? "bg-gradient-to-br from-primary/15 via-primary/5 to-card border-primary ring-2 ring-primary/40 shadow-md shadow-primary/10 -translate-y-0.5"
-                              : `bg-card ${spec.borderColor} border-border text-foreground hover:bg-muted/40 hover:-translate-y-0.5`
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                            isActive
+                              ? "bg-primary/15 text-primary border border-primary/30 shadow-xs"
+                              : "bg-muted/40 hover:bg-muted text-muted-foreground border border-transparent"
                           }`}
                         >
-                          <div className="flex items-start justify-between w-full mb-3">
-                            <div
-                              className={`h-11 w-11 rounded-2xl flex items-center justify-center transition-all ${
-                                isSelected
-                                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/20 scale-105"
-                                  : "bg-muted/80 text-muted-foreground group-hover:text-primary group-hover:bg-primary/10"
-                              }`}
-                            >
-                              <IconComponent className="h-5 w-5" />
-                            </div>
-
-                            {isSelected ? (
-                              <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
-                                <Check className="h-3 w-3 stroke-[3]" />
-                              </span>
-                            ) : (
-                              <span className="h-5 w-5 rounded-full border border-border/80 group-hover:border-primary/40 transition-colors" />
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="font-extrabold text-sm sm:text-base text-foreground tracking-tight">
-                              {spec.label}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1 font-medium">
-                              {spec.desc}
-                            </div>
-                          </div>
-
-                          <div className="mt-3.5 pt-2.5 border-t border-border/50 flex items-center justify-between">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                                isSelected
-                                  ? "bg-primary/20 text-primary border border-primary/30"
-                                  : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {spec.badge}
-                            </span>
-                          </div>
+                          {tab.label}
                         </button>
                       )
                     })}
                   </div>
+
+                  {/* Grade de Pacotes & Turmas com Valores Dinâmicos */}
+                  {publicPackages && publicPackages.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      {publicPackages.map((pkg) => {
+                        const isConvenio = patientBillingType === "convenio"
+                        const pricing = getPackagePricing(pkg, isConvenio)
+                        const isSelected = selectedPackageId === pkg._id
+                        const pricePerSession =
+                          pkg.sessionCount > 0
+                            ? (pricing.pixPrice / pkg.sessionCount).toFixed(2)
+                            : pricing.pixPrice.toFixed(2)
+
+                        return (
+                          <button
+                            key={pkg._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPackageId(pkg._id)
+                              if (pkg.specialty && pkg.specialty !== selectedSpecialty) {
+                                setSelectedSpecialty(pkg.specialty as any)
+                              }
+                              setSelectedSlot(null)
+                            }}
+                            className={`group relative p-4 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between min-h-[190px] ${
+                              isSelected
+                                ? "bg-gradient-to-br from-primary/15 via-primary/5 to-card border-primary ring-2 ring-primary/40 shadow-lg shadow-primary/10 -translate-y-0.5"
+                                : "bg-card hover:bg-muted/30 border-border text-foreground hover:border-primary/40 hover:-translate-y-0.5"
+                            }`}
+                          >
+                            {/* Topo: Especialidade e Badge de Selecionado */}
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                                  {pkg.specialty === "pilates"
+                                    ? "Studio Pilates"
+                                    : pkg.specialty === "fisioterapia"
+                                    ? "Fisioterapia"
+                                    : "RPG Postural"}
+                                </span>
+
+                                {isSelected ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-extrabold bg-primary text-primary-foreground px-2 py-0.5 rounded-full shadow-xs">
+                                    <Check className="h-3 w-3 stroke-[3]" />
+                                    <span>Escolhido</span>
+                                  </span>
+                                ) : (
+                                  <span className="h-4 w-4 rounded-full border border-border/80 group-hover:border-primary/50 transition-colors" />
+                                )}
+                              </div>
+
+                              <h3 className="font-extrabold text-sm sm:text-base text-foreground tracking-tight leading-snug">
+                                {pkg.name}
+                              </h3>
+
+                              {pkg.description && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                                  {pkg.description}
+                                </p>
+                              )}
+
+                              {/* Badges de Turma / Capacidade */}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                                {pkg.groupDetails ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground/80 border border-border/60">
+                                    👥 {pkg.groupDetails}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground/80 border border-border/60">
+                                    {pkg.modality === "turma" ? "👥 Turma em Grupo" : "👤 Individual"}
+                                  </span>
+                                )}
+
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted/60 text-muted-foreground">
+                                  {pkg.sessionCount > 1 ? `${pkg.sessionCount} Sessões` : "Sessão Avulsa"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Base: Caixa de Preços em Destaque */}
+                            <div className="mt-3.5 pt-3 border-t border-border/60 space-y-1">
+                              <div className="flex items-baseline justify-between gap-1">
+                                <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
+                                  R$ {pricing.pixPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 ml-1">
+                                    no Pix
+                                  </span>
+                                </div>
+
+                                {pricing.hasDiscountPix && (
+                                  <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                    Desconto Pix
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                                <span>
+                                  ou R$ {pricing.cardPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}{" "}
+                                  {pricing.cardInstallments > 1
+                                    ? `em até ${pricing.cardInstallments}x no Cartão`
+                                    : "no Cartão"}
+                                </span>
+                                {pkg.sessionCount > 1 && (
+                                  <span className="text-[10px] font-medium opacity-80">
+                                    (~R$ {pricePerSession}/aula)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    /* Fallback caso os pacotes ainda estejam carregando */
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      Carregando opções de planos e pacotes da clínica...
+                    </div>
+                  )}
+
+                  {/* Banner de Feedback do Pacote Selecionado */}
+                  {selectedPackageId && (
+                    <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fade-in">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                        <span className="text-xs text-foreground">
+                          Plano Selecionado:{" "}
+                          <strong className="font-bold text-primary">
+                            {publicPackages?.find((p) => p._id === selectedPackageId)?.name}
+                          </strong>{" "}
+                          ({patientBillingType === "convenio" ? `Tabela Convênio - ${selectedHealthInsurance}` : "Tabela Particular"})
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        Agora selecione o melhor dia e horário abaixo ↓
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. SELETOR DE DATAS PREMIUM COM ÍCONES E CONTROLE HORIZONTAL */}
@@ -1078,7 +1362,14 @@ export const PublicBookingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Mensagem de Erro de Horário Não Selecionado */}
+                  {/* Mensagem de Erro de Pacote ou Horário */}
+                  {formErrors.package && (
+                    <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold flex items-center gap-2 animate-fade-in">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{formErrors.package}</span>
+                    </div>
+                  )}
+
                   {formErrors.slot && (
                     <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold flex items-center gap-2 animate-fade-in">
                       <AlertCircle className="h-4 w-4 shrink-0" />
@@ -1111,6 +1402,10 @@ export const PublicBookingPage: React.FC = () => {
                         const firstRoom = slot.rooms[0]
                         const period = getSlotPeriod(slot.startTime)
 
+                        // Rótulo amigável do turno
+                        const periodLabel =
+                          period === "morning" ? "Manhã" : period === "afternoon" ? "Tarde" : "Noite"
+
                         // Ícone elegante baseado no período
                         const PeriodIcon =
                           period === "morning" ? Sunrise : period === "afternoon" ? Sun : Moon
@@ -1120,6 +1415,10 @@ export const PublicBookingPage: React.FC = () => {
                             : period === "afternoon"
                             ? "text-amber-600 bg-amber-600/10"
                             : "text-indigo-400 bg-indigo-500/10"
+
+                        // Nome limpo da sala para evitar truncamento prematuro
+                        const fullRoomName = firstRoom?.roomName || "Studio Pilates"
+                        const cleanRoomName = fullRoomName.split(" - ")[0].split(" | ")[0]
 
                         return (
                           <button
@@ -1142,59 +1441,49 @@ export const PublicBookingPage: React.FC = () => {
                                 })
                               }
                             }}
-                            className={`group p-4 rounded-2xl border text-left transition-all duration-200 relative flex flex-col justify-between min-h-[104px] ${
+                            className={`group p-4 sm:p-4.5 rounded-2xl border text-left transition-all duration-200 relative flex flex-col justify-between min-h-[128px] ${
                               !slot.isAvailable
                                 ? "opacity-35 bg-muted/20 border-dashed cursor-not-allowed"
                                 : isSelected
-                                ? "bg-gradient-to-br from-primary via-emerald-600 to-emerald-700 text-white border-primary shadow-xl shadow-primary/25 ring-2 ring-primary ring-offset-2 scale-[1.02] -translate-y-0.5"
+                                ? "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white border-emerald-500 shadow-xl shadow-emerald-700/25 ring-2 ring-emerald-500 ring-offset-2 scale-[1.02] -translate-y-0.5"
                                 : "bg-card hover:bg-muted/40 border-border text-foreground hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5"
                             }`}
                           >
-                            {/* Linha Superior: Ícone do Turno + Horário Principal + Badge de Vagas */}
-                            <div className="flex items-center justify-between gap-3 w-full">
-                              <div className="flex items-center gap-3 min-w-0">
+                            {/* 1. TOPO: Período (Ícone + Turno) & Badge de Vagas / Status */}
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <div
-                                  className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                                  className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
                                     isSelected
                                       ? "bg-white/20 text-white shadow-inner"
                                       : `${iconColorClass} group-hover:scale-105`
                                   }`}
                                 >
-                                  <PeriodIcon className="h-4 w-4" />
+                                  <PeriodIcon className="h-3.5 w-3.5" />
                                 </div>
-
-                                <div className="flex flex-col min-w-0">
-                                  <span
-                                    className={`text-lg sm:text-xl font-black tracking-tight leading-tight block ${
-                                      isSelected ? "text-white" : "text-foreground"
-                                    }`}
-                                  >
-                                    {slot.startTime}
-                                  </span>
-                                  <span
-                                    className={`text-[11px] font-medium leading-tight block mt-1 ${
-                                      isSelected ? "text-white/85" : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    até {slot.endTime}
-                                  </span>
-                                </div>
+                                <span
+                                  className={`text-xs font-semibold tracking-tight truncate ${
+                                    isSelected ? "text-white/90" : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {periodLabel}
+                                </span>
                               </div>
 
                               {/* Badge de Vagas ou Status Selecionado */}
                               <div className="shrink-0">
                                 {isSelected ? (
-                                  <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-wide uppercase bg-white text-emerald-800 dark:text-emerald-950 px-2.5 py-1 rounded-full shadow-sm">
-                                    <Check className="h-3 w-3 stroke-[3] text-emerald-700" />
-                                    <span>Escolhido</span>
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold bg-white text-emerald-800 dark:text-emerald-950 px-2.5 py-0.5 rounded-full shadow-sm animate-fade-in">
+                                    <Check className="h-3.5 w-3.5 stroke-[3] text-emerald-600" />
+                                    <span>Selecionado</span>
                                   </span>
                                 ) : slot.totalAvailableSpots === 1 ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-300/60 dark:border-amber-700/60 px-2 py-0.5 rounded-full">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-300/60 dark:border-amber-700/60 px-2.5 py-0.5 rounded-full">
                                     <Flame className="h-3 w-3 text-amber-500 animate-pulse" />
-                                    1 vaga
+                                    <span>1 vaga</span>
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-700/60 px-2.5 py-0.5 rounded-full">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-700/60 px-2.5 py-0.5 rounded-full">
                                     <Users className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                                     <span>{slot.totalAvailableSpots} vagas</span>
                                   </span>
@@ -1202,9 +1491,27 @@ export const PublicBookingPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Linha Inferior: Sala & Duração da Sessão */}
+                            {/* 2. CORPO: Horário com Destaque Total (Espaço 100% Livre de Colisões) */}
+                            <div className="my-2.5">
+                              <div
+                                className={`text-2xl sm:text-[26px] font-black tracking-tight leading-none ${
+                                  isSelected ? "text-white" : "text-foreground"
+                                }`}
+                              >
+                                {slot.startTime}
+                              </div>
+                              <div
+                                className={`text-xs font-medium mt-1.5 flex items-center gap-1 ${
+                                  isSelected ? "text-white/85" : "text-muted-foreground"
+                                }`}
+                              >
+                                <span>até {slot.endTime}</span>
+                              </div>
+                            </div>
+
+                            {/* 3. BASE: Sala & Duração da Sessão */}
                             <div
-                              className={`mt-3.5 pt-2.5 border-t flex items-center justify-between gap-2 text-[11px] ${
+                              className={`pt-2.5 border-t flex items-center justify-between gap-2 text-xs ${
                                 isSelected ? "border-white/20" : "border-border/60"
                               }`}
                             >
@@ -1212,15 +1519,16 @@ export const PublicBookingPage: React.FC = () => {
                                 className={`flex items-center gap-1.5 truncate min-w-0 ${
                                   isSelected ? "text-white/90" : "text-muted-foreground"
                                 }`}
+                                title={fullRoomName}
                               >
                                 <Layers className="h-3.5 w-3.5 shrink-0 opacity-80" />
                                 <span className="truncate font-medium">
-                                  {firstRoom?.roomName || "Studio Pilates Aparelhos"}
+                                  {cleanRoomName}
                                 </span>
                               </div>
 
                               <span
-                                className={`text-[10px] font-semibold shrink-0 tabular-nums ${
+                                className={`text-[11px] font-semibold shrink-0 tabular-nums ${
                                   isSelected ? "text-white/80" : "text-muted-foreground/80"
                                 }`}
                               >
@@ -1233,36 +1541,44 @@ export const PublicBookingPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Banner de Horário Selecionado */}
+                  {/* Banner de Horário Selecionado (Resumo Elegante sem Botão Redundante) */}
                   {selectedSlot && (
-                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-emerald-500/5 to-card border border-primary/25 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-card border border-emerald-500/30 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
                       <div className="flex items-center gap-3.5">
-                        <div className="h-11 w-11 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shadow-md shadow-primary/20 shrink-0">
+                        <div className="h-11 w-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
                           <CheckCircle2 className="h-5 w-5" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <div className="text-xs font-bold text-foreground flex items-center gap-2">
                             <span>Sessão Selecionada:</span>
-                            <span className="text-primary capitalize font-extrabold">
-                              {selectedSpecialty}
+                            <span className="text-emerald-700 dark:text-emerald-400 capitalize font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/25">
+                              {selectedSpecialty === "pilates"
+                                ? "Studio Pilates"
+                                : selectedSpecialty === "fisioterapia"
+                                ? "Fisioterapia"
+                                : "RPG Souchard"}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
                             {formatDateWithWeekdayBR(selectedDate)} às{" "}
-                            <strong className="text-foreground font-semibold">{selectedSlot.startTime}</strong> (
-                            {selectedSlot.roomName || "Studio Pilates"})
+                            <strong className="text-foreground font-semibold text-sm">{selectedSlot.startTime}</strong>{" "}
+                            <span className="text-muted-foreground">({selectedSlot.roomName || "Studio Pilates"})</span>
                           </div>
                         </div>
                       </div>
 
-                      <Button
-                        type="button"
-                        onClick={handleNextStep}
-                        className="rounded-xl px-5 py-2.5 h-10 sm:h-11 text-xs font-bold shadow-md shadow-primary/20 flex items-center gap-2 shrink-0 self-end sm:self-auto"
-                      >
-                        <span>Confirmar e Continuar</span>
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedSlot(null)}
+                          className="text-xs text-muted-foreground hover:text-foreground h-9 px-3 rounded-xl flex items-center gap-1.5"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>Trocar horário</span>
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>

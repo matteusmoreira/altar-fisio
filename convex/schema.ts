@@ -100,7 +100,16 @@ export default defineSchema({
     serviceId: v.id("services"),
     sessionCount: v.number(), // Ex: 8 sessões, 10 sessões
     validityDays: v.number(), // Ex: 30 dias, 60 dias
-    price: v.number(),
+    price: v.number(), // Preço padrão / Cartão Particular
+    pricePix: v.optional(v.number()), // Valor à vista no Pix (Particular)
+    cardInstallments: v.optional(v.number()), // Ex: 2 (até 2x sem juros)
+    // Tabela com Plano de Saúde / Convênio
+    insurancePrice: v.optional(v.number()), // Valor no Cartão com Plano
+    insurancePricePix: v.optional(v.number()), // Valor no Pix com Plano
+    insuranceCardInstallments: v.optional(v.number()), // Parcelamento com Plano
+    // Detalhes da Turma / Modalidade
+    groupDetails: v.optional(v.string()), // Ex: "Grupo de até 8 Pessoas", "2X na Semana, 1 Hora de Aula"
+    showInPublicBooking: v.optional(v.boolean()), // Exibir no agendamento público
     description: v.optional(v.string()),
     active: v.boolean(),
   }),
@@ -540,6 +549,13 @@ export default defineSchema({
       v.literal("rejected")
     ),
     serviceId: v.optional(v.id("services")),
+    packageId: v.optional(v.id("packages")),
+    packageName: v.optional(v.string()),
+    hasHealthInsurance: v.optional(v.boolean()),
+    healthInsuranceName: v.optional(v.string()),
+    selectedPrice: v.optional(v.number()),
+    selectedPaymentMethod: v.optional(v.string()), // "pix" | "cartao"
+    pricingDetails: v.optional(v.string()),
     professionalId: v.optional(v.id("professionals")),
     roomId: v.optional(v.id("rooms")),
     date: v.string(),
