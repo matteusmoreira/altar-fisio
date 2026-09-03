@@ -14,15 +14,71 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Auto-recuperação resiliente contra caches legados / chunks obsoletos de deploy
+      window.addEventListener('error', function(event) {
+        var msg = (event && event.message) || '';
+        var target = event && event.target;
+        var isResourceError = target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK');
+        var isMimeOrModuleError = msg.indexOf('MIME') !== -1 ||
+                                  msg.indexOf('module script') !== -1 ||
+                                  msg.indexOf('Loading chunk') !== -1;
+        if ((isResourceError || isMimeOrModuleError) && !sessionStorage.getItem('sw_chunk_recovered')) {
+          sessionStorage.setItem('sw_chunk_recovered', 'true');
+          console.warn('[AutoRecovery] Inconsistência de cache pós-deploy detectada. Purgando Service Worker...');
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            }).then(function() {
+              if ('caches' in window) {
+                caches.keys().then(function(keys) {
+                  return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                }).then(function() {
+                  window.location.reload(true);
+                });
+              } else {
+                window.location.reload(true);
+              }
+            });
+          }
+        }
+      }, true);
+
+      // Manipulador oficial do Vite para chunk preload errors pós-deploy
+      window.addEventListener('vite:preloadError', function(event) {
+        console.warn('[Vite] Chunk dinâmico obsoleto pós-deploy. Recarregando aplicação...', event);
+        window.location.reload();
+      });
+    </script>
   </head>
   <body class="font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            registration.update();
+            registration.addEventListener('updatefound', function() {
+              var newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              }
+            });
+          }).catch(function(err) {
             console.warn('Service Worker registration skipped:', err);
+          });
+
+          var isRefreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (!isRefreshing) {
+              isRefreshing = true;
+              window.location.reload();
+            }
           });
         });
       }
