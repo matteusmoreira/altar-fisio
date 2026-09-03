@@ -80,11 +80,56 @@ export const identifyPatient = query({
   },
 })
 
+// 1.1. Pacientes de Demonstracao Dinamicos (para testes rapidos sem IDs fixos entre ambientes)
+export const getDemoPatients = query({
+  args: {},
+  handler: async (ctx) => {
+    const samplePatients = await ctx.db
+      .query("patients")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .take(4)
+
+    return Promise.all(
+      samplePatients.map(async (p) => {
+        const activePkg = await ctx.db
+          .query("patientPackages")
+          .withIndex("by_patient", (q) => q.eq("patientId", p._id))
+          .filter((q) => q.eq(q.field("status"), "active"))
+          .first()
+
+        let planDesc = "Aluno Cadastrado"
+        if (activePkg) {
+          const pkgDef = await ctx.db.get(activePkg.packageId)
+          planDesc = `${pkgDef?.name || "Plano Ativo"} (${activePkg.remainingSessions} sessões)`
+        }
+
+        const nameParts = p.name.trim().split(/\s+/)
+        const initials =
+          nameParts.length >= 2
+            ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+            : (p.name.slice(0, 2) || "AL").toUpperCase()
+
+        return {
+          _id: p._id,
+          name: p.name,
+          documentCpf: p.documentCpf,
+          phone: p.phone,
+          planDesc,
+          initials,
+        }
+      })
+    )
+  },
+})
+
 // 2. Consulta Completa de Dados do Portal do Paciente
 export const getPatientPortalData = query({
-  args: { patientId: v.id("patients") },
+  args: { patientId: v.string() },
   handler: async (ctx, args) => {
-    const patient = await ctx.db.get(args.patientId)
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) return null
+
+    const patient = await ctx.db.get(normPatientId)
     if (!patient) return null
 
     const settings = await ctx.db.query("clinicSettings").first()
@@ -94,7 +139,7 @@ export const getPatientPortalData = query({
     // 2.1. Buscar todas as participacoes do paciente
     const participations = await ctx.db
       .query("scheduleParticipants")
-      .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
       .collect()
 
     const now = Date.now()
@@ -163,7 +208,7 @@ export const getPatientPortalData = query({
     // 2.2. Pacotes e Planos Ativos
     const rawPackages = await ctx.db
       .query("patientPackages")
-      .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
       .collect()
 
     const enrichedPackages = await Promise.all(
@@ -188,7 +233,7 @@ export const getPatientPortalData = query({
     const replacementCredits = await ctx.db
       .query("replacementCredits")
       .withIndex("by_patient_status", (q) =>
-        q.eq("patientId", args.patientId).eq("status", "available")
+        q.eq("patientId", normPatientId).eq("status", "available")
       )
       .collect()
 
@@ -231,14 +276,19 @@ export const getPatientPortalData = query({
 // 3. Cancelamento pelo Paciente (com aplicacao automatica da regra de 2 horas)
 export const cancelAppointmentByPatient = mutation({
   args: {
-    participantId: v.id("scheduleParticipants"),
-    patientId: v.id("patients"),
+    participantId: v.string(),
+    patientId: v.string(),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const participant = await ctx.db.get(args.participantId)
+    const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
+    if (!normParticipantId) throw new Error("Agendamento nao encontrado.")
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) throw new Error("Paciente nao encontrado.")
+
+    const participant = await ctx.db.get(normParticipantId)
     if (!participant) throw new Error("Agendamento nao encontrado.")
-    if (participant.patientId !== args.patientId) {
+    if (participant.patientId !== normPatientId) {
       throw new Error("Acesso nao autorizado para este agendamento.")
     }
 
@@ -261,7 +311,7 @@ export const cancelAppointmentByPatient = mutation({
 
       // Gera credito de reposicao
       const creditId = await ctx.db.insert("replacementCredits", {
-        patientId: args.patientId,
+        patientId: normPatientId,
         originScheduleId: schedule._id,
         generatedAt: now,
         expiryDate: expiryStr,
@@ -273,13 +323,13 @@ export const cancelAppointmentByPatient = mutation({
         ? `Desmarcado pelo aluno (${hoursNotice.toFixed(1)}h antes): ${args.reason}`
         : `Desmarcado pelo aluno (${hoursNotice.toFixed(1)}h antes do inicio)`
 
-      await ctx.db.patch(args.participantId, {
+      await ctx.db.patch(normParticipantId, {
         status: "justified_absence",
         notes: note,
       })
 
       // Dispara confirmacao via WhatsApp
-      const patient = await ctx.db.get(args.patientId)
+      const patient = await ctx.db.get(normPatientId)
       if (patient?.phone) {
         await ctx.scheduler.runAfter(0, api.notifications.sendReplacementCreditNoticeAction, {
           patientName: patient.name,
@@ -301,7 +351,7 @@ export const cancelAppointmentByPatient = mutation({
       }
     } else {
       // Fora do prazo: marca ausencia sem gerar credito
-      await ctx.db.patch(args.participantId, {
+      await ctx.db.patch(normParticipantId, {
         status: "absence",
         notes: args.reason
           ? `Desmarcado pelo aluno fora do prazo (${hoursNotice.toFixed(1)}h antes): ${args.reason}`
@@ -321,28 +371,35 @@ export const cancelAppointmentByPatient = mutation({
 // 4. Remarcacao de Sessao pelo Paciente (Troca de Horario Atomica)
 export const rescheduleAppointmentByPatient = mutation({
   args: {
-    participantId: v.id("scheduleParticipants"),
-    targetScheduleId: v.id("schedules"),
-    patientId: v.id("patients"),
+    participantId: v.string(),
+    targetScheduleId: v.string(),
+    patientId: v.string(),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const currentPart = await ctx.db.get(args.participantId)
+    const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
+    if (!normParticipantId) throw new Error("Agendamento atual nao encontrado.")
+    const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
+    if (!normTargetScheduleId) throw new Error("Novo horario selecionado nao encontrado.")
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) throw new Error("Paciente nao autorizado.")
+
+    const currentPart = await ctx.db.get(normParticipantId)
     if (!currentPart) throw new Error("Agendamento atual nao encontrado.")
-    if (currentPart.patientId !== args.patientId) {
+    if (currentPart.patientId !== normPatientId) {
       throw new Error("Nao autorizado.")
     }
 
     const currentSchedule = await ctx.db.get(currentPart.scheduleId)
     if (!currentSchedule) throw new Error("Sessao atual nao encontrada.")
 
-    const targetSchedule = await ctx.db.get(args.targetScheduleId)
+    const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Novo horario selecionado nao encontrado.")
 
     // Checar capacidade no novo horario
     const existingParts = await ctx.db
       .query("scheduleParticipants")
-      .withIndex("by_schedule", (q) => q.eq("scheduleId", args.targetScheduleId))
+      .withIndex("by_schedule", (q) => q.eq("scheduleId", normTargetScheduleId))
       .collect()
 
     const activeParts = existingParts.filter((p) => p.status !== "justified_absence")
@@ -351,15 +408,15 @@ export const rescheduleAppointmentByPatient = mutation({
     }
 
     // 1. Libera o horario antigo
-    await ctx.db.patch(args.participantId, {
+    await ctx.db.patch(normParticipantId, {
       status: "justified_absence",
       notes: `Remarcado pelo aluno para ${targetSchedule.date} as ${targetSchedule.startTime}`,
     })
 
     // 2. Insere no novo horario com o mesmo pacote vinculado (se houver)
     const newPartId = await ctx.db.insert("scheduleParticipants", {
-      scheduleId: args.targetScheduleId,
-      patientId: args.patientId,
+      scheduleId: normTargetScheduleId,
+      patientId: normPatientId,
       status: "scheduled",
       patientPackageId: currentPart.patientPackageId,
       notes: `Remarcacao transferida da sessao de ${currentSchedule.date} as ${currentSchedule.startTime}`,
@@ -378,31 +435,38 @@ export const rescheduleAppointmentByPatient = mutation({
 // 5. Agendar Horario Usando Credito de Reposicao Disponivel
 export const useReplacementCreditToBook = mutation({
   args: {
-    creditId: v.id("replacementCredits"),
-    targetScheduleId: v.id("schedules"),
-    patientId: v.id("patients"),
+    creditId: v.string(),
+    targetScheduleId: v.string(),
+    patientId: v.string(),
   },
   handler: async (ctx, args) => {
-    const credit = await ctx.db.get(args.creditId)
+    const normCreditId = ctx.db.normalizeId("replacementCredits", args.creditId)
+    if (!normCreditId) throw new Error("Credito de reposicao invalido.")
+    const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
+    if (!normTargetScheduleId) throw new Error("Horario nao encontrado.")
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) throw new Error("Paciente nao encontrado.")
+
+    const credit = await ctx.db.get(normCreditId)
     if (!credit || credit.status !== "available") {
       throw new Error("Credito de reposicao invalido ou ja utilizado.")
     }
-    if (credit.patientId !== args.patientId) {
+    if (credit.patientId !== normPatientId) {
       throw new Error("Credito pertence a outro paciente.")
     }
 
     const todayStr = new Date().toISOString().split("T")[0]
     if (credit.expiryDate < todayStr) {
-      await ctx.db.patch(args.creditId, { status: "expired" })
+      await ctx.db.patch(normCreditId, { status: "expired" })
       throw new Error("Este credito de reposicao expirou em " + credit.expiryDate)
     }
 
-    const targetSchedule = await ctx.db.get(args.targetScheduleId)
+    const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Horario nao encontrado.")
 
     const existingParts = await ctx.db
       .query("scheduleParticipants")
-      .withIndex("by_schedule", (q) => q.eq("scheduleId", args.targetScheduleId))
+      .withIndex("by_schedule", (q) => q.eq("scheduleId", normTargetScheduleId))
       .collect()
 
     const activeParts = existingParts.filter((p) => p.status !== "justified_absence")
@@ -411,17 +475,17 @@ export const useReplacementCreditToBook = mutation({
     }
 
     // 1. Marca credito como utilizado
-    await ctx.db.patch(args.creditId, {
+    await ctx.db.patch(normCreditId, {
       status: "used",
-      usedInScheduleId: args.targetScheduleId,
+      usedInScheduleId: normTargetScheduleId,
     })
 
     // 2. Insere aluno como status "replacement"
     const partId = await ctx.db.insert("scheduleParticipants", {
-      scheduleId: args.targetScheduleId,
-      patientId: args.patientId,
+      scheduleId: normTargetScheduleId,
+      patientId: normPatientId,
       status: "replacement",
-      replacementCreditId: args.creditId,
+      replacementCreditId: normCreditId,
       notes: "Agendamento realizado via credito de reposicao",
     })
 
@@ -502,16 +566,19 @@ export const listAvailableSlotsForBooking = query({
 
 // 7. Seed Auxiliar de Demonstracao (Garante agendamentos e vagas para teste imediato)
 export const ensurePatientDemoSchedules = mutation({
-  args: { patientId: v.id("patients") },
+  args: { patientId: v.string() },
   handler: async (ctx, args) => {
-    const patient = await ctx.db.get(args.patientId)
-    if (!patient) throw new Error("Paciente nao encontrado")
+    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
+    if (!normPatientId) return { success: false, message: "Paciente nao encontrado" }
+
+    const patient = await ctx.db.get(normPatientId)
+    if (!patient) return { success: false, message: "Paciente nao encontrado" }
 
     // Checar se o paciente ja tem agendamentos futuros
     const todayStr = new Date().toISOString().split("T")[0]
     const participations = await ctx.db
       .query("scheduleParticipants")
-      .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
       .collect()
 
     let hasFuture = false
@@ -564,7 +631,7 @@ export const ensurePatientDemoSchedules = mutation({
 
     await ctx.db.insert("scheduleParticipants", {
       scheduleId: sch1,
-      patientId: args.patientId,
+      patientId: normPatientId,
       status: "scheduled",
     })
 
@@ -584,7 +651,7 @@ export const ensurePatientDemoSchedules = mutation({
 
     await ctx.db.insert("scheduleParticipants", {
       scheduleId: sch2,
-      patientId: args.patientId,
+      patientId: normPatientId,
       status: "scheduled",
     })
 
@@ -624,7 +691,7 @@ export const ensurePatientDemoSchedules = mutation({
     const existingCredits = await ctx.db
       .query("replacementCredits")
       .withIndex("by_patient_status", (q) =>
-        q.eq("patientId", args.patientId).eq("status", "available")
+        q.eq("patientId", normPatientId).eq("status", "available")
       )
       .collect()
 
@@ -632,7 +699,7 @@ export const ensurePatientDemoSchedules = mutation({
       const expDate = new Date()
       expDate.setDate(expDate.getDate() + 30)
       await ctx.db.insert("replacementCredits", {
-        patientId: args.patientId,
+        patientId: normPatientId,
         originScheduleId: sch1,
         generatedAt: Date.now() - 86400000,
         expiryDate: expDate.toISOString().split("T")[0],

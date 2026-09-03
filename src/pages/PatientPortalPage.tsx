@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,60 @@ const STORAGE_PATIENT_KEY = "altar_patient_portal_id"
 
 type PortalTab = "schedule" | "replacements" | "packages" | "history"
 
-export const PatientPortalPage: React.FC = () => {
+// Error Boundary para capturar falhas de sincronização e permitir auto-recuperação
+class PortalErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn("Portal Error Boundary intercepted:", error)
+    try {
+      localStorage.removeItem(STORAGE_PATIENT_KEY)
+    } catch {}
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 text-foreground flex flex-col items-center justify-center p-6 text-center select-none font-sans">
+          <div className="max-w-md w-full p-6 rounded-3xl bg-card border border-border/80 shadow-2xl space-y-4">
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+              <HeartPulse className="h-7 w-7 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold">Portal Altar Fisio</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Detectamos uma alteração de dados do sistema no seu navegador. Os dados temporários foram limpos para garantir seu acesso seguro.
+            </p>
+            <Button
+              onClick={() => {
+                try {
+                  localStorage.removeItem(STORAGE_PATIENT_KEY)
+                } catch {}
+                window.location.reload()
+              }}
+              className="w-full rounded-2xl h-12 font-bold shadow-lg shadow-primary/20"
+            >
+              Recarregar e Acessar
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+const PatientPortalContent: React.FC = () => {
   // Estado de Autenticação / Identificação do Aluno
   const [patientId, setPatientId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -78,10 +131,21 @@ export const PatientPortalPage: React.FC = () => {
     identifierInput.trim().length >= 8 ? { identifier: identifierInput } : "skip"
   )
 
+  const demoPatients = useQuery(api.patientPortal.getDemoPatients)
+
   const portalData = useQuery(
     api.patientPortal.getPatientPortalData,
     patientId ? { patientId: patientId as any } : "skip"
   )
+
+  // Auto-recuperação: se o ID armazenado no localStorage não existir no banco atual, limpa a sessão
+  useEffect(() => {
+    if (patientId && portalData === null) {
+      localStorage.removeItem(STORAGE_PATIENT_KEY)
+      setPatientId(null)
+      showToast("Sessão anterior não localizada neste ambiente. Por favor, acesse com seus dados.", "error")
+    }
+  }, [patientId, portalData])
 
   const cancelAppointmentMutation = useMutation(api.patientPortal.cancelAppointmentByPatient)
   const rescheduleAppointmentMutation = useMutation(api.patientPortal.rescheduleAppointmentByPatient)
@@ -371,65 +435,43 @@ export const PatientPortalPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-1.5">
-              <button
-                onClick={() => handleLogin("jx772fg7z4s8mw4henm5vnv1cn8dmmjj")}
-                className="w-full p-2.5 rounded-2xl bg-card border border-border/70 hover:border-primary/50 text-left flex items-center justify-between group transition-all"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-xs">
-                    JM
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                      Juliana Mendes da Silva
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Pilates 2x/Semana (2 sessões restantes)
-                    </div>
-                  </div>
+              {demoPatients && demoPatients.length > 0 ? (
+                demoPatients.map((dp, idx) => {
+                  const colorClasses = [
+                    "bg-emerald-500/10 text-emerald-600",
+                    "bg-blue-500/10 text-blue-600",
+                    "bg-purple-500/10 text-purple-600",
+                    "bg-amber-500/10 text-amber-600",
+                  ]
+                  const color = colorClasses[idx % colorClasses.length]
+                  return (
+                    <button
+                      key={dp._id}
+                      onClick={() => handleLogin(dp._id)}
+                      className="w-full p-2.5 rounded-2xl bg-card border border-border/70 hover:border-primary/50 text-left flex items-center justify-between group transition-all"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`h-8 w-8 rounded-xl ${color} flex items-center justify-center font-bold text-xs`}>
+                          {dp.initials}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                            {dp.name}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {dp.planDesc}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                    </button>
+                  )
+                })
+              ) : (
+                <div className="py-2.5 text-center text-xs text-muted-foreground">
+                  Carregando alunos disponíveis...
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-              </button>
-
-              <button
-                onClick={() => handleLogin("jx7b2tsayssvcy698fzv22fa498dnfee")}
-                className="w-full p-2.5 rounded-2xl bg-card border border-border/70 hover:border-primary/50 text-left flex items-center justify-between group transition-all"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-xs">
-                    RC
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                      Roberto Fernandes Costa
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Fisioterapia Avançada (6 sessões restantes)
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-              </button>
-
-              <button
-                onClick={() => handleLogin("jx7f78cbfr425k3qcpw9w0fcw58dn8gy")}
-                className="w-full p-2.5 rounded-2xl bg-card border border-border/70 hover:border-primary/50 text-left flex items-center justify-between group transition-all"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center font-bold text-xs">
-                    BN
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                      Beatriz Nogueira Lopes
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Pilates 3x/Semana (1 sessão restante)
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-              </button>
+              )}
             </div>
           </div>
         </div>
@@ -1302,5 +1344,13 @@ export const PatientPortalPage: React.FC = () => {
         </div>
       )}
     </div>
+  )
+}
+
+export const PatientPortalPage: React.FC = () => {
+  return (
+    <PortalErrorBoundary>
+      <PatientPortalContent />
+    </PortalErrorBoundary>
   )
 }

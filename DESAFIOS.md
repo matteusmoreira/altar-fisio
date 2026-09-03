@@ -157,3 +157,14 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-02] Regeneração de Tipos Convex (npx convex codegen) Pré-Build
 - **Ponto de Fricção**: Ao modificar tabelas ou campos em `convex/schema.ts`, executar diretamente `npm run build` (`tsc -b`) falha com `error TS2353: Object literal may only specify known properties` porque o arquivo `convex/_generated/dataModel.d.ts` ainda contém as tipagens antigas em cache.
 - **Mitigação / Regra**: Sempre executar `npx convex codegen` antes de builds de produção ou typechecks após alterações estruturais de schema. O codegen sincroniza os tipos estáticos instantaneamente.
+
+---
+
+### [2026-09-02] IDs Convex entre Ambientes (Local vs Produção), Cache de Cliente e Error Boundaries
+- **Ponto de Fricção**: Os IDs de documentos gerados pelo Convex contêm codificação interna da tabela específica daquele deployment (prefixo `j...` no banco de dev local e `k...` na nuvem de produção). O uso estrito do validador `v.id("tableName")` em queries/mutations públicas ou portais que recebem IDs do `localStorage` ou parâmetros de URL dispara `ArgumentValidationError: Found ID "..." from table '...', which does not match validator v.id(...)` caso o cliente possua um ID em cache de outro ambiente ou ID de aluno deletado. Como o React 19 / Convex `useQuery` propaga erros de servidor como exceções síncronas de renderização, isso crashava a aplicação inteira em tela branca. Além disso, browsers modernos emitem aviso de depreciação para `<meta name="apple-mobile-web-app-capable">` se desacompanhado de `<meta name="mobile-web-app-capable">`.
+- **Mitigação / Regra**:
+  1. Em endpoints de portais com entrada livre ou cache de cliente, utilizar `v.string()` nos validadores e normalizar o ID via `ctx.db.normalizeId("tableName", args.id)`. Caso o ID pertença a outro deployment ou formato inválido, `normalizeId` retorna `null` de forma silenciosa e segura sem estourar `ArgumentValidationError`.
+  2. Nunca hardcodar IDs de documentos em atalhos ou botões de demonstração; consultar dinamicamente com queries (`getDemoPatients`) para obter os IDs reais do banco de dados ativo.
+  3. No frontend, adicionar auto-recuperação de sessão: se `patientId` estiver presente no estado mas a query de dados retornar `null`, limpar automaticamente o `localStorage` e resetar a tela de login.
+  4. Envolver páginas do portal com `ErrorBoundary` dedicado que expurga dados corrompidos do `localStorage` e exibe opção de recarregamento suave.
+  5. Incluir `<meta name="mobile-web-app-capable" content="yes" />` no `index.html`.
