@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select-native"
+import { formatDateTimeBR } from "@/lib/dateUtils"
 import {
   ShieldAlert,
   ShieldCheck,
@@ -149,17 +151,18 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [] })
             />
           </div>
 
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-border bg-background text-xs text-foreground"
-          >
-            <option value="all">Todas as Ações</option>
-            <option value="view">Visualizações de Prontuário</option>
-            <option value="pdf">Emissões de Documentos / PDF</option>
-            <option value="consent">Consentimentos LGPD</option>
-            <option value="soap">Evoluções SOAP</option>
-          </select>
+          <div className="w-48 sm:w-56">
+            <Select
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+            >
+              <option value="all">Todas as Ações</option>
+              <option value="view">Visualizações de Prontuário</option>
+              <option value="pdf">Emissões de Documentos / PDF</option>
+              <option value="consent">Consentimentos LGPD</option>
+              <option value="soap">Evoluções SOAP</option>
+            </Select>
+          </div>
         </div>
       </CardHeader>
 
@@ -188,7 +191,7 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [] })
                     <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3 text-muted-foreground" />
-                        {new Date(log.timestamp).toLocaleString("pt-BR")}
+                        {formatDateTimeBR(log.timestamp)}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 font-medium whitespace-nowrap">

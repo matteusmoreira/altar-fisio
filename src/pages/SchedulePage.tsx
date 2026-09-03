@@ -6,6 +6,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select-native"
+import {
+  formatDateBR,
+  formatDateWithWeekdayBR,
+  addDaysSafe,
+  getTodayDateString,
+} from "@/lib/dateUtils"
 import {
   Dialog,
   DialogContent,
@@ -81,9 +88,7 @@ export const SchedulePage: React.FC = () => {
 
   // Navegação de datas
   const handleDateChange = (offset: number) => {
-    const current = new Date(selectedDate)
-    current.setDate(current.getDate() + offset)
-    setSelectedDate(current.toISOString().split("T")[0])
+    setSelectedDate(addDaysSafe(selectedDate, offset))
   }
 
   // Filtragem
@@ -211,7 +216,7 @@ export const SchedulePage: React.FC = () => {
       if (res.generatedCredit) {
         setFeedback(
           res.expiryDate
-            ? `Desmarcado! Crédito de reposição gerado com validade até ${res.expiryDate}.`
+            ? `Desmarcado! Crédito de reposição gerado com validade até ${formatDateBR(res.expiryDate)}.`
             : "Desmarcado! Crédito de reposição gerado com sucesso."
         )
       } else {
@@ -259,84 +264,93 @@ export const SchedulePage: React.FC = () => {
       </div>
 
       {/* Barra de Navegação de Data & Filtros */}
-      <Card className="p-4 bg-card shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <Card className="p-4 bg-card shadow-xs border-border">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Seletor do Dia */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => handleDateChange(-1)}
-              className="h-9 w-9"
-              title="Dia anterior"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => handleDateChange(-1)}
+                className="h-10 w-10 rounded-xl"
+                title="Dia anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-input bg-background">
-              <CalendarIcon className="h-4 w-4 text-primary" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-sm font-medium text-foreground focus:outline-none cursor-pointer"
-              />
+              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl border border-input bg-background shadow-2xs">
+                <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-sm font-semibold text-foreground focus:outline-none cursor-pointer"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => handleDateChange(1)}
+                className="h-10 w-10 rounded-xl"
+                title="Próximo dia"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
 
             <Button
               variant="outline"
-              size="icon"
-              onClick={() => handleDateChange(1)}
-              className="h-9 w-9"
-              title="Próximo dia"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <Button
-              variant="ghost"
               size="sm"
-              onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
-              className="text-xs text-primary font-medium"
+              onClick={() => setSelectedDate(getTodayDateString())}
+              className="h-10 px-3.5 rounded-xl text-xs font-semibold text-primary border-primary/30 hover:bg-primary/5"
             >
               Hoje
             </Button>
+
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border text-xs text-foreground">
+              <span className="font-semibold">{formatDateWithWeekdayBR(selectedDate)}</span>
+              <span className="text-primary font-bold">({formatDateBR(selectedDate)})</span>
+            </div>
           </div>
 
           {/* Filtros de Sala e Profissional */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Filter className="h-3.5 w-3.5" />
-              <span>Filtrar:</span>
+              <span className="font-medium">Filtrar:</span>
             </div>
 
             {/* Filtro por Sala */}
-            <select
-              value={selectedRoom}
-              onChange={(e) => setSelectedRoom(e.target.value)}
-              className="h-9 rounded-lg border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="all">Todas as Salas</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-44">
+              <Select
+                value={selectedRoom}
+                onChange={(e) => setSelectedRoom(e.target.value)}
+              >
+                <option value="all">Todas as Salas</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
 
             {/* Filtro por Profissional */}
-            <select
-              value={selectedProf}
-              onChange={(e) => setSelectedProf(e.target.value)}
-              className="h-9 rounded-lg border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="all">Todos os Profissionais</option>
-              {professionals.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-48">
+              <Select
+                value={selectedProf}
+                onChange={(e) => setSelectedProf(e.target.value)}
+              >
+                <option value="all">Todos os Profissionais</option>
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         </div>
       </Card>
@@ -554,10 +568,10 @@ export const SchedulePage: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleCreate}>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 {creationMode === "recurring" ? (
                   <Repeat className="h-5 w-5 text-primary" />
                 ) : (
@@ -569,7 +583,7 @@ export const SchedulePage: React.FC = () => {
                     : "Novo Agendamento / Horário"}
                 </span>
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs text-muted-foreground">
                 Configure os detalhes do horário, ambiente, profissional e recorrência da grade.
               </DialogDescription>
             </DialogHeader>
@@ -606,15 +620,15 @@ export const SchedulePage: React.FC = () => {
 
             {/* Alerta de Conflito / Erro */}
             {modalError && (
-              <div className="mt-3 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-fade-in">
+              <div className="mt-3 p-3.5 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-fade-in">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span className="font-medium">{modalError}</span>
               </div>
             )}
 
-            <div className="space-y-3.5 py-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-medium text-foreground">Título / Descrição</label>
+            <div className="space-y-4 py-4 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Título / Descrição</label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -626,76 +640,72 @@ export const SchedulePage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Tipo de Atendimento</label>
-                  <select
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Tipo de Atendimento</label>
+                  <Select
                     value={type}
                     onChange={(e) => setType(e.target.value as any)}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="turma">Turma (Grupo)</option>
                     <option value="individual">Individual</option>
-                  </select>
+                  </Select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Especialidade</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Especialidade</label>
+                  <Select
                     value={specialty}
                     onChange={(e) => setSpecialty(e.target.value as any)}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="pilates">Pilates</option>
                     <option value="fisioterapia">Fisioterapia</option>
                     <option value="rpg">RPG</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Sala / Ambiente</label>
-                  <select
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Sala / Ambiente</label>
+                  <Select
                     value={roomId}
                     onChange={(e) => setRoomId(e.target.value)}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     {rooms.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name} (Capacidade: {r.capacity})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Profissional Responsável</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Profissional Responsável</label>
+                  <Select
                     value={profId}
                     onChange={(e) => setProfId(e.target.value)}
-                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     {professionals.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Horário Início</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Horário Início</label>
                   <Input
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="font-medium text-foreground">Horário Término</label>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Horário Término</label>
                   <Input
                     type="time"
                     value={endTime}
@@ -757,39 +767,38 @@ export const SchedulePage: React.FC = () => {
                       />
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="font-medium text-foreground text-[11px]">
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground/85 mb-1.5">
                         Duração da Série
                       </label>
-                      <select
+                      <Select
                         value={weeksCount}
                         onChange={(e) => setWeeksCount(Number(e.target.value))}
-                        className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                       >
                         <option value={4}>4 semanas (1 mês)</option>
                         <option value={8}>8 semanas (2 meses)</option>
                         <option value={12}>12 semanas (3 meses)</option>
                         <option value={24}>24 semanas (6 meses)</option>
-                      </select>
+                      </Select>
                     </div>
                   </div>
 
                   {/* Seleção de Alunos Fixos da Turma */}
-                  <div className="space-y-1.5 pt-1 border-t border-primary/10">
-                    <label className="font-medium text-foreground text-[11px] flex items-center justify-between">
+                  <div className="space-y-2 pt-2 border-t border-primary/10">
+                    <label className="text-xs font-semibold text-foreground/90 flex items-center justify-between">
                       <span>Matricular Alunos Fixos na Série ({enrolledPatients.length}):</span>
-                      <span className="text-[10px] text-muted-foreground">Opcional</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Opcional</span>
                     </label>
-                    <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
+                    <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
                       {patients.map((p) => {
                         const isEnrolled = enrolledPatients.includes(p.id)
                         return (
                           <div
                             key={p.id}
                             onClick={() => toggleEnrolledPatient(p.id)}
-                            className={`p-2 rounded-lg text-xs cursor-pointer flex items-center justify-between border transition-all ${
+                            className={`p-2.5 rounded-xl text-xs cursor-pointer flex items-center justify-between border transition-all ${
                               isEnrolled
-                                ? "bg-primary/10 border-primary text-foreground font-semibold"
+                                ? "bg-primary/10 border-primary text-foreground font-semibold shadow-2xs"
                                 : "bg-background border-border/70 text-muted-foreground hover:bg-muted/40"
                             }`}
                           >
@@ -804,16 +813,17 @@ export const SchedulePage: React.FC = () => {
               )}
             </div>
 
-            <DialogFooter className="mt-2">
+            <DialogFooter className="gap-2 pt-2 sm:space-x-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsNewModalOpen(false)}
                 disabled={isSubmitting}
+                className="h-10 px-5 rounded-xl font-semibold"
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="h-10 px-6 rounded-xl font-semibold shadow-xs">
                 {isSubmitting
                   ? "Processando..."
                   : creationMode === "recurring"
@@ -853,7 +863,7 @@ export const SchedulePage: React.FC = () => {
                         {cancelTarget.participant.patientName}
                       </span>
                       <span className="text-muted-foreground">
-                        {cancelTarget.schedule.date} às {cancelTarget.schedule.startTime}
+                        {formatDateBR(cancelTarget.schedule.date)} às {cancelTarget.schedule.startTime}
                       </span>
                     </div>
                     <p className="text-muted-foreground text-[11px]">

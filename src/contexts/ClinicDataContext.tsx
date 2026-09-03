@@ -26,28 +26,46 @@ import type {
   CommissionAttendance,
   AuditLog,
   PatientConsent,
+  ClinicalOverviewItem,
+  ClinicalReport,
 } from "@/types"
+import {
+  getTodayDateString,
+  getCurrentMonthString,
+  formatDateBR,
+  addDaysSafe,
+  formatDateISOInTz,
+} from "@/lib/dateUtils"
+
 
 
 interface ClinicDataContextType {
   // Rooms
   rooms: Room[]
-  addRoom: (room: Omit<Room, "id">) => void
+  addRoom: (room: Omit<Room, "id">) => Promise<string | void>
+  updateRoom: (id: string, data: Partial<Room>) => Promise<void>
+  deleteRoom: (id: string) => Promise<void>
 
   // Professionals
   professionals: Professional[]
-  addProfessional: (prof: Omit<Professional, "id">) => void
+  addProfessional: (prof: Omit<Professional, "id">) => Promise<string | void>
+  updateProfessional: (id: string, data: Partial<Professional>) => Promise<void>
+  deleteProfessional: (id: string) => Promise<void>
 
   // Patients
   patients: Patient[]
   addPatient: (patient: Omit<Patient, "id" | "createdAt" | "active">) => string
   updatePatient: (id: string, data: Partial<Patient>) => void
+  deletePatient: (id: string) => Promise<void>
 
   // Schedules & Classes
   schedules: Schedule[]
   selectedDate: string
   setSelectedDate: (date: string) => void
   addSchedule: (schedule: Omit<Schedule, "id" | "participants">) => Promise<void>
+  updateSchedule: (id: string, data: Partial<Schedule>) => Promise<void>
+  deleteSchedule: (id: string, deleteSeries?: boolean) => Promise<void>
+  removeParticipantFromSchedule: (scheduleId: string, participantRecordId: string) => Promise<void>
   addRecurringScheduleSeries: (params: RecurringScheduleSeriesParams) => Promise<{
     createdCount: number
     skippedCount: number
@@ -88,19 +106,36 @@ interface ClinicDataContextType {
   replacementCredits: ReplacementCredit[]
 
   // Clinical
+  clinicalOverview: ClinicalOverviewItem[]
   getClinicalRecord: (patientId: string) => ClinicalRecord | undefined
   saveClinicalRecord: (record: ClinicalRecord) => void
+  deleteClinicalRecord: (patientId: string) => Promise<void>
   getEvolutions: (patientId: string) => ClinicalEvolution[]
   addSoapEvolution: (evolution: Omit<ClinicalEvolution, "id" | "timestamp">) => void
+  updateSoapEvolution: (id: string, data: Partial<ClinicalEvolution>) => Promise<void>
+  deleteSoapEvolution: (id: string, patientId: string) => Promise<void>
   uploadPosturalPhoto: (patientId: string, viewType: PosturalViewType, file: File) => Promise<string>
   getPainEvolutionHistory: (patientId: string) => PainDataPoint[]
 
-  // Commercial Packages & Plans
+  // Clinical Reports / Laudos
+  clinicalReports: ClinicalReport[]
+  getClinicalReports: (patientId: string) => ClinicalReport[]
+  createClinicalReport: (report: Omit<ClinicalReport, "id" | "createdAt" | "updatedAt">) => Promise<ClinicalReport>
+  updateClinicalReport: (id: string, data: Partial<ClinicalReport>) => Promise<void>
+  deleteClinicalReport: (id: string) => Promise<void>
+
+  // Services & Commercial Packages
   services: ClinicService[]
+  addService: (service: Omit<ClinicService, "id" | "packageCount">) => Promise<string>
+  updateService: (id: string, data: Partial<ClinicService>) => Promise<void>
+  deleteService: (id: string) => Promise<{ success: boolean; id: string }>
   packages: ClinicPackage[]
   patientPackages: PatientPackage[]
   renewalAlerts: RenewalAlert[]
   addPackage: (pkg: Omit<ClinicPackage, "id">) => Promise<string>
+  updatePackage: (id: string, data: Partial<ClinicPackage>) => Promise<void>
+  deletePackage: (id: string) => Promise<void>
+  deletePatientPackage: (id: string) => Promise<void>
   assignPackageToPatient: (params: {
     patientId: string
     packageId: string
@@ -108,6 +143,7 @@ interface ClinicDataContextType {
     paymentMethod: "pix" | "dinheiro" | "cartao_debito" | "cartao_credito" | "transferencia"
     isPaid: boolean
   }) => Promise<any>
+
 
   // Finance & Commissions
   transactions: FinancialTransaction[]
@@ -301,7 +337,7 @@ const initialPatients: Patient[] = [
   },
 ]
 
-const todayStr = new Date().toISOString().split("T")[0]
+const todayStr = getTodayDateString()
 
 const initialSchedules: Schedule[] = [
   {
@@ -612,6 +648,53 @@ const initialClinicalRecords: Record<string, ClinicalRecord> = {
   },
 }
 
+const initialClinicalReports: ClinicalReport[] = [
+  {
+    id: "rep-1",
+    patientId: "p1", // Juliana Mendes da Silva
+    professionalId: "prof1", // Dr. Marcelo Henrique
+    type: "report",
+    title: "Laudo de Evolução Clínica e Biomecânica",
+    date: "2026-08-25",
+    chiefComplaint: "Lombalgia e tensão postural com irradiação glútea à direita.",
+    painScaleEva: 4,
+    painLocation: "Lombar / Região Paravertebral",
+    hpi: "Quadro com início insidioso relacionado a posturas sentadas mantidas no trabalho de escritório.",
+    clinicalGoals: "Estabilização segmentar vertebral e melhora da flexibilidade global da cadeia posterior.",
+    diagnosticCid: "M54.5 (Dor lombar baixa)",
+    evolutionSummary: "Paciente compareceu a 12 sessões com boa assiduidade e aderência ao tratamento. Apresenta evolução postural satisfatória, redução do padrão álgico de EVA 7 para 4 e melhora de mobilidade lombo-pélvica.",
+    conclusion: "Paciente evolui com excelente resposta ao protocolo de Pilates Clínico e Estabilização Segmentar. Recomenda-se manutenção da frequência de 2x semanais por mais 8 semanas para consolidação do ganho biomecânico.",
+    customNotes: "Acompanhamento fisioterapêutico sem intercorrências.",
+    documentHash: "COFFITO-184520F-L98A1B",
+    signedProfessionalName: "Dr. Marcelo Henrique",
+    crefito: "CREFITO-3 / 184520-F",
+    createdAt: 1724580000000,
+    updatedAt: 1724580000000,
+  },
+  {
+    id: "rep-2",
+    patientId: "p2", // Roberto Silva
+    professionalId: "prof1",
+    type: "report",
+    title: "Laudo Fisioterapêutico de Reabilitação Pós-Operatória",
+    date: "2026-08-20",
+    chiefComplaint: "Pós-operatório de reconstrução de LCA no joelho direito (6ª semana).",
+    painScaleEva: 3,
+    painLocation: "Face anterior do joelho direito",
+    hpi: "Pós-operatório tardio com queixa de rigidez matinal e leve edema peripatelar após sobrecarga.",
+    clinicalGoals: "Extensão completa de joelho (0°), flexão acima de 125°, fortalecimento de quadríceps e estabilização proprioceptiva.",
+    diagnosticCid: "M23.2 (Transtorno interno do menisco/ligamento)",
+    evolutionSummary: "Completou 16 sessões com foco em cinesioterapia ativa-assistida, mobilização patelar e treino sensório-motor.",
+    conclusion: "Paciente apto a progredir para fase de fortalecimento excêntrico e trote leve em esteira. Liberado para atividades funcionais de baixo impacto.",
+    customNotes: "Boa tolerância a cargas.",
+    documentHash: "COFFITO-184520F-K87Z3C",
+    signedProfessionalName: "Dr. Marcelo Henrique",
+    crefito: "CREFITO-3 / 184520-F",
+    createdAt: 1724148000000,
+    updatedAt: 1724148000000,
+  },
+]
+
 const ClinicDataContext = createContext<ClinicDataContextType | undefined>(undefined)
 
 export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -654,6 +737,11 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return s ? JSON.parse(s) : initialEvolutions
   })
 
+  const [clinicalReports, setClinicalReports] = useState<ClinicalReport[]>(() => {
+    const s = localStorage.getItem("altar_clinical_reports")
+    return s ? JSON.parse(s) : initialClinicalReports
+  })
+
   const [transactions, setTransactions] = useState<FinancialTransaction[]>(() => {
     const s = localStorage.getItem("altar_transactions")
     return s ? JSON.parse(s) : initialTransactions
@@ -678,7 +766,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   })
 
   const [selectedFinanceMonth, setSelectedFinanceMonth] = useState<string>(() =>
-    new Date().toISOString().slice(0, 7)
+    getCurrentMonthString()
   )
 
   // Convex Real-Time Queries (WebSocket)
@@ -693,23 +781,44 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const convexClosedCommissions = useQuery(api.finance.listCommissions)
   const convexLogs = useQuery(api.notifications.listLogs, {})
   const convexNotificationStats = useQuery(api.notifications.getNotificationStats, {})
-  const convexServices = useQuery(api.packages.listServices)
+  const convexServices = useQuery(api.services.listServices)
   const convexPackages = useQuery(api.packages.listPackages)
   const convexPatientPackages = useQuery(api.packages.listPatientPackages, {})
   const convexRenewalAlerts = useQuery(api.packages.listRenewalAlerts)
   const convexAuditLogs = useQuery(api.audit.listAuditLogs, {})
+  const convexClinicalOverview = useQuery(api.clinical.listAllClinicalOverview)
+  const convexClinicalReports = useQuery(api.clinical.listClinicalReports, {})
 
   // Convex Mutations
+  const createServiceMutation = useMutation(api.services.createService)
+  const updateServiceMutation = useMutation(api.services.updateService)
+  const deleteServiceMutation = useMutation(api.services.deleteService)
+  const createRoomMutation = useMutation(api.rooms.createRoom)
+  const updateRoomMutation = useMutation(api.rooms.updateRoom)
+  const deleteRoomMutation = useMutation(api.rooms.deleteRoom)
+  const createProfessionalMutation = useMutation(api.professionals.createProfessional)
+  const updateProfessionalMutation = useMutation(api.professionals.updateProfessional)
+  const deleteProfessionalMutation = useMutation(api.professionals.deleteProfessional)
   const createPatientMutation = useMutation(api.patients.createPatient)
   const updatePatientMutation = useMutation(api.patients.updatePatient)
+  const deletePatientMutation = useMutation(api.patients.deletePatient)
   const createScheduleMutation = useMutation(api.schedules.createSchedule)
+  const updateScheduleMutation = useMutation(api.schedules.updateSchedule)
+  const deleteScheduleMutation = useMutation(api.schedules.deleteSchedule)
+  const removeParticipantMutation = useMutation(api.schedules.removeParticipantFromSchedule)
   const createRecurringScheduleMutation = useMutation(api.schedules.createRecurringScheduleSeries)
   const checkInMutation = useMutation(api.schedules.checkInParticipant)
   const cancelWithReplacementMutation = useMutation(api.schedules.cancelWithReplacementCredit)
   const addParticipantMutation = useMutation(api.schedules.addParticipantToSchedule)
   const saveClinicalRecordMutation = useMutation(api.clinical.saveClinicalRecord)
+  const deleteClinicalRecordMutation = useMutation(api.clinical.deleteClinicalRecord)
   const addSoapEvolutionMutation = useMutation(api.clinical.addSoapEvolution)
+  const updateSoapEvolutionMutation = useMutation(api.clinical.updateSoapEvolution)
+  const deleteSoapEvolutionMutation = useMutation(api.clinical.deleteSoapEvolution)
   const generateUploadUrlMutation = useMutation(api.clinical.generateUploadUrl)
+  const createClinicalReportMutation = useMutation(api.clinical.createClinicalReport)
+  const updateClinicalReportMutation = useMutation(api.clinical.updateClinicalReport)
+  const deleteClinicalReportMutation = useMutation(api.clinical.deleteClinicalReport)
   const createTransactionMutation = useMutation(api.finance.createTransaction)
   const updateTransactionMutation = useMutation(api.finance.updateTransaction)
   const markTransactionPaidMutation = useMutation(api.finance.markTransactionPaid)
@@ -719,9 +828,13 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const sendWhatsAppMutation = useMutation(api.notifications.sendWhatsAppReminder)
   const sendEmailReceiptMutation = useMutation(api.notifications.sendEmailReceipt)
   const createPackageMutation = useMutation(api.packages.createPackage)
+  const updatePackageMutation = useMutation(api.packages.updatePackage)
+  const deletePackageMutation = useMutation(api.packages.deletePackage)
+  const deletePatientPackageMutation = useMutation(api.packages.deletePatientPackage)
   const assignPackageMutation = useMutation(api.packages.assignPackageToPatient)
   const logAuditMutation = useMutation(api.audit.logAction)
   const saveConsentMutation = useMutation(api.consents.saveConsent)
+
 
 
   // Convex Actions (Disparos I/O Assíncronos Omnicanal)
@@ -732,6 +845,13 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const testUazapiAction = useAction(api.notifications.testUazapiConnectionAction)
   const testResendAction = useAction(api.notifications.testResendConnectionAction)
 
+  const [packages, setPackages] = useState<ClinicPackage[]>(() => {
+    const s = localStorage.getItem("altar_packages")
+    return s ? JSON.parse(s) : []
+  })
+
+  const [patientPackages, setPatientPackages] = useState<PatientPackage[]>([])
+
   // Dados Derivados Reativos em Tempo Real (Convex com Fallback Otimista)
   const effectiveServices = (convexServices && convexServices.length > 0)
     ? convexServices.map((s: any) => ({ ...s, id: s._id }))
@@ -739,15 +859,17 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const effectivePackages = (convexPackages && convexPackages.length > 0)
     ? convexPackages.map((p: any) => ({ ...p, id: p._id }))
-    : []
+    : packages
 
   const effectivePatientPackages = (convexPatientPackages && convexPatientPackages.length > 0)
     ? convexPatientPackages.map((pp: any) => ({ ...pp, id: pp._id }))
-    : []
+    : patientPackages
+
 
   const effectiveRenewalAlerts = (convexRenewalAlerts && convexRenewalAlerts.length > 0)
     ? convexRenewalAlerts.map((ra: any) => ({ ...ra, id: ra._id }))
     : []
+
 
   const effectiveAuditLogs: AuditLog[] = (convexAuditLogs && convexAuditLogs.length > 0)
     ? convexAuditLogs.map((l: any) => ({
@@ -812,7 +934,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const effectiveCashFlow: CashFlowSummary = convexCashFlow || (() => {
     let inc = 0, exp = 0, pInc = 0, pExp = 0, ovInc = 0, ovExp = 0
-    const today = new Date().toISOString().split("T")[0]
+    const today = getTodayDateString()
     for (const t of effectiveTransactions) {
       if (t.status === "cancelled") continue
       if (t.status === "paid") {
@@ -901,6 +1023,43 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     ? convexClosedCommissions.map((c: any) => ({ ...c, id: c._id }))
     : []
 
+  const effectiveClinicalOverview: ClinicalOverviewItem[] = (convexClinicalOverview && convexClinicalOverview.length > 0)
+    ? convexClinicalOverview.map((item: any) => ({
+        ...item,
+        patientId: item.patientId,
+      }))
+    : effectivePatients.map((p) => {
+        const record = clinicalRecords[p.id]
+        const evos = (evolutions || []).filter((e) => e.patientId === p.id).sort((a, b) => b.timestamp - a.timestamp)
+        const lastEvo = evos[0]
+        return {
+          patientId: p.id,
+          patientName: p.name,
+          patientCpf: p.documentCpf,
+          patientPhone: p.phone,
+          patientBirthDate: p.birthDate,
+          patientActive: p.active,
+          hasRecord: !!record,
+          chiefComplaint: record?.chiefComplaint || "",
+          painScaleEva: record?.painScaleEva ?? null,
+          clinicalGoals: record?.clinicalGoals || "",
+          posturalNotes: record?.posturalNotes || "",
+          evolutionsCount: evos.length,
+          lastEvolutionDate: lastEvo?.date || null,
+          lastTechnique: lastEvo?.techniqueCategory || null,
+          lastPainAfter: lastEvo?.painScaleAfter ?? null,
+          updatedAt: record?.updatedAt ?? (lastEvo?.timestamp ?? p.createdAt),
+        }
+      })
+
+  const effectiveClinicalReports: ClinicalReport[] =
+    convexClinicalReports && convexClinicalReports.length > 0
+      ? convexClinicalReports.map((r: any) => ({
+          ...r,
+          id: r._id,
+        }))
+      : clinicalReports
+
   // Sync state to LocalStorage (Persistência Resiliente / Offline Fallback)
   useEffect(() => {
     localStorage.setItem("altar_rooms", JSON.stringify(rooms))
@@ -911,6 +1070,9 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     localStorage.setItem("altar_patients", JSON.stringify(patients))
   }, [patients])
+  useEffect(() => {
+    localStorage.setItem("altar_packages", JSON.stringify(packages))
+  }, [packages])
   useEffect(() => {
     localStorage.setItem("altar_schedules", JSON.stringify(schedules))
   }, [schedules])
@@ -924,20 +1086,110 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     localStorage.setItem("altar_evolutions", JSON.stringify(evolutions))
   }, [evolutions])
   useEffect(() => {
+    localStorage.setItem("altar_clinical_reports", JSON.stringify(clinicalReports))
+  }, [clinicalReports])
+  useEffect(() => {
     localStorage.setItem("altar_transactions", JSON.stringify(transactions))
   }, [transactions])
   useEffect(() => {
     localStorage.setItem("altar_notification_logs", JSON.stringify(notificationLogs))
   }, [notificationLogs])
 
-  const addRoom = (roomData: Omit<Room, "id">) => {
-    const newRoom: Room = { ...roomData, id: `r_${Date.now()}` }
+
+  const addRoom = async (roomData: Omit<Room, "id">) => {
+    let createdId = `r_${Date.now()}`
+    try {
+      const cid = await createRoomMutation({
+        name: roomData.name,
+        type: roomData.type,
+        capacity: roomData.capacity,
+        color: roomData.color,
+        description: roomData.description,
+        isActive: roomData.isActive,
+      })
+      if (cid) createdId = cid
+    } catch (err) {
+      console.warn("Convex sync warning (addRoom):", err)
+    }
+    const newRoom: Room = { ...roomData, id: createdId }
     setRooms((prev) => [...prev, newRoom])
+    return createdId
   }
 
-  const addProfessional = (profData: Omit<Professional, "id">) => {
-    const newProf: Professional = { ...profData, id: `prof_${Date.now()}` }
+  const updateRoom = async (id: string, data: Partial<Room>) => {
+    setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...data } : r)))
+    try {
+      await updateRoomMutation({
+        id: id as any,
+        name: data.name || "",
+        type: (data.type || "pilates_aparelhos") as any,
+        capacity: data.capacity || 4,
+        color: data.color || "#10b981",
+        isActive: data.isActive ?? true,
+        description: data.description,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (updateRoom):", err)
+    }
+  }
+
+  const deleteRoom = async (id: string) => {
+    setRooms((prev) => prev.filter((r) => r.id !== id))
+    try {
+      await deleteRoomMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deleteRoom):", err)
+    }
+  }
+
+  const addProfessional = async (profData: Omit<Professional, "id">) => {
+    let createdId = `prof_${Date.now()}`
+    try {
+      const cid = await createProfessionalMutation({
+        name: profData.name,
+        email: profData.email,
+        phone: profData.phone,
+        crefito: profData.crefito,
+        specialties: profData.specialties as string[],
+        commissionType: profData.commissionType,
+        commissionValue: profData.commissionValue,
+        active: profData.active,
+      })
+      if (cid) createdId = cid
+    } catch (err) {
+      console.warn("Convex sync warning (addProfessional):", err)
+    }
+    const newProf: Professional = { ...profData, id: createdId }
     setProfessionals((prev) => [...prev, newProf])
+    return createdId
+  }
+
+  const updateProfessional = async (id: string, data: Partial<Professional>) => {
+    setProfessionals((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
+    try {
+      await updateProfessionalMutation({
+        id: id as any,
+        name: data.name || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        crefito: data.crefito || "",
+        specialties: (data.specialties || []) as string[],
+        commissionType: data.commissionType || "percentage",
+        commissionValue: data.commissionValue ?? 40,
+        active: data.active ?? true,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (updateProfessional):", err)
+    }
+  }
+
+  const deleteProfessional = async (id: string) => {
+    setProfessionals((prev) => prev.filter((p) => p.id !== id))
+    try {
+      await deleteProfessionalMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deleteProfessional):", err)
+    }
   }
 
   const addPatient = (patientData: Omit<Patient, "id" | "createdAt" | "active">) => {
@@ -991,6 +1243,16 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Ignora erro se for ID local mock
     }
   }
+
+  const deletePatient = async (id: string) => {
+    setPatients((prev) => prev.filter((p) => p.id !== id))
+    try {
+      await deletePatientMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deletePatient):", err)
+    }
+  }
+
 
   const addSchedule = async (scheduleData: Omit<Schedule, "id" | "participants">) => {
     // Validação de conflito e persistência via Convex
@@ -1052,6 +1314,66 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }
 
+  const updateSchedule = async (id: string, data: Partial<Schedule>) => {
+    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)))
+    try {
+      await updateScheduleMutation({
+        id: id as any,
+        title: data.title,
+        specialty: data.specialty,
+        roomId: data.roomId as any,
+        professionalId: data.professionalId as any,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        maxCapacity: data.maxCapacity,
+        notes: data.notes,
+        status: data.status,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (updateSchedule):", err)
+    }
+  }
+
+  const deleteSchedule = async (id: string, deleteSeries?: boolean) => {
+    setSchedules((prev) => {
+      const target = prev.find((s) => s.id === id)
+      if (deleteSeries && target?.recurringGroupId) {
+        return prev.filter((s) => s.recurringGroupId !== target.recurringGroupId)
+      }
+      return prev.filter((s) => s.id !== id)
+    })
+    try {
+      await deleteScheduleMutation({
+        id: id as any,
+        deleteSeries: !!deleteSeries,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (deleteSchedule):", err)
+    }
+  }
+
+  const removeParticipantFromSchedule = async (scheduleId: string, participantRecordId: string) => {
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.id !== scheduleId) return s
+        return {
+          ...s,
+          participants: s.participants.filter((p) => p.id !== participantRecordId),
+        }
+      })
+    )
+    try {
+      await removeParticipantMutation({
+        scheduleId: scheduleId as any,
+        participantRecordId: participantRecordId as any,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (removeParticipantFromSchedule):", err)
+    }
+  }
+
+
   const checkIn = async (
     scheduleId: string,
     participantId: string,
@@ -1090,7 +1412,38 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }
 
+  const addService = async (serviceData: Omit<ClinicService, "id" | "packageCount">): Promise<string> => {
+    const id = await createServiceMutation({
+      name: serviceData.name,
+      modality: serviceData.modality,
+      specialty: serviceData.specialty,
+      durationMinutes: serviceData.durationMinutes,
+      defaultPrice: serviceData.defaultPrice,
+      description: serviceData.description,
+      active: serviceData.active,
+    })
+    return id
+  }
+
+  const updateService = async (id: string, data: Partial<ClinicService>): Promise<void> => {
+    await updateServiceMutation({
+      id: id as any,
+      name: data.name,
+      modality: data.modality,
+      specialty: data.specialty,
+      durationMinutes: data.durationMinutes,
+      defaultPrice: data.defaultPrice,
+      description: data.description,
+      active: data.active,
+    })
+  }
+
+  const deleteService = async (id: string): Promise<{ success: boolean; id: string }> => {
+    return await deleteServiceMutation({ id: id as any })
+  }
+
   const addPackage = async (pkgData: Omit<ClinicPackage, "id">): Promise<string> => {
+    let createdId = `pkg_${Date.now()}`
     try {
       const id = await createPackageMutation({
         name: pkgData.name,
@@ -1101,12 +1454,67 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         description: pkgData.description,
         active: pkgData.active,
       })
-      return id
+      if (id) createdId = id
     } catch (err: any) {
-      console.error("Erro ao criar pacote comercial:", err)
-      throw err
+      console.warn("Convex sync warning (createPackage):", err)
+    }
+
+    const newPkg: ClinicPackage = {
+      ...pkgData,
+      id: createdId,
+      serviceName: effectiveServices.find((s) => s.id === pkgData.serviceId)?.name || "Serviço",
+      pricePerSession: pkgData.sessionCount > 0 ? Number((pkgData.price / pkgData.sessionCount).toFixed(2)) : 0,
+    }
+    setPackages((prev) => [...prev, newPkg])
+    return createdId
+
+  }
+
+  const updatePackage = async (id: string, data: Partial<ClinicPackage>) => {
+    setPackages((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p
+        const updated = { ...p, ...data }
+        if (updated.sessionCount && updated.sessionCount > 0 && updated.price) {
+          updated.pricePerSession = Number((updated.price / updated.sessionCount).toFixed(2))
+        }
+        return updated
+      })
+    )
+    try {
+      await updatePackageMutation({
+        id: id as any,
+        name: data.name,
+        serviceId: data.serviceId as any,
+        sessionCount: data.sessionCount,
+        validityDays: data.validityDays,
+        price: data.price,
+        description: data.description,
+        active: data.active,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (updatePackage):", err)
     }
   }
+
+  const deletePackage = async (id: string) => {
+    setPackages((prev) => prev.filter((p) => p.id !== id))
+    try {
+      await deletePackageMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deletePackage):", err)
+    }
+  }
+
+  const deletePatientPackage = async (id: string) => {
+    setPatientPackages((prev) => prev.filter((pp) => pp.id !== id))
+    try {
+      await deletePatientPackageMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deletePatientPackage):", err)
+    }
+  }
+
 
   const assignPackageToPatient = async (params: {
     patientId: string
@@ -1180,9 +1588,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return res
     } catch (err) {
       // Fallback local caso offline
-      const expiry = new Date()
-      expiry.setDate(expiry.getDate() + 30)
-      const expiryStr = expiry.toISOString().split("T")[0]
+      const expiryStr = addDaysSafe(schedule?.date || todayStr, 30)
 
       if (participant) {
         const credit: ReplacementCredit = {
@@ -1314,6 +1720,19 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch {}
   }
 
+  const deleteClinicalRecord = async (patientId: string) => {
+    setClinicalRecords((prev) => {
+      const copy = { ...prev }
+      delete copy[patientId]
+      return copy
+    })
+    try {
+      await deleteClinicalRecordMutation({ patientId: patientId as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deleteClinicalRecord):", err)
+    }
+  }
+
   const getEvolutions = (patientId: string) => {
     return evolutions.filter((e) => e.patientId === patientId)
   }
@@ -1342,6 +1761,34 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }).catch((err) => console.warn("Convex sync warning (addSoapEvolution):", err))
     } catch {}
   }
+
+  const updateSoapEvolution = async (id: string, data: Partial<ClinicalEvolution>) => {
+    setEvolutions((prev) => prev.map((e) => (e.id === id ? { ...e, ...data } : e)))
+    try {
+      await updateSoapEvolutionMutation({
+        id: id as any,
+        subjective: data.subjective || "",
+        objective: data.objective || "",
+        assessment: data.assessment || "",
+        plan: data.plan || "",
+        painScaleAfter: data.painScaleAfter,
+        techniqueCategory: data.techniqueCategory,
+        date: data.date,
+      })
+    } catch (err) {
+      console.warn("Convex sync warning (updateSoapEvolution):", err)
+    }
+  }
+
+  const deleteSoapEvolution = async (id: string, patientId: string) => {
+    setEvolutions((prev) => prev.filter((e) => e.id !== id))
+    try {
+      await deleteSoapEvolutionMutation({ id: id as any })
+    } catch (err) {
+      console.warn("Convex sync warning (deleteSoapEvolution):", err)
+    }
+  }
+
 
   const uploadPosturalPhoto = async (
     patientId: string,
@@ -1444,7 +1891,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     if (record) {
       points.push({
-        date: new Date(record.updatedAt).toISOString().split("T")[0],
+        date: formatDateISOInTz(record.updatedAt),
         painLevel: record.painScaleEva,
         sessionLabel: "Avaliação Inicial (Anamnese)",
         professionalName: "Equipe Altar Fisio",
@@ -1463,6 +1910,121 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     })
 
     return points
+  }
+
+  const getClinicalReports = (patientId: string) => {
+    return effectiveClinicalReports
+      .filter((r) => r.patientId === patientId)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  }
+
+  const createClinicalReport = async (
+    reportData: Omit<ClinicalReport, "id" | "createdAt" | "updatedAt">
+  ): Promise<ClinicalReport> => {
+    const prof = professionals.find((p) => p.id === reportData.professionalId) || professionals[0]
+    const cleanCrefito = prof?.crefito ? prof.crefito.replace(/[^A-Za-z0-9]/g, "") : "CREFITO"
+    const now = Date.now()
+    const documentHash =
+      reportData.documentHash || `COFFITO-${cleanCrefito}-${now.toString(36).toUpperCase()}`
+
+    const newReport: ClinicalReport = {
+      ...reportData,
+      id: `rep_${now}`,
+      documentHash,
+      signedProfessionalName: prof?.name || "Dr. Marcelo Henrique",
+      crefito: prof?.crefito || "CREFITO-3 / 184520-F",
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    setClinicalReports((prev) => [newReport, ...prev])
+
+    try {
+      if (createClinicalReportMutation) {
+        await createClinicalReportMutation({
+          patientId: reportData.patientId as any,
+          professionalId: reportData.professionalId as any,
+          type: reportData.type,
+          title: reportData.title,
+          date: reportData.date,
+          chiefComplaint: reportData.chiefComplaint,
+          painScaleEva: reportData.painScaleEva,
+          painLocation: reportData.painLocation,
+          hpi: reportData.hpi,
+          clinicalGoals: reportData.clinicalGoals,
+          diagnosticCid: reportData.diagnosticCid,
+          evolutionSummary: reportData.evolutionSummary,
+          conclusion: reportData.conclusion,
+          customNotes: reportData.customNotes,
+          purpose: reportData.purpose,
+          receiptAmount: reportData.receiptAmount,
+          sessionsCount: reportData.sessionsCount,
+          paymentMethod: reportData.paymentMethod,
+          serviceDescription: reportData.serviceDescription,
+        })
+      }
+    } catch (err) {
+      console.warn("Convex sync warning (createClinicalReport):", err)
+    }
+
+    return newReport
+  }
+
+  const updateClinicalReport = async (id: string, data: Partial<ClinicalReport>) => {
+    setClinicalReports((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const updated = { ...r, ...data, updatedAt: Date.now() }
+          if (data.professionalId && data.professionalId !== r.professionalId) {
+            const prof = professionals.find((p) => p.id === data.professionalId)
+            if (prof) {
+              updated.signedProfessionalName = prof.name
+              updated.crefito = prof.crefito
+            }
+          }
+          return updated
+        }
+        return r
+      })
+    )
+
+    try {
+      if (updateClinicalReportMutation) {
+        await updateClinicalReportMutation({
+          id: id as any,
+          title: data.title,
+          date: data.date,
+          chiefComplaint: data.chiefComplaint,
+          painScaleEva: data.painScaleEva,
+          painLocation: data.painLocation,
+          hpi: data.hpi,
+          clinicalGoals: data.clinicalGoals,
+          diagnosticCid: data.diagnosticCid,
+          evolutionSummary: data.evolutionSummary,
+          conclusion: data.conclusion,
+          customNotes: data.customNotes,
+          purpose: data.purpose,
+          receiptAmount: data.receiptAmount,
+          sessionsCount: data.sessionsCount,
+          paymentMethod: data.paymentMethod,
+          serviceDescription: data.serviceDescription,
+          professionalId: data.professionalId as any,
+        })
+      }
+    } catch (err) {
+      console.warn("Convex sync warning (updateClinicalReport):", err)
+    }
+  }
+
+  const deleteClinicalReport = async (id: string) => {
+    setClinicalReports((prev) => prev.filter((r) => r.id !== id))
+    try {
+      if (deleteClinicalReportMutation) {
+        await deleteClinicalReportMutation({ id: id as any })
+      }
+    } catch (err) {
+      console.warn("Convex sync warning (deleteClinicalReport):", err)
+    }
   }
 
   const addTransaction = async (txData: Omit<FinancialTransaction, "id">) => {
@@ -1587,7 +2149,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     schedule: Schedule,
     participant: { name: string; phone: string }
   ) => {
-    const message = `Olá, *${participant.name}*! 👋\n\nEste é um lembrete do seu atendimento na *Altar Fisio*:\n\n📅 *Data:* ${schedule.date}\n⏰ *Horário:* ${schedule.startTime}\n👨‍⚕️ *Profissional:* ${schedule.professionalName}\n📍 *Local:* ${schedule.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
+    const message = `Olá, *${participant.name}*! 👋\n\nEste é um lembrete do seu atendimento na *Altar Fisio*:\n\n📅 *Data:* ${formatDateBR(schedule.date)}\n⏰ *Horário:* ${schedule.startTime}\n👨‍⚕️ *Profissional:* ${schedule.professionalName}\n📍 *Local:* ${schedule.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
 
     const newLog: NotificationLog = {
       id: `log_${Date.now()}`,
@@ -1765,26 +2327,43 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       value={{
         rooms: effectiveRooms,
         addRoom,
+        updateRoom,
+        deleteRoom,
         professionals: effectiveProfessionals,
         addProfessional,
+        updateProfessional,
+        deleteProfessional,
         patients: effectivePatients,
         addPatient,
         updatePatient,
+        deletePatient,
         schedules: effectiveSchedules,
         selectedDate,
         setSelectedDate,
         addSchedule,
+        updateSchedule,
+        deleteSchedule,
+        removeParticipantFromSchedule,
         addRecurringScheduleSeries,
         checkIn,
         cancelWithReplacement,
         addParticipantToClass,
         replacementCredits: effectiveReplacementCredits,
+        clinicalOverview: effectiveClinicalOverview,
         getClinicalRecord,
         saveClinicalRecord,
+        deleteClinicalRecord,
         getEvolutions,
         addSoapEvolution,
+        updateSoapEvolution,
+        deleteSoapEvolution,
         uploadPosturalPhoto,
         getPainEvolutionHistory,
+        clinicalReports: effectiveClinicalReports,
+        getClinicalReports,
+        createClinicalReport,
+        updateClinicalReport,
+        deleteClinicalReport,
         transactions: effectiveTransactions,
         cashFlowSummary: effectiveCashFlow,
         commissionReports: effectiveCommissionReports,
@@ -1806,16 +2385,23 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         testUazapiConnection,
         testResendConnection,
         services: effectiveServices,
+        addService,
+        updateService,
+        deleteService,
         packages: effectivePackages,
         patientPackages: effectivePatientPackages,
         renewalAlerts: effectiveRenewalAlerts,
         addPackage,
+        updatePackage,
+        deletePackage,
+        deletePatientPackage,
         assignPackageToPatient,
         auditLogs: effectiveAuditLogs,
         logAuditAction,
         savePatientConsent,
       }}
     >
+
 
       {children}
     </ClinicDataContext.Provider>

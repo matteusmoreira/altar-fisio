@@ -4,6 +4,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select-native"
+import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -54,7 +56,7 @@ export const FinancePage: React.FC = () => {
     sendWhatsAppReceipt,
   } = useClinicData()
 
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = getTodayDateString()
 
   // Tabs & Filters
   const [activeTab, setActiveTab] = useState<string>("cashflow")
@@ -459,18 +461,19 @@ export const FinancePage: React.FC = () => {
                 />
               </div>
 
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground focus:outline-none"
-              >
-                <option value="all">Todas Categorias</option>
-                {availableCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <div className="w-44 sm:w-52">
+                <Select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  <option value="all">Todas Categorias</option>
+                  {availableCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -542,8 +545,8 @@ export const FinancePage: React.FC = () => {
                           </div>
 
                           <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                            <span>Vencimento: <strong>{t.dueDate}</strong></span>
-                            {t.paymentDate && <span>• Pago em: <strong>{t.paymentDate}</strong></span>}
+                            <span>Vencimento: <strong>{formatDateBR(t.dueDate)}</strong></span>
+                            {t.paymentDate && <span>• Pago em: <strong>{formatDateBR(t.paymentDate)}</strong></span>}
                             <span>• Forma: <strong>{t.paymentMethod.toUpperCase()}</strong></span>
                             {t.patientName && <span>• Paciente: <strong className="text-foreground">{t.patientName}</strong></span>}
                             {t.professionalName && <span>• Profissional: <strong className="text-foreground">{t.professionalName}</strong></span>}
@@ -817,7 +820,7 @@ export const FinancePage: React.FC = () => {
                                 {report.attendancesList.map((att, idx) => (
                                   <tr key={`${att.scheduleId}_${idx}`} className="hover:bg-muted/10">
                                     <td className="p-2.5 font-medium text-foreground">
-                                      {att.date} • {att.startTime}
+                                      {formatDateBR(att.date)} • {att.startTime}
                                     </td>
                                     <td className="p-2.5 text-foreground">{att.patientName}</td>
                                     <td className="p-2.5 text-muted-foreground">
@@ -905,20 +908,23 @@ export const FinancePage: React.FC = () => {
       {/* MODAL 1: NOVO LANÇAMENTO FINANCEIRO                                       */}
       {/* ========================================================================= */}
       <Dialog open={isNewTxModalOpen} onOpenChange={setIsNewTxModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <form onSubmit={handleCreateTx}>
-            <DialogHeader>
-              <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
-              <DialogDescription>
-                Cadastre uma receita de paciente ou despesa de operação da Altar Fisio.
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                <Plus className="h-5 w-5 text-primary" />
+                <span>Novo Lançamento Financeiro</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Cadastre uma receita de paciente ou despesa operacional da Altar Fisio.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 py-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Tipo de Movimentação</label>
-                  <select
+            <div className="space-y-4 py-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Tipo de Movimentação *</label>
+                  <Select
                     value={newType}
                     onChange={(e) => {
                       const t = e.target.value as "income" | "expense"
@@ -929,19 +935,17 @@ export const FinancePage: React.FC = () => {
                         setNewCategory("Manutenção Aparelhos")
                       }
                     }}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="income">Entrada (Receita)</option>
                     <option value="expense">Saída (Despesa)</option>
-                  </select>
+                  </Select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Categoria</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Categoria *</label>
+                  <Select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     {newType === "income" ? (
                       <>
@@ -962,34 +966,32 @@ export const FinancePage: React.FC = () => {
                         <option value="Outras Despesas">Outras Despesas</option>
                       </>
                     )}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               {newType === "income" && (
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Paciente Associado</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Paciente Associado</label>
+                  <Select
                     value={newPatientId}
                     onChange={(e) => setNewPatientId(e.target.value)}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     {patients.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name} ({p.documentCpf})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
 
               {newType === "expense" && newCategory === "Repasse de Comissão" && (
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Profissional Beneficiário</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Profissional Beneficiário</label>
+                  <Select
                     value={newProfessionalId}
                     onChange={(e) => setNewProfessionalId(e.target.value)}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="">Selecione o profissional...</option>
                     {professionals.map((pr) => (
@@ -997,78 +999,76 @@ export const FinancePage: React.FC = () => {
                         {pr.name} ({pr.crefito})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
 
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Descrição</label>
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Descrição *</label>
                 <Input
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Ex: Mensalidade Pilates 2x/Semana..."
-                  className="h-9 text-xs"
+                  required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Valor (R$)</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Valor (R$) *</label>
                   <Input
                     type="number"
                     step="0.01"
                     value={newAmount}
                     onChange={(e) => setNewAmount(Number(e.target.value))}
-                    className="h-9 text-xs font-semibold"
+                    required
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Forma de Pagamento</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Forma de Pagamento</label>
+                  <Select
                     value={newPaymentMethod}
                     onChange={(e) => setNewPaymentMethod(e.target.value as any)}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="pix">PIX (Chave Clínica)</option>
                     <option value="dinheiro">Dinheiro Físico</option>
                     <option value="cartao_credito">Cartão de Crédito</option>
                     <option value="cartao_debito">Cartão de Débito</option>
                     <option value="transferencia">Transferência Bancária</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Data de Vencimento</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Data de Vencimento *</label>
                   <Input
                     type="date"
                     value={newDueDate}
                     onChange={(e) => setNewDueDate(e.target.value)}
-                    className="h-9 text-xs"
+                    required
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-foreground">Status Inicial</label>
-                  <select
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Status Inicial</label>
+                  <Select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value as any)}
-                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                   >
                     <option value="paid">Pago / Liquidado Imediatamente</option>
                     <option value="pending">Pendente a Receber / Pagar</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsNewTxModalOpen(false)} className="text-xs">
+            <DialogFooter className="gap-2 pt-2 sm:space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsNewTxModalOpen(false)} className="h-10 px-5 rounded-xl font-semibold">
                 Cancelar
               </Button>
-              <Button type="submit" className="text-xs">
+              <Button type="submit" className="h-10 px-6 rounded-xl font-semibold shadow-xs">
                 Salvar Lançamento
               </Button>
             </DialogFooter>
@@ -1080,17 +1080,20 @@ export const FinancePage: React.FC = () => {
       {/* MODAL 2: BAIXA RÁPIDA DE PAGAMENTO                                        */}
       {/* ========================================================================= */}
       <Dialog open={isSettleModalOpen} onOpenChange={setIsSettleModalOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Baixa de Pagamento</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <span>Baixa de Pagamento</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
               Confirme a liquidação do lançamento no caixa da Altar Fisio.
             </DialogDescription>
           </DialogHeader>
 
           {settleTx && (
-            <div className="space-y-3 py-2 text-xs">
-              <div className="p-3 bg-muted/30 rounded-xl border border-border space-y-1">
+            <div className="space-y-4 py-3 text-sm">
+              <div className="p-3.5 bg-muted/30 rounded-xl border border-border space-y-1">
                 <p className="font-bold text-foreground text-sm">{settleTx.description}</p>
                 <div className="flex justify-between items-center pt-1 text-xs">
                   <span className="text-muted-foreground">Valor:</span>
@@ -1100,38 +1103,37 @@ export const FinancePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Data Efetiva da Liquidação</label>
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Data Efetiva da Liquidação *</label>
                 <Input
                   type="date"
                   value={settleDate}
                   onChange={(e) => setSettleDate(e.target.value)}
-                  className="h-9 text-xs"
+                  required
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Forma de Pagamento Recebida</label>
-                <select
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Forma de Pagamento Recebida</label>
+                <Select
                   value={settleMethod}
                   onChange={(e) => setSettleMethod(e.target.value as any)}
-                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                 >
                   <option value="pix">PIX</option>
                   <option value="dinheiro">Dinheiro Físico</option>
                   <option value="cartao_debito">Cartão de Débito</option>
                   <option value="cartao_credito">Cartão de Crédito</option>
                   <option value="transferencia">Transferência Bancária</option>
-                </select>
+                </Select>
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSettleModalOpen(false)} className="text-xs">
+          <DialogFooter className="gap-2 pt-2 sm:space-x-2">
+            <Button variant="outline" onClick={() => setIsSettleModalOpen(false)} className="h-10 px-5 rounded-xl font-semibold">
               Cancelar
             </Button>
-            <Button onClick={handleConfirmSettle} className="text-xs">
+            <Button onClick={handleConfirmSettle} className="h-10 px-6 rounded-xl font-semibold shadow-xs">
               Confirmar Baixa
             </Button>
           </DialogFooter>
@@ -1184,7 +1186,7 @@ export const FinancePage: React.FC = () => {
                     Referente a: <strong>{receiptTx.description}</strong> ({receiptTx.category}).
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Forma de pagamento: <strong>{receiptTx.paymentMethod.toUpperCase()}</strong> • Data: <strong>{receiptTx.paymentDate || receiptTx.dueDate}</strong>
+                    Forma de pagamento: <strong>{receiptTx.paymentMethod.toUpperCase()}</strong> • Data: <strong>{formatDateBR(receiptTx.paymentDate || receiptTx.dueDate)}</strong>
                   </p>
                 </div>
 
@@ -1294,38 +1296,36 @@ export const FinancePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Status do Pagamento no Caixa</label>
-                <select
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Status do Pagamento no Caixa</label>
+                <Select
                   value={closingPaymentStatus}
                   onChange={(e) => setClosingPaymentStatus(e.target.value as any)}
-                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs"
                 >
                   <option value="paid">Pago Imediatamente (Transferência/PIX realizado)</option>
                   <option value="pending">Agendado no Contas a Pagar (Pendente de liquidação)</option>
-                </select>
-                <p className="text-[10px] text-muted-foreground">
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
                   Ao aprovar, o sistema lançará automaticamente uma despesa na categoria "Repasse de Comissão".
                 </p>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Observações / Notas do Fechamento</label>
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Observações / Notas do Fechamento</label>
                 <Input
                   value={closingNotes}
                   onChange={(e) => setClosingNotes(e.target.value)}
                   placeholder="Ex: Fechamento regular de Setembro/2026..."
-                  className="h-9 text-xs"
                 />
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCloseModalOpen(false)} className="text-xs">
+          <DialogFooter className="gap-2 pt-2 sm:space-x-2">
+            <Button variant="outline" onClick={() => setIsCloseModalOpen(false)} className="h-10 px-5 rounded-xl font-semibold">
               Cancelar
             </Button>
-            <Button onClick={handleConfirmCloseCommission} className="text-xs">
+            <Button onClick={handleConfirmCloseCommission} className="h-10 px-6 rounded-xl font-semibold shadow-xs">
               Confirmar Fechamento
             </Button>
           </DialogFooter>
@@ -1383,7 +1383,7 @@ export const FinancePage: React.FC = () => {
                     <tbody className="divide-y divide-border">
                       {statementReport.attendancesList.map((att, i) => (
                         <tr key={i}>
-                          <td className="p-2">{att.date} {att.startTime}</td>
+                          <td className="p-2">{formatDateBR(att.date)} {att.startTime}</td>
                           <td className="p-2">{att.patientName}</td>
                           <td className="p-2 text-muted-foreground">{att.modality}</td>
                           <td className="p-2 text-right">R$ {att.sessionRevenue.toFixed(2)}</td>

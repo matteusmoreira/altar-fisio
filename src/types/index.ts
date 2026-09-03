@@ -183,6 +183,26 @@ export interface ClinicalEvolution {
   signatureHash?: string
 }
 
+export interface ClinicalOverviewItem {
+  patientId: string
+  patientName: string
+  patientCpf: string
+  patientPhone: string
+  patientBirthDate: string
+  patientActive: boolean
+  hasRecord: boolean
+  chiefComplaint: string
+  painScaleEva: number | null
+  clinicalGoals: string
+  posturalNotes: string
+  evolutionsCount: number
+  lastEvolutionDate: string | null
+  lastTechnique: string | null
+  lastPainAfter: number | null
+  updatedAt: number
+}
+
+
 export interface FinancialTransaction {
   id: string
   type: "income" | "expense"
@@ -292,6 +312,7 @@ export interface ClinicService {
   defaultPrice: number
   description?: string
   active: boolean
+  packageCount?: number
 }
 
 export interface ClinicPackage {
@@ -358,6 +379,34 @@ export type ClinicalDocumentType =
   | "receipt" // Recibo para reembolso de plano de saúde
   | "tcle" // Termo de consentimento livre e esclarecido
   | "report" // Relatório / Laudo do prontuário
+
+export interface ClinicalReport {
+  id: string
+  patientId: string
+  professionalId: string
+  type: ClinicalDocumentType
+  title: string
+  date: string
+  chiefComplaint?: string
+  painScaleEva?: number
+  painLocation?: string
+  hpi?: string
+  clinicalGoals?: string
+  diagnosticCid?: string
+  evolutionSummary?: string
+  conclusion?: string
+  customNotes?: string
+  purpose?: string
+  receiptAmount?: number
+  sessionsCount?: number
+  paymentMethod?: string
+  serviceDescription?: string
+  documentHash: string
+  signedProfessionalName: string
+  crefito: string
+  createdAt: number
+  updatedAt: number
+}
 
 export interface AuditLog {
   id: string

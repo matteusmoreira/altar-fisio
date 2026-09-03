@@ -344,6 +344,21 @@ export const seedInitialData = mutation({
         active: true,
         createdAt: Date.now(),
       })
+
+      // 4. Matteus Moreira (Administrador Geral / TI)
+      const saltMatteus = "salt_matteus_altar"
+      const hashMatteus = await hashPassword("@Moreira2026", saltMatteus)
+      await ctx.db.insert("users", {
+        name: "Matteus Moreira",
+        email: "fisio@matteusmoreira.com",
+        role: "admin",
+        passwordHash: hashMatteus,
+        salt: saltMatteus,
+        professionalId: marceloId,
+        avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+        active: true,
+        createdAt: Date.now(),
+      })
     }
 
     return { success: true, message: "Dados iniciais da Altar Fisio semeados com sucesso!" }

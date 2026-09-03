@@ -696,3 +696,94 @@ export const listAvailableTurmasForReplacement = query({
   },
 })
 
+// Edição de Agendamento ou Turma
+export const updateSchedule = mutation({
+  args: {
+    id: v.id("schedules"),
+    title: v.optional(v.string()),
+    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    roomId: v.optional(v.id("rooms")),
+    professionalId: v.optional(v.id("professionals")),
+    date: v.optional(v.string()),
+    startTime: v.optional(v.string()),
+    endTime: v.optional(v.string()),
+    maxCapacity: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal("scheduled"),
+        v.literal("in_progress"),
+        v.literal("completed"),
+        v.literal("cancelled")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...data } = args
+    const existing = await ctx.db.get(id)
+    if (!existing) throw new Error("Agendamento não encontrado")
+
+    await ctx.db.patch(id, data)
+    return id
+  },
+})
+
+// Exclusão de Agendamento ou Turma (com suporte a exclusão em série)
+export const deleteSchedule = mutation({
+  args: {
+    id: v.id("schedules"),
+    deleteSeries: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const schedule = await ctx.db.get(args.id)
+    if (!schedule) throw new Error("Agendamento não encontrado")
+
+    if (args.deleteSeries && schedule.recurringGroupId) {
+      const series = await ctx.db
+        .query("schedules")
+        .withIndex("by_recurring_group", (q) => q.eq("recurringGroupId", schedule.recurringGroupId!))
+        .collect()
+
+      for (const s of series) {
+        // Remover participantes
+        const parts = await ctx.db
+          .query("scheduleParticipants")
+          .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
+          .collect()
+        for (const p of parts) {
+          await ctx.db.delete(p._id)
+        }
+        await ctx.db.delete(s._id)
+      }
+      return { success: true, count: series.length }
+    } else {
+      // Excluir apenas este agendamento e seus participantes
+      const parts = await ctx.db
+        .query("scheduleParticipants")
+        .withIndex("by_schedule", (q) => q.eq("scheduleId", args.id))
+        .collect()
+      for (const p of parts) {
+        await ctx.db.delete(p._id)
+      }
+      await ctx.db.delete(args.id)
+      return { success: true, count: 1 }
+    }
+  },
+})
+
+// Remoção / Desmatrícula de participante da turma
+export const removeParticipantFromSchedule = mutation({
+  args: {
+    scheduleId: v.id("schedules"),
+    participantRecordId: v.id("scheduleParticipants"),
+  },
+  handler: async (ctx, args) => {
+    const part = await ctx.db.get(args.participantRecordId)
+    if (!part) throw new Error("Participante não encontrado")
+
+    await ctx.db.delete(args.participantRecordId)
+    return { success: true }
+  },
+})
+
+

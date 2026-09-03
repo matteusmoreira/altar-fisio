@@ -69,3 +69,17 @@ export const updatePatient = mutation({
     return id
   },
 })
+
+export const deletePatient = mutation({
+  args: {
+    id: v.id("patients"),
+  },
+  handler: async (ctx, args) => {
+    const patient = await ctx.db.get(args.id)
+    if (!patient) throw new Error("Paciente não encontrado")
+
+    await ctx.db.delete(args.id)
+    return { success: true, id: args.id }
+  },
+})
+

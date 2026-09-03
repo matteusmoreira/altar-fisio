@@ -1,8 +1,9 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useTheme } from "@/contexts/ThemeContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { ThemeCustomizerModal } from "./ThemeCustomizerModal"
 import { ProfileSwitcherModal } from "./ProfileSwitcherModal"
+import { formatDateBR, formatTimeBR, CLINIC_TIMEZONE } from "@/lib/dateUtils"
 import {
   Calendar,
   Users,
@@ -25,17 +26,26 @@ import {
   Stethoscope,
   UserCheck,
   LogOut,
+  Clock,
+  ExternalLink,
+  CalendarCheck,
+  Sparkles,
 } from "lucide-react"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 
 export type NavSection =
   | "dashboard"
   | "schedule"
+  | "online_bookings"
   | "classes"
   | "patients"
+  | "professionals"
   | "clinical"
   | "packages"
   | "finance"
   | "notifications"
+  | "booking_builder"
   | "settings"
 
 interface AppLayoutProps {
@@ -57,6 +67,36 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [themeModalOpen, setThemeModalOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
 
+  const [currentTimeInfo, setCurrentTimeInfo] = useState(() => {
+    const now = new Date()
+    const weekdayRaw = now.toLocaleDateString("pt-BR", { timeZone: CLINIC_TIMEZONE, weekday: "long" })
+    const weekday = weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1)
+    return {
+      dateBR: formatDateBR(now),
+      timeBR: formatTimeBR(now),
+      weekday,
+    }
+  })
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date()
+      const weekdayRaw = now.toLocaleDateString("pt-BR", { timeZone: CLINIC_TIMEZONE, weekday: "long" })
+      const weekday = weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1)
+      setCurrentTimeInfo({
+        dateBR: formatDateBR(now),
+        timeBR: formatTimeBR(now),
+        weekday,
+      })
+    }
+    const timer = setInterval(update, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const publicBookings = useQuery(api.bookingBuilder.listPublicBookings, {})
+  const pendingOnlineCount =
+    publicBookings?.filter((b) => b.status === "pending_approval").length || 0
+
   const allNavItems: Array<{
     id: NavSection
     label: string
@@ -67,14 +107,25 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   }> = [
     { id: "dashboard", label: "Visão Geral", shortLabel: "Início", icon: Activity, group: "atendimento" },
     { id: "schedule", label: "Agenda & Marcações", shortLabel: "Agenda", icon: Calendar, badge: "Hoje", group: "atendimento" },
+    {
+      id: "online_bookings",
+      label: "Agendamentos Online",
+      shortLabel: "Online",
+      icon: CalendarCheck,
+      badge: pendingOnlineCount > 0 ? `${pendingOnlineCount} Novo` : undefined,
+      group: "atendimento",
+    },
     { id: "classes", label: "Turmas & Salas", shortLabel: "Turmas", icon: Layers, badge: "Pilates", group: "atendimento" },
     { id: "patients", label: "Pacientes & Alunos", shortLabel: "Pacientes", icon: Users, group: "clinico" },
+    { id: "professionals", label: "Profissionais da Saúde", shortLabel: "Equipe", icon: Stethoscope, badge: "CREFITO", group: "clinico" },
     { id: "clinical", label: "Prontuário & Avaliações", shortLabel: "Prontuário", icon: FileText, badge: "CREFITO", group: "clinico" },
-    { id: "packages", label: "Pacotes & Reposições", shortLabel: "Pacotes", icon: BookmarkCheck, group: "gestao" },
+    { id: "packages", label: "Serviços & Pacotes", shortLabel: "Serviços", icon: BookmarkCheck, group: "gestao" },
     { id: "finance", label: "Financeiro Interno", shortLabel: "Financeiro", icon: DollarSign, group: "gestao" },
     { id: "notifications", label: "Lembretes WhatsApp/Email", shortLabel: "Lembretes", icon: Bell, group: "gestao" },
+    { id: "booking_builder", label: "Construtor de Agendamento", shortLabel: "Construtor", icon: Sparkles, badge: "Online", group: "gestao" },
     { id: "settings", label: "Configurações da Clínica", shortLabel: "Ajustes", icon: Settings, group: "gestao" },
   ]
+
 
   // Filtra itens de acordo com a política RBAC do perfil conectado
   const navItems = allNavItems.filter((item) => canAccessSection(item.id))
@@ -417,6 +468,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Indicador de Hora Mobile */}
+          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-muted/60 border border-border text-[11px]">
+            <Clock className="h-3 w-3 text-primary" />
+            <span className="font-mono font-bold text-foreground">{currentTimeInfo.timeBR}</span>
+          </div>
+
           {/* Botão de Perfil Rápido Mobile */}
           {user && (
             <button
@@ -588,7 +645,46 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MAIN CONTENT AREA                                                         */}
       {/* ========================================================================= */}
-      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-6">
+      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+        {/* Top Header Bar Desktop com Relógio e Data no Fuso America/Sao_Paulo */}
+        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 h-14 border-b border-border bg-card/60 backdrop-blur-md sticky top-0 z-20 transition-all">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-foreground/80 font-bold">{theme.clinicName}</span>
+            <span className="text-muted-foreground/40">/</span>
+            <span className="text-primary font-bold">
+              {navItems.find((n) => n.id === currentSection)?.label || "Visão Geral"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <a
+              href="/agendar"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-all shadow-2xs"
+              title="Abrir página pública de agendamento online"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Página Pública</span>
+              <span>/agendar</span>
+            </a>
+
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-border bg-background/80 shadow-2xs text-xs">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              <span className="font-semibold text-foreground">
+                {currentTimeInfo.weekday}, {currentTimeInfo.dateBR}
+              </span>
+              <span className="text-muted-foreground/60">•</span>
+              <span className="font-mono font-bold text-foreground tracking-wide">
+                {currentTimeInfo.timeBR}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold tracking-tight">
+                Brasília (UTC-3)
+              </span>
+            </div>
+          </div>
+        </header>
+
         {children}
       </main>
 

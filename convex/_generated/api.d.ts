@@ -10,6 +10,7 @@
 
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as bookingBuilder from "../bookingBuilder.js";
 import type * as clinic from "../clinic.js";
 import type * as clinical from "../clinical.js";
 import type * as consents from "../consents.js";
@@ -22,6 +23,8 @@ import type * as professionals from "../professionals.js";
 import type * as rooms from "../rooms.js";
 import type * as schedules from "../schedules.js";
 import type * as seed from "../seed.js";
+import type * as services from "../services.js";
+import type * as whatsapp from "../whatsapp.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +35,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auth: typeof auth;
+  bookingBuilder: typeof bookingBuilder;
   clinic: typeof clinic;
   clinical: typeof clinical;
   consents: typeof consents;
@@ -44,6 +48,8 @@ declare const fullApi: ApiFromModules<{
   rooms: typeof rooms;
   schedules: typeof schedules;
   seed: typeof seed;
+  services: typeof services;
+  whatsapp: typeof whatsapp;
 }>;
 
 /**

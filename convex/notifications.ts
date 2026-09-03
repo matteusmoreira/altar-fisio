@@ -1,6 +1,7 @@
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
+import { sendUazapiInteractiveMessage, normalizeWhatsAppText } from "./whatsapp"
 
 // ============================================================================
 // HELPERS DE DATA E FORMATAÇÃO (Fuso Horário de Brasília UTC-3)
@@ -261,15 +262,19 @@ async function sendWhatsAppDirectHelper(
   }
 ): Promise<{ success: boolean; status: "sent" | "failed"; errorMessage?: string }> {
   const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
+  const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
+  const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
+  const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
   const formattedPhone = formatBrazilianPhone(args.phone)
+  const cleanMessage = normalizeWhatsAppText(args.message)
 
   let status: "sent" | "failed" = "sent"
   let errorMessage: string | undefined = undefined
 
-  if (settings?.uazapiEndpoint && settings?.uazapiToken) {
+  if (baseUrl && effectiveToken) {
     try {
-      const cleanEndpoint = settings.uazapiEndpoint.replace(/\/+$/, "")
-      const url = `${cleanEndpoint}/message/sendText`
+      const cleanEndpoint = baseUrl.replace(/\/+$/, "")
+      const url = `${cleanEndpoint}/send/text`
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 9000)
@@ -278,15 +283,12 @@ async function sendWhatsAppDirectHelper(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${settings.uazapiToken}`,
-          "token": settings.uazapiToken,
-          "apikey": settings.uazapiToken,
+          "token": effectiveToken,
+          "Authorization": `Bearer ${effectiveToken}`,
         },
         body: JSON.stringify({
           number: formattedPhone,
-          message: args.message,
-          text: args.message,
-          instance: settings.uazapiInstanceId,
+          text: cleanMessage,
         }),
         signal: controller.signal,
       })
@@ -303,7 +305,7 @@ async function sendWhatsAppDirectHelper(
         err?.name === "AbortError" ? "Timeout de 9s na conexão com UAZAPI" : err?.message || "Erro desconhecido"
     }
   } else {
-    errorMessage = "[Modo Sandbox] Disparo simulado com sucesso. Token da UAZAPI não configurado."
+    errorMessage = "[Modo Sandbox] Disparo simulado com sucesso. Nenhuma instância conectada com token."
   }
 
   await ctx.runMutation(internal.notifications.logNotificationInternal, {
@@ -311,11 +313,11 @@ async function sendWhatsAppDirectHelper(
     recipientName: args.recipientName,
     recipientContact: args.phone,
     triggerType: args.triggerType,
-    content: args.message,
+    content: cleanMessage,
     status: status,
     scheduleId: args.scheduleId,
     timestamp: Date.now(),
-    errorMessage: status === "failed" ? errorMessage : (settings?.uazapiToken ? undefined : errorMessage),
+    errorMessage: status === "failed" ? errorMessage : (effectiveToken ? undefined : errorMessage),
   })
 
   return {
@@ -442,22 +444,61 @@ export const checkAndSendDailyReminders24hAction = action({
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
     const clinicName = settings?.clinicName || "Altar Fisio"
     const noticeHours = settings?.cancellationNoticeHours || 2
+    const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
+    const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
+    const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
+
+    let template24: any = null
+    if (settings?.activeReminder24hTemplateId) {
+      template24 = await ctx.runQuery(internal.whatsapp.getTemplateByIdInternal, {
+        id: settings.activeReminder24hTemplateId,
+      })
+    }
 
     let sentCount = 0
     let failedCount = 0
 
     for (const c of candidates) {
-      const message = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${c.date}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
+      const vars: Record<string, string> = {
+        paciente: c.patientName,
+        data: c.date,
+        horario: c.startTime,
+        profissional: c.professionalName,
+        sala: c.roomName,
+        clinica: clinicName,
+        regras: `Caso precise desmarcar, avise com no mínimo ${noticeHours}h de antecedência para liberar seu crédito de reposição automático.`,
+        telefone_clinica: settings?.phone || "",
+      }
 
-      const result = await sendWhatsAppDirectHelper(ctx, {
-        recipientName: c.patientName,
-        phone: c.phone,
-        message,
-        triggerType: "lembrete_24h",
-        scheduleId: c.scheduleId,
-      })
+      let success = false
+      if (template24 && effectiveToken) {
+        const res = await sendUazapiInteractiveMessage(baseUrl, effectiveToken, c.phone, template24, vars)
+        success = res.success
 
-      if (result.success) sentCount++
+        await ctx.runMutation(internal.notifications.logNotificationInternal, {
+          channel: "whatsapp_uazapi",
+          recipientName: c.patientName,
+          recipientContact: c.phone,
+          triggerType: "lembrete_24h",
+          content: `[Template: ${template24.title}] Lembrete 24h para ${c.patientName}`,
+          status: success ? "sent" : "failed",
+          scheduleId: c.scheduleId,
+          timestamp: Date.now(),
+          errorMessage: res.error,
+        })
+      } else {
+        const defaultMsg = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${c.date}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
+        const res = await sendWhatsAppDirectHelper(ctx, {
+          recipientName: c.patientName,
+          phone: c.phone,
+          message: defaultMsg,
+          triggerType: "lembrete_24h",
+          scheduleId: c.scheduleId,
+        })
+        success = res.success
+      }
+
+      if (success) sentCount++
       else failedCount++
     }
 
@@ -489,6 +530,16 @@ export const checkAndSendUpcomingReminders2hAction = action({
 
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
     const clinicName = settings?.clinicName || "Altar Fisio"
+    const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
+    const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
+    const baseUrl = settings?.uazapiEndpoint || "https://whatpress.uazapi.com"
+
+    let template2h: any = null
+    if (settings?.activeReminder2hTemplateId) {
+      template2h = await ctx.runQuery(internal.whatsapp.getTemplateByIdInternal, {
+        id: settings.activeReminder2hTemplateId,
+      })
+    }
 
     let sentCount = 0
     let failedCount = 0
@@ -499,17 +550,46 @@ export const checkAndSendUpcomingReminders2hAction = action({
         ? "\n🧦 *Dica:* Lembre-se de trazer suas meias antiderrapantes para a aula de Pilates!"
         : ""
 
-      const message = `Olá, *${c.patientName}*! ⏰\n\nFalta pouco para seu atendimento na *${clinicName}*!\n\n📅 *Hoje às ${c.startTime}*\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}${tip}\n\nAté logo!`
+      const vars: Record<string, string> = {
+        paciente: c.patientName,
+        data: c.date,
+        horario: c.startTime,
+        profissional: c.professionalName,
+        sala: c.roomName,
+        clinica: clinicName,
+        dica: tip,
+        telefone_clinica: settings?.phone || "",
+      }
 
-      const result = await sendWhatsAppDirectHelper(ctx, {
-        recipientName: c.patientName,
-        phone: c.phone,
-        message,
-        triggerType: "lembrete_2h",
-        scheduleId: c.scheduleId,
-      })
+      let success = false
+      if (template2h && effectiveToken) {
+        const res = await sendUazapiInteractiveMessage(baseUrl, effectiveToken, c.phone, template2h, vars)
+        success = res.success
 
-      if (result.success) sentCount++
+        await ctx.runMutation(internal.notifications.logNotificationInternal, {
+          channel: "whatsapp_uazapi",
+          recipientName: c.patientName,
+          recipientContact: c.phone,
+          triggerType: "lembrete_2h",
+          content: `[Template: ${template2h.title}] Lembrete 2h para ${c.patientName}`,
+          status: success ? "sent" : "failed",
+          scheduleId: c.scheduleId,
+          timestamp: Date.now(),
+          errorMessage: res.error,
+        })
+      } else {
+        const defaultMsg = `Olá, *${c.patientName}*! ⏰\n\nFalta pouco para seu atendimento na *${clinicName}*!\n\n📅 *Hoje às ${c.startTime}*\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}${tip}\n\nAté logo!`
+        const res = await sendWhatsAppDirectHelper(ctx, {
+          recipientName: c.patientName,
+          phone: c.phone,
+          message: defaultMsg,
+          triggerType: "lembrete_2h",
+          scheduleId: c.scheduleId,
+        })
+        success = res.success
+      }
+
+      if (success) sentCount++
       else failedCount++
     }
 

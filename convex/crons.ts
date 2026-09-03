@@ -19,4 +19,13 @@ crons.interval(
   {}
 )
 
+// 3. A cada 30 minutos processa campanhas recorrentes do disparador em massa
+crons.interval(
+  "processamento-campanhas-recorrentes",
+  { minutes: 30 },
+  api.whatsapp.processRecurringCampaignsAction,
+  {}
+)
+
 export default crons
+

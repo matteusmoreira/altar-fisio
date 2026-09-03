@@ -19,6 +19,10 @@ export default defineSchema({
     uazapiEndpoint: v.optional(v.string()),
     uazapiToken: v.optional(v.string()),
     uazapiInstanceId: v.optional(v.string()),
+    uazapiAdminToken: v.optional(v.string()),
+    activeWhatsappInstanceToken: v.optional(v.string()),
+    activeReminder24hTemplateId: v.optional(v.id("messageTemplates")),
+    activeReminder2hTemplateId: v.optional(v.id("messageTemplates")),
     resendApiKey: v.optional(v.string()),
     resendFromEmail: v.optional(v.string()),
   }),
@@ -314,5 +318,228 @@ export default defineSchema({
   })
     .index("by_patient", ["patientId"])
     .index("by_patient_term", ["patientId", "termType"]),
+
+  // ==========================================================================
+  // MÓDULO WHATSAPP UAZAPI: INSTÂNCIAS, TEMPLATES & DISPARADOR EM MASSA
+  // ==========================================================================
+
+  // Instâncias Uazapi Conectadas
+  whatsappInstances: defineTable({
+    name: v.string(),
+    instanceId: v.string(), // ID gerado na Uazapi (ex: "rc7dde9bdf259a3")
+    token: v.string(), // Token de autenticação da instância
+    status: v.union(v.literal("connected"), v.literal("disconnected"), v.literal("connecting")),
+    profileName: v.optional(v.string()),
+    profilePicUrl: v.optional(v.string()),
+    ownerNumber: v.optional(v.string()),
+    isDefault: v.boolean(),
+    qrcode: v.optional(v.string()), // Data URI em base64 do QR Code para conexão
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_default", ["isDefault"])
+    .index("by_status", ["status"]),
+
+  // Biblioteca de Templates de Mensagens Interativas
+  messageTemplates: defineTable({
+    title: v.string(),
+    type: v.union(v.literal("text"), v.literal("button"), v.literal("list"), v.literal("carousel")),
+    content: v.string(), // Texto da mensagem com placeholders: {{paciente}}, {{data}}, etc.
+    footerText: v.optional(v.string()),
+    // Botões interativos (type = "button")
+    buttons: v.optional(
+      v.array(
+        v.object({
+          text: v.string(),
+          actionType: v.union(v.literal("reply"), v.literal("url")),
+          payload: v.string(), // id da resposta ou URL completa
+        })
+      )
+    ),
+    // Menu em lista (type = "list")
+    listButtonText: v.optional(v.string()),
+    listSections: v.optional(
+      v.array(
+        v.object({
+          title: v.string(),
+          rows: v.array(
+            v.object({
+              title: v.string(),
+              description: v.optional(v.string()),
+              rowId: v.string(),
+            })
+          ),
+        })
+      )
+    ),
+    // Carrossel de cartões (type = "carousel")
+    carouselCards: v.optional(
+      v.array(
+        v.object({
+          title: v.string(),
+          description: v.string(),
+          imageUrl: v.string(),
+          buttonText: v.string(),
+          buttonType: v.union(v.literal("reply"), v.literal("url")),
+          buttonPayload: v.string(),
+        })
+      )
+    ),
+    category: v.union(
+      v.literal("reminder_24h"),
+      v.literal("reminder_2h"),
+      v.literal("broadcast"),
+      v.literal("custom")
+    ),
+    isSystemDefault: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_category", ["category"]),
+
+  // Campanhas de Disparo em Massa & Recorrência
+  broadcastCampaigns: defineTable({
+    name: v.string(),
+    templateId: v.optional(v.id("messageTemplates")),
+    customText: v.string(),
+    messageType: v.union(v.literal("text"), v.literal("button"), v.literal("list"), v.literal("carousel")),
+    targetPatientIds: v.array(v.id("patients")),
+    recurrence: v.union(
+      v.literal("none"),
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("biweekly"),
+      v.literal("monthly")
+    ),
+    scheduledHour: v.string(), // "HH:mm"
+    scheduledDaysOfWeek: v.optional(v.array(v.number())), // [0 = Domingo, 1 = Segunda, ...]
+    status: v.union(v.literal("active"), v.literal("paused"), v.literal("completed"), v.literal("cancelled")),
+    lastExecutedAt: v.optional(v.number()),
+    nextRunAt: v.optional(v.number()),
+    totalRecipients: v.number(),
+    sentCount: v.number(),
+    failedCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_next_run", ["status", "nextRunAt"]),
+
+  // Laudos Clínicos e Documentos Oficiais Emitidos (CRUD de Laudos)
+  clinicalReports: defineTable({
+    patientId: v.id("patients"),
+    professionalId: v.id("professionals"),
+    type: v.union(
+      v.literal("report"),
+      v.literal("certificate"),
+      v.literal("receipt"),
+      v.literal("tcle")
+    ),
+    title: v.string(), // Ex: "Laudo de Evolução Clínica e Biomecânica"
+    date: v.string(), // YYYY-MM-DD
+    // Conteúdo clínico estruturado do laudo
+    chiefComplaint: v.optional(v.string()),
+    painScaleEva: v.optional(v.number()),
+    painLocation: v.optional(v.string()),
+    hpi: v.optional(v.string()),
+    clinicalGoals: v.optional(v.string()),
+    diagnosticCid: v.optional(v.string()),
+    evolutionSummary: v.optional(v.string()),
+    conclusion: v.optional(v.string()), // Parecer do Fisioterapeuta
+    customNotes: v.optional(v.string()),
+    // Campos auxiliares para outros tipos de documentos
+    purpose: v.optional(v.string()),
+    receiptAmount: v.optional(v.number()),
+    sessionsCount: v.optional(v.number()),
+    paymentMethod: v.optional(v.string()),
+    serviceDescription: v.optional(v.string()),
+    // Rastreabilidade e Assinatura Legal COFFITO
+    documentHash: v.string(),
+    signedProfessionalName: v.string(),
+    crefito: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_patient", ["patientId"])
+    .index("by_professional", ["professionalId"])
+    .index("by_date", ["date"]),
+
+  // Configuração do Construtor de Agendamento Público e Triagem
+  bookingFormConfig: defineTable({
+    requireApproval: v.boolean(),
+    steps: v.array(
+      v.object({
+        id: v.string(),
+        title: v.string(),
+        description: v.optional(v.string()),
+        order: v.number(),
+        type: v.union(
+          v.literal("intake_form"),
+          v.literal("slot_picker"),
+          v.literal("patient_info")
+        ),
+      })
+    ),
+    fields: v.array(
+      v.object({
+        id: v.string(),
+        stepId: v.string(),
+        label: v.string(),
+        type: v.union(
+          v.literal("yes_no"),
+          v.literal("select"),
+          v.literal("text"),
+          v.literal("textarea"),
+          v.literal("multiselect")
+        ),
+        options: v.optional(v.array(v.string())),
+        required: v.boolean(),
+        order: v.number(),
+        placeholder: v.optional(v.string()),
+        helpText: v.optional(v.string()),
+        conditional: v.optional(
+          v.object({
+            dependsOnFieldId: v.string(),
+            equalsValue: v.string(),
+          })
+        ),
+      })
+    ),
+    welcomeTitle: v.optional(v.string()),
+    welcomeMessage: v.optional(v.string()),
+    successMessage: v.optional(v.string()),
+    updatedAt: v.number(),
+  }),
+
+  // Submissões de Agendamentos Públicos Realizados por Pacientes
+  publicBookings: defineTable({
+    patientId: v.id("patients"),
+    scheduleId: v.optional(v.id("schedules")),
+    status: v.union(
+      v.literal("pending_approval"),
+      v.literal("confirmed"),
+      v.literal("rejected")
+    ),
+    serviceId: v.optional(v.id("services")),
+    professionalId: v.optional(v.id("professionals")),
+    roomId: v.optional(v.id("rooms")),
+    date: v.string(),
+    startTime: v.string(),
+    endTime: v.string(),
+    answers: v.array(
+      v.object({
+        questionId: v.string(),
+        questionLabel: v.string(),
+        answer: v.string(),
+      })
+    ),
+    notes: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_patient", ["patientId"])
+    .index("by_date", ["date"]),
 })
+
 

@@ -250,4 +250,58 @@ graph TD
 
 ---
 
+### 🟡 FASE 9: CRUD Completo & Gestão Integral de Prontuários e Evoluções
+**Objetivo**: Disponibilizar operações completas de criação, leitura, edição e exclusão para Salas/Ambientes, Turmas, Profissionais, Pacientes, Pacotes e a Central de Prontuários & Evoluções.
+
+- [ ] **Etapa 9.1: CRUD de Salas/Ambientes e Turmas**
+  - Backend: `rooms.ts` (`createRoom`, `updateRoom`, `deleteRoom`); `schedules.ts` (`updateSchedule`, `deleteSchedule`, `removeParticipantFromSchedule`).
+  - Frontend: Aba dedicada em `ClassesPage.tsx` para gestão física de salas (criar, editar, excluir com cor e capacidade); ações de edição e exclusão de turmas e desmatrícula de alunos.
+- [ ] **Etapa 9.2: CRUD de Profissionais de Saúde**
+  - Backend: `professionals.ts` (`createProfessional`, `updateProfessional`, `deleteProfessional`).
+  - Frontend: Nova página `ProfessionalsPage.tsx` e link no menu lateral para listar, cadastrar, editar e excluir profissionais, com gestão de CREFITO e regras de comissão.
+- [ ] **Etapa 9.3: CRUD de Pacientes e Alunos**
+  - Backend: `patients.ts` (`deletePatient`).
+  - Frontend: Em `PatientsPage.tsx`, adicionar botões de editar e excluir em cada card com modais dedicados e filtros de ativos/inativos.
+- [ ] **Etapa 9.4: CRUD de Pacotes Comerciais**
+  - Backend: `packages.ts` (`deletePackage`, `updatePackage`).
+  - Frontend: Em `PackagesPage.tsx`, adicionar botões de editar e excluir planos comerciais com modal completo de ajuste de preço, sessões e validade.
+- [ ] **Etapa 9.5: Central de Prontuários e Evoluções (Ver, Criar, Editar, Excluir)**
+  - Backend: `clinical.ts` (`listAllClinicalOverview`, `updateSoapEvolution`, `deleteSoapEvolution`, `deleteClinicalRecord`).
+  - Frontend: Em `ClinicalRecordPage.tsx`, implementar visão geral/tabela de prontuários com busca de todos os pacientes e status clínico; botões de **Editar** e **Excluir** em cada evolução SOAP; botões para **Editar** e **Excluir Prontuário**.
+
+---
+
+### 🟢 FASE 10: Rota Pública de Agendamento Online (/agendar) & Construtor Dinâmico de Triagem Clínica
+**Objetivo**: Disponibilizar uma rota pública (`/agendar` e `/agendamento`) com construtor de formulários dinâmico, campos condicionais de plano de saúde/convênio, seleção de horários livres em tempo real e painel de moderação para a clínica.
+
+- [x] **Etapa 10.1: Modelagem e Endpoints Convex**
+  - Tabelas `bookingFormConfig` e `publicBookings` adicionadas ao `schema.ts`.
+  - Módulo `convex/bookingBuilder.ts` com queries e mutations (`getBookingConfig`, `updateBookingConfig`, `resetBookingConfigToDefault`, `listPublicAvailableSlots`, `submitPublicBooking`, `listPublicBookings`, `updatePublicBookingStatus`).
+- [x] **Etapa 10.2: Página Pública do Cliente (`PublicBookingPage.tsx`)**
+  - Layout clean, moderno e profissional com identidade visual dinâmica da clínica (Altar Fisio / Dr. Marcelo).
+  - Stepper interativo com barra de progresso.
+  - Avaliação de regras condicionais em tempo real (ex: "Possui plano de saúde? Sim -> Qual convênio?").
+  - Seletor reativo de datas e horários com cálculo de vagas disponíveis na grade de salas.
+  - Máscaras automáticas de CPF, Celular/WhatsApp e Data de Nascimento.
+  - Tela de sucesso com resumo da sessão, botão "Salvar no Google Agenda", orientações clínicas e link do WhatsApp.
+- [x] **Etapa 10.3: Construtor Dinâmico no Painel Administrativo (`BookingBuilderTab.tsx`)**
+  - Gerenciador de perguntas e regras condicionais (Sim/Não, Select, Texto, Textarea).
+  - Modo Híbrido: Chave de alternância entre "Auto-Confirmação Imediata" e "Requer Aprovação da Recepção".
+  - Central de agendamentos online recebidos com visualização de respostas e botões de aprovar/recusar com 1 clique.
+  - Card de divulgação com links diretos com parâmetros de campanha (`?servico=pilates`, `?servico=fisioterapia`) e botão de copiar link.
+- [x] **Etapa 10.4: Roteamento SPA Desprotegido & Integração de Atalhos**
+  - Interceptação de rota pública em `App.tsx` para `/agendar`, `/agendamento` e `?mode=agendar`.
+  - Integração da aba "Construtor de Agendamento" em `SettingsPage.tsx`.
+  - Botão de atalho "Página Pública /agendar" no header desktop de `AppLayout.tsx`.
+- [x] **Etapa 10.5: Edição Completa no Construtor (Descrição do Título, Título e Descrição de Etapas e Reordenação)**
+  - Edição do subtítulo/descrição explicativa abaixo do título principal no topo da página pública (`welcomeMessage`).
+  - Gerenciador visual de etapas no Construtor com edição modal do Título e Descrição de cada etapa, com botões para reordenar a sequência (Mover para Cima / Mover para Baixo).
+- [x] **Etapa 10.6: Seção Exclusiva no Menu Lateral ("Agendamentos Online") & Exportação em XLS**
+  - Novo item de menu lateral `online_bookings` no grupo de Atendimento com ícone `CalendarCheck` e badge dinâmica de agendamentos pendentes de aprovação.
+  - Nova página completa `OnlineBookingsPage.tsx` com KPIs (total, pendentes, confirmados, recusados), busca, filtros e moderação.
+  - Utilitário `src/lib/exportToXls.ts` com exportação dupla em XLS:
+    - Botão "Exportar em XLS" dentro do modal de "Ver Respostas" (ficha individual completa do paciente).
+    - Botão "Exportar Lista em XLS" no topo da listagem geral com todas as solicitações e colunas dinâmicas de triagem.
+
+
 

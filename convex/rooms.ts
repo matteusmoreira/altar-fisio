@@ -31,6 +31,13 @@ export const updateRoom = mutation({
   args: {
     id: v.id("rooms"),
     name: v.string(),
+    type: v.union(
+      v.literal("pilates_aparelhos"),
+      v.literal("pilates_solo"),
+      v.literal("rpg"),
+      v.literal("fisioterapia"),
+      v.literal("consultorio")
+    ),
     capacity: v.number(),
     color: v.string(),
     isActive: v.boolean(),
@@ -42,3 +49,18 @@ export const updateRoom = mutation({
     return id
   },
 })
+
+export const deleteRoom = mutation({
+  args: {
+    id: v.id("rooms"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.id)
+    if (!room) throw new Error("Sala não encontrada")
+
+    // Remove a sala do banco
+    await ctx.db.delete(args.id)
+    return { success: true, id: args.id }
+  },
+})
+

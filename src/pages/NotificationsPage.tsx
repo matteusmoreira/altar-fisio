@@ -5,6 +5,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select-native"
+import { formatDateBR, formatDateTimeBR, getTodayDateString } from "@/lib/dateUtils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -36,6 +38,9 @@ import {
   FileCheck,
 } from "lucide-react"
 import type { NotificationLog } from "@/types"
+import { WhatsAppInstanceManager } from "@/components/whatsapp/WhatsAppInstanceManager"
+import { MessageTemplateBuilder } from "@/components/whatsapp/MessageTemplateBuilder"
+import { BroadcastSender } from "@/components/whatsapp/BroadcastSender"
 
 export const NotificationsPage: React.FC = () => {
   const {
@@ -75,6 +80,10 @@ export const NotificationsPage: React.FC = () => {
   // Modal de Detalhes do Log
   const [selectedLog, setSelectedLog] = useState<NotificationLog | null>(null)
 
+  // Abas de Navegação Principal
+  const [mainTab, setMainTab] = useState<"whatsapp_hub" | "logs" | "automations">("whatsapp_hub")
+  const [whatsappSubTab, setWhatsappSubTab] = useState<"instances" | "templates" | "broadcast">("instances")
+
   // Filtragem dos Logs
   const filteredLogs = useMemo(() => {
     return notificationLogs.filter((log) => {
@@ -99,7 +108,7 @@ export const NotificationsPage: React.FC = () => {
     const mockSchedule = schedules[0] || {
       title: "Sessão de Pilates Aparelhos",
       startTime: "08:00",
-      date: new Date().toISOString().split("T")[0],
+      date: getTodayDateString(),
       professionalName: "Dra. Camila Duarte",
       roomName: "Studio Pilates Aparelhos",
     }
@@ -210,7 +219,68 @@ export const NotificationsPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* 1. KPIs Consolidados do Motor de Disparos */}
+      
+      {/* Abas Principais do Módulo */}
+      <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
+        <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex flex-wrap gap-1">
+          <TabsTrigger
+            value="whatsapp_hub"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+          >
+            <Smartphone className="w-4 h-4 text-emerald-500" />
+            <span>Central WhatsApp & Disparador Uazapi</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="logs"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+          >
+            <FileCheck className="w-4 h-4 text-sky-500" />
+            <span>Histórico & Auditoria ({notificationStats.total})</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="automations"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+          >
+            <Sparkles className="w-4 h-4 text-purple-500" />
+            <span>Automações & Testes</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ABA 1: CENTRAL WHATSAPP & DISPARADOR */}
+        <TabsContent value="whatsapp_hub" className="space-y-6 focus-visible:outline-none">
+          <Tabs value={whatsappSubTab} onValueChange={(v: any) => setWhatsappSubTab(v)} className="space-y-6">
+            <TabsList className="bg-muted/40 border p-1 rounded-xl h-auto flex flex-wrap gap-1">
+              <TabsTrigger value="instances" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+                <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
+                Instâncias & Conexão QR Code
+              </TabsTrigger>
+              <TabsTrigger value="templates" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Modelos de Lembretes (Botões / Carrossel)
+              </TabsTrigger>
+              <TabsTrigger value="broadcast" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+                <Send className="w-3.5 h-3.5 text-sky-500" />
+                Disparador em Massa & Recorrência
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="instances" className="focus-visible:outline-none">
+              <WhatsAppInstanceManager />
+            </TabsContent>
+
+            <TabsContent value="templates" className="focus-visible:outline-none">
+              <MessageTemplateBuilder />
+            </TabsContent>
+
+            <TabsContent value="broadcast" className="focus-visible:outline-none">
+              <BroadcastSender />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        {/* ABA 2: HISTÓRICO & AUDITORIA DE DISPAROS */}
+        <TabsContent value="logs" className="space-y-6 focus-visible:outline-none">
+          {/* 1. KPIs Consolidados do Motor de Disparos */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card className="p-4 border-border">
           <div className="flex items-center justify-between">
@@ -267,8 +337,152 @@ export const NotificationsPage: React.FC = () => {
           <span className="text-[10px] text-muted-foreground">Próximas 24h & 2h</span>
         </Card>
       </div>
+          {/* 4. Tabela de Logs de Disparo em Tempo Real */}
+      <Card className="border-border overflow-hidden">
+        <CardHeader className="p-4 border-b border-border bg-muted/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <span>Histórico de Logs de Notificações</span>
+                <Badge variant="outline" className="text-[10px]">
+                  {filteredLogs.length} registros
+                </Badge>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Auditoria completa de todos os disparos efetuados pelo sistema
+              </CardDescription>
+            </div>
 
-      {/* 2. Painel de Automações & Crons do Servidor */}
+            {/* Filtros da Tabela */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar paciente ou contato..."
+                  className="h-8 pl-8 text-xs w-44 sm:w-56"
+                />
+              </div>
+
+              <div className="w-36">
+                <Select
+                  value={channelFilter}
+                  onChange={(e) => setChannelFilter(e.target.value as any)}
+                >
+                  <option value="all">Todos Canais</option>
+                  <option value="whatsapp_uazapi">WhatsApp</option>
+                  <option value="email_resend">E-mail</option>
+                </Select>
+              </div>
+
+              <div className="w-36">
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                >
+                  <option value="all">Todos Status</option>
+                  <option value="sent">Enviado</option>
+                  <option value="failed">Falha</option>
+                  <option value="queued">Na Fila</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+
+        <div className="divide-y divide-border overflow-x-auto">
+          {filteredLogs.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              Nenhum log encontrado com os filtros selecionados.
+            </div>
+          ) : (
+            filteredLogs.map((log) => {
+              const isWhatsapp = log.channel === "whatsapp_uazapi"
+              const trig = getTriggerLabel(log.triggerType)
+
+              return (
+                <div
+                  key={log.id}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-muted/20 transition-colors"
+                >
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div
+                      className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        isWhatsapp
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-sky-500/10 text-sky-600"
+                      }`}
+                    >
+                      {isWhatsapp ? (
+                        <MessageSquare className="h-4 w-4" />
+                      ) : (
+                        <Mail className="h-4 w-4" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-foreground truncate">{log.recipientName}</span>
+                        <span className="text-[11px] text-muted-foreground">({log.recipientContact})</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium ${trig.color}`}>
+                          {trig.label}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-[11px] mt-0.5 line-clamp-1 max-w-xl">
+                        {log.content}
+                      </p>
+                      {log.errorMessage && (
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 font-mono">
+                          {log.errorMessage}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {formatDateTimeBR(log.timestamp)}
+                    </span>
+
+                    <Badge
+                      variant={
+                        log.status === "sent"
+                          ? "success"
+                          : log.status === "failed"
+                          ? "destructive"
+                          : "warning"
+                      }
+                      className="text-[9px] py-0"
+                    >
+                      {log.status === "sent"
+                        ? "Enviado"
+                        : log.status === "failed"
+                        ? "Falha"
+                        : "Na Fila"}
+                    </Badge>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setSelectedLog(log)}
+                      title="Ver mensagem completa"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </Card>
+        </TabsContent>
+
+        {/* ABA 3: AUTOMAÇÕES E TESTES */}
+        <TabsContent value="automations" className="space-y-6 focus-visible:outline-none">
+          {/* 2. Painel de Automações & Crons do Servidor */}
       <Card className="border-border overflow-hidden">
         <CardHeader className="p-5 pb-3 bg-muted/20 border-b border-border">
           <div className="flex items-center justify-between">
@@ -389,7 +603,7 @@ export const NotificationsPage: React.FC = () => {
                   {`Olá, *${testName}*! 👋
 
 Este é um lembrete do seu atendimento na *Altar Fisio*:
-📅 *Data:* ${new Date().toISOString().split("T")[0]}
+📅 *Data:* ${formatDateBR(getTodayDateString())}
 ⏰ *Horário:* 08:00
 👨‍⚕️ *Profissional:* Dra. Camila Duarte
 📍 *Local:* Studio Pilates Aparelhos
@@ -452,153 +666,9 @@ Estamos ansiosos para te receber! ✨`}
           )}
         </CardContent>
       </Card>
-
-      {/* 4. Tabela de Logs de Disparo em Tempo Real */}
-      <Card className="border-border overflow-hidden">
-        <CardHeader className="p-4 border-b border-border bg-muted/20">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <span>Histórico de Logs de Notificações</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {filteredLogs.length} registros
-                </Badge>
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Auditoria completa de todos os disparos efetuados pelo sistema
-              </CardDescription>
-            </div>
-
-            {/* Filtros da Tabela */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar paciente ou contato..."
-                  className="h-8 pl-8 text-xs w-44 sm:w-56"
-                />
-              </div>
-
-              <select
-                value={channelFilter}
-                onChange={(e) => setChannelFilter(e.target.value as any)}
-                className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground focus:outline-none"
-              >
-                <option value="all">Todos Canais</option>
-                <option value="whatsapp_uazapi">WhatsApp</option>
-                <option value="email_resend">E-mail</option>
-              </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground focus:outline-none"
-              >
-                <option value="all">Todos Status</option>
-                <option value="sent">Enviado</option>
-                <option value="failed">Falha</option>
-                <option value="queued">Na Fila</option>
-              </select>
-            </div>
-          </div>
-        </CardHeader>
-
-        <div className="divide-y divide-border overflow-x-auto">
-          {filteredLogs.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              Nenhum log encontrado com os filtros selecionados.
-            </div>
-          ) : (
-            filteredLogs.map((log) => {
-              const isWhatsapp = log.channel === "whatsapp_uazapi"
-              const trig = getTriggerLabel(log.triggerType)
-
-              return (
-                <div
-                  key={log.id}
-                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-muted/20 transition-colors"
-                >
-                  <div className="flex items-start sm:items-center gap-3 min-w-0">
-                    <div
-                      className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        isWhatsapp
-                          ? "bg-emerald-500/10 text-emerald-600"
-                          : "bg-sky-500/10 text-sky-600"
-                      }`}
-                    >
-                      {isWhatsapp ? (
-                        <MessageSquare className="h-4 w-4" />
-                      ) : (
-                        <Mail className="h-4 w-4" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold text-foreground truncate">{log.recipientName}</span>
-                        <span className="text-[11px] text-muted-foreground">({log.recipientContact})</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium ${trig.color}`}>
-                          {trig.label}
-                        </span>
-                      </div>
-                      <p className="text-muted-foreground text-[11px] mt-0.5 line-clamp-1 max-w-xl">
-                        {log.content}
-                      </p>
-                      {log.errorMessage && (
-                        <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 font-mono">
-                          {log.errorMessage}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-
-                    <Badge
-                      variant={
-                        log.status === "sent"
-                          ? "success"
-                          : log.status === "failed"
-                          ? "destructive"
-                          : "warning"
-                      }
-                      className="text-[9px] py-0"
-                    >
-                      {log.status === "sent"
-                        ? "Enviado"
-                        : log.status === "failed"
-                        ? "Falha"
-                        : "Na Fila"}
-                    </Badge>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() => setSelectedLog(log)}
-                      title="Ver mensagem completa"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </Card>
-
-      {/* Modal de Detalhes do Log */}
+        </TabsContent>
+      </Tabs>
+{/* Modal de Detalhes do Log */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -628,7 +698,7 @@ Estamos ansiosos para te receber! ✨`}
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Data e Hora:</span>
-                  <span className="text-foreground">{new Date(selectedLog.timestamp).toLocaleString("pt-BR")}</span>
+                  <span className="text-foreground">{formatDateTimeBR(selectedLog.timestamp)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Status:</span>

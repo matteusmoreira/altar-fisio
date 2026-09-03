@@ -17,13 +17,13 @@ import {
   CheckCircle2,
   Moon,
   Sun,
-  Sparkles,
   Send,
   Mail,
   Smartphone,
   ShieldCheck,
   AlertCircle,
   Loader2,
+  CalendarCheck,
 } from "lucide-react"
 
 export const SettingsPage: React.FC = () => {

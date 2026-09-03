@@ -11,11 +11,16 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ 
 const SchedulePage = lazy(() => import("@/pages/SchedulePage").then((m) => ({ default: m.SchedulePage })))
 const ClassesPage = lazy(() => import("@/pages/ClassesPage").then((m) => ({ default: m.ClassesPage })))
 const PatientsPage = lazy(() => import("@/pages/PatientsPage").then((m) => ({ default: m.PatientsPage })))
+const ProfessionalsPage = lazy(() => import("@/pages/ProfessionalsPage").then((m) => ({ default: m.ProfessionalsPage })))
 const ClinicalRecordPage = lazy(() => import("@/pages/ClinicalRecordPage").then((m) => ({ default: m.ClinicalRecordPage })))
 const PackagesPage = lazy(() => import("@/pages/PackagesPage").then((m) => ({ default: m.PackagesPage })))
 const FinancePage = lazy(() => import("@/pages/FinancePage").then((m) => ({ default: m.FinancePage })))
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })))
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })))
+const PublicBookingPage = lazy(() => import("@/pages/PublicBookingPage").then((m) => ({ default: m.PublicBookingPage })))
+const OnlineBookingsPage = lazy(() => import("@/pages/OnlineBookingsPage").then((m) => ({ default: m.OnlineBookingsPage })))
+const BookingBuilderPage = lazy(() => import("@/pages/BookingBuilderPage").then((m) => ({ default: m.BookingBuilderPage })))
+
 
 function PageLoadingFallback() {
   return (
@@ -36,6 +41,22 @@ function AppContent() {
   const { isAuthenticated, isLoading, canAccessSection, user } = useAuth()
   const [currentSection, setCurrentSection] = useState<NavSection>("dashboard")
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined)
+
+  // Detecção de Rota Pública de Agendamento (/agendar, /agendamento ou ?mode=agendar)
+  const isPublicBookingRoute =
+    typeof window !== "undefined" &&
+    (window.location.pathname.startsWith("/agendar") ||
+      window.location.pathname.startsWith("/agendamento") ||
+      window.location.search.includes("mode=agendar") ||
+      window.location.hash.includes("agendar"))
+
+  if (isPublicBookingRoute) {
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <PublicBookingPage />
+      </Suspense>
+    )
+  }
 
   // Proteção de rotas RBAC: redireciona para o dashboard caso o perfil atual não tenha permissão na seção
   useEffect(() => {
@@ -80,16 +101,20 @@ function AppContent() {
           <DashboardPage onNavigate={setCurrentSection} />
         )}
         {currentSection === "schedule" && <SchedulePage />}
+        {currentSection === "online_bookings" && <OnlineBookingsPage />}
         {currentSection === "classes" && <ClassesPage />}
         {currentSection === "patients" && (
           <PatientsPage onNavigateToClinical={handleNavigateToClinical} />
         )}
+        {currentSection === "professionals" && <ProfessionalsPage />}
         {currentSection === "clinical" && canAccessSection("clinical") && (
+
           <ClinicalRecordPage initialPatientId={selectedPatientId} />
         )}
         {currentSection === "packages" && <PackagesPage />}
         {currentSection === "finance" && canAccessSection("finance") && <FinancePage />}
         {currentSection === "notifications" && canAccessSection("notifications") && <NotificationsPage />}
+        {currentSection === "booking_builder" && canAccessSection("booking_builder") && <BookingBuilderPage />}
         {currentSection === "settings" && canAccessSection("settings") && <SettingsPage />}
       </Suspense>
     </AppLayout>

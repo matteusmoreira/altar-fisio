@@ -29,6 +29,7 @@ interface AuthContextType {
   canAccessFinance: boolean
   canAccessSettings: boolean
   canAccessNotifications: boolean
+  canAccessBookingBuilder: boolean
   login: (email: string, password: string) => Promise<void>
   fastLogin: (role: UserRole) => Promise<void>
   logout: () => Promise<void>
@@ -122,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canAccessFinance = isAdmin
   const canAccessSettings = isAdmin
   const canAccessNotifications = isAdmin || isReception
+  const canAccessBookingBuilder = isAdmin || isReception
 
   const canAccessSection = (section: string): boolean => {
     if (!user) return false
@@ -130,10 +132,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switch (section) {
       case "dashboard":
       case "schedule":
+      case "online_bookings":
       case "classes":
       case "patients":
+      case "professionals":
       case "packages":
         return true
+
       case "clinical":
         return canAccessClinical // Apenas Admin e Fisioterapeuta com CREFITO
       case "finance":
@@ -142,6 +147,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return canAccessSettings // Apenas Administrador
       case "notifications":
         return canAccessNotifications // Admin e Recepção
+      case "booking_builder":
+        return canAccessBookingBuilder // Admin e Recepção
       default:
         return false
     }
@@ -163,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         canAccessFinance,
         canAccessSettings,
         canAccessNotifications,
+        canAccessBookingBuilder,
         login,
         fastLogin,
         logout,

@@ -58,6 +58,7 @@ export const updatePackage = mutation({
   args: {
     id: v.id("packages"),
     name: v.optional(v.string()),
+    serviceId: v.optional(v.id("services")),
     price: v.optional(v.number()),
     sessionCount: v.optional(v.number()),
     validityDays: v.optional(v.number()),
@@ -67,8 +68,38 @@ export const updatePackage = mutation({
   handler: async (ctx, args) => {
     const { id, ...data } = args
     await ctx.db.patch(id, data)
+    return id
   },
 })
+
+// Exclusão de pacote comercial
+export const deletePackage = mutation({
+  args: {
+    id: v.id("packages"),
+  },
+  handler: async (ctx, args) => {
+    const pkg = await ctx.db.get(args.id)
+    if (!pkg) throw new Error("Pacote não encontrado")
+
+    await ctx.db.delete(args.id)
+    return { success: true, id: args.id }
+  },
+})
+
+// Cancelamento / Exclusão de pacote atribuído a paciente
+export const deletePatientPackage = mutation({
+  args: {
+    id: v.id("patientPackages"),
+  },
+  handler: async (ctx, args) => {
+    const pp = await ctx.db.get(args.id)
+    if (!pp) throw new Error("Assinatura de pacote não encontrada")
+
+    await ctx.db.delete(args.id)
+    return { success: true, id: args.id }
+  },
+})
+
 
 // Listagem dos pacotes adquiridos pelos pacientes (com cálculo de expiração e progresso)
 export const listPatientPackages = query({
