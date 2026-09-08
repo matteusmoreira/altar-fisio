@@ -1,6 +1,8 @@
 // UI query gating only. Server guards independently enforce these permissions.
 export const accessPolicy: Record<string, 'public' | 'patient' | readonly string[]> = {
   "clinic:getNotificationSettings": ["admin", "reception"],
+  "clinic:getHealthInsuranceOptions": ["admin", "professional", "reception"],
+  "clinic:updateHealthInsuranceOptions": ["admin"],
   "clinical:attachPosturalPhoto": ["admin", "professional"],
   "clinic:getAdminSettings": ["admin"],
   "portalAuth:changePassword": ["admin"],

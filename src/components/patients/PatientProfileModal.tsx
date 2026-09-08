@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 import { formatPhoneBR, cleanPhoneDigits } from "@/lib/utils"
+import { formatCep } from "../../../shared/patientIdentity"
 import {
   User,
   Phone,
@@ -680,7 +681,14 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                         <span className="text-muted-foreground block text-[11px]">Endereço Residencial</span>
                         <span className="text-foreground font-medium flex items-start gap-1.5 mt-0.5">
                           <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <span>{patient.address || "Endereço não cadastrado"}</span>
+                          <span>
+                            {patient.address || "Endereço não cadastrado"}
+                            {patient.cep && (
+                              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                                CEP: {formatCep(patient.cep)}
+                              </span>
+                            )}
+                          </span>
                         </span>
                       </div>
                     </CardContent>
@@ -1561,7 +1569,8 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             <div><strong>Nascimento:</strong> {formatDateBR(patient.birthDate)} ({age} anos)</div>
             <div><strong>Gênero:</strong> {patient.gender || "Não informado"}</div>
             <div><strong>Convênio / Modalidade:</strong> {patient.healthInsurance || "Particular"}</div>
-            <div><strong>Contato Emergência:</strong> {patient.emergencyContact || "—"} ({patient.emergencyPhone || "—"})</div>
+            <div><strong>Contato Emergência:</strong> {patient.emergencyContact || "—"} ({patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"})</div>
+            <div><strong>CEP:</strong> {patient.cep ? formatCep(patient.cep) : "—"}</div>
             <div className="col-span-2"><strong>Endereço:</strong> {patient.address || "Não informado"}</div>
           </div>
         </div>

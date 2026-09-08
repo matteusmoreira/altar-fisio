@@ -1,6 +1,7 @@
 import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
+import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../shared/healthInsurance'
 
 export const getSettings = query({
   handler: async (ctx) => {
@@ -51,6 +52,47 @@ export const getNotificationSettings = query({
     await requireStaff(ctx, args.sessionToken, ['admin', 'reception'])
     const settings = await ctx.db.query('clinicSettings').first()
     return { activeConfirmationTemplateId: settings?.activeConfirmationTemplateId, activeReminder24hTemplateId: settings?.activeReminder24hTemplateId, activeReminder2hTemplateId: settings?.activeReminder2hTemplateId }
+  },
+})
+
+export const getHealthInsuranceOptions = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'professional', 'reception'])
+    const settings = await ctx.db.query('clinicSettings').first()
+    return settings?.healthInsuranceOptions ?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
+  },
+})
+
+export const updateHealthInsuranceOptions = mutation({
+  args: { sessionToken: v.string(), options: v.array(v.string()) },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ['admin'])
+
+    const options = input.options
+      .map((option) => option.trim())
+      .filter(Boolean)
+      .filter((option, index, all) =>
+        all.findIndex((item) => item.toLowerCase() === option.toLowerCase()) === index
+      )
+
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (settings) {
+      await ctx.db.patch(settings._id, { healthInsuranceOptions: options })
+      return options
+    }
+
+    await ctx.db.insert('clinicSettings', {
+      clinicName: 'Altar Fisio',
+      clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
+      primaryColor: '#10b981',
+      colorPreset: 'emerald',
+      mode: 'light',
+      cancellationNoticeHours: 2,
+      replacementExpiryDays: 30,
+      healthInsuranceOptions: options,
+    })
+    return options
   },
 })
 

@@ -1,8 +1,11 @@
 import { useAuth } from '@/contexts/AuthContext'
-import { formatCpf, formatPhone, isValidCpf, isValidPhone } from '../../shared/patientIdentity'
-import React, { useState } from "react"
+import { formatCep, formatCpf, formatPhone, isValidCpf, isValidPhone, normalizeCep } from '../../shared/patientIdentity'
+import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../../shared/healthInsurance'
+import React, { useRef, useState } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient } from "@/types"
+import { useMutation, useQuery } from "@/lib/staffConvex"
+import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +36,8 @@ import {
   AlertTriangle,
   HeartPulse,
   Eye,
+  Loader2,
+  Settings2,
 } from "lucide-react"
 import { PatientProfileModal } from "@/components/patients/PatientProfileModal"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
@@ -45,6 +50,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const { role } = useAuth()
   const canEditPatient = role === 'admin'
   const { patients, addPatient, updatePatient, deletePatient, clinicalOverview } = useClinicData()
+  const healthInsuranceOptionsQuery = useQuery(api.clinic.getHealthInsuranceOptions)
+  const updateHealthInsuranceOptionsMutation = useMutation(api.clinic.updateHealthInsuranceOptions)
+  const healthInsuranceOptions = healthInsuranceOptionsQuery ?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("altar_patients_view_mode")
@@ -72,13 +80,21 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [email, setEmail] = useState("")
   const [birthDate, setBirthDate] = useState("1990-01-01")
   const [gender, setGender] = useState("Feminino")
+  const [cep, setCep] = useState("")
   const [address, setAddress] = useState("")
   const [emergencyContact, setEmergencyContact] = useState("")
   const [emergencyPhone, setEmergencyPhone] = useState("")
   const [healthInsurance, setHealthInsurance] = useState("Particular")
+  const [showInsuranceManager, setShowInsuranceManager] = useState(false)
+  const [insuranceOptionsDraft, setInsuranceOptionsDraft] = useState<string[]>([])
+  const [newInsuranceOption, setNewInsuranceOption] = useState("")
+  const [isSavingInsuranceOptions, setIsSavingInsuranceOptions] = useState(false)
+  const [isLookingUpCep, setIsLookingUpCep] = useState(false)
+  const [cepFeedback, setCepFeedback] = useState<string | null>(null)
   const [notes, setNotes] = useState("")
   const [active, setActive] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const cepLookupSequence = useRef(0)
 
   // Modal de Exclusão
   const [deletingPatient, setDeletingPatient] = useState<Patient | null>(null)
@@ -87,6 +103,95 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const showToast = (msg: string) => {
     setFeedback(msg)
     setTimeout(() => setFeedback(null), 3500)
+  }
+
+  const hasInsuranceOption = (value: string, options = healthInsuranceOptions) =>
+    options.some((option) => option.toLowerCase() === value.toLowerCase())
+
+  const lookupCep = async (value: string) => {
+    const cleanCep = normalizeCep(value)
+    if (cleanCep.length !== 8) return
+
+    const requestSequence = ++cepLookupSequence.current
+    setIsLookingUpCep(true)
+    setCepFeedback(null)
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+      if (!response.ok) throw new Error("Falha na consulta")
+
+      const result = await response.json() as {
+        erro?: boolean
+        logradouro?: string
+        bairro?: string
+        localidade?: string
+        uf?: string
+      }
+
+      if (requestSequence !== cepLookupSequence.current) return
+      if (result.erro) {
+        setCepFeedback("CEP não encontrado. Confira os números e tente novamente.")
+        return
+      }
+
+      const city = [result.localidade, result.uf].filter(Boolean).join(" - ")
+      const addressParts = [result.logradouro, result.bairro, city].filter(Boolean)
+      if (addressParts.length > 0) setAddress(addressParts.join(", "))
+    } catch {
+      if (requestSequence === cepLookupSequence.current) {
+        setCepFeedback("Não foi possível consultar o CEP agora. Você pode preencher o endereço manualmente.")
+      }
+    } finally {
+      if (requestSequence === cepLookupSequence.current) setIsLookingUpCep(false)
+    }
+  }
+
+  const handleCepChange = (value: string) => {
+    const formatted = formatCep(value)
+    setCep(formatted)
+    setCepFeedback(null)
+    if (normalizeCep(formatted).length === 8) {
+      void lookupCep(formatted)
+    } else {
+      cepLookupSequence.current += 1
+      setIsLookingUpCep(false)
+    }
+  }
+
+  const handleOpenInsuranceManager = () => {
+    setInsuranceOptionsDraft([...healthInsuranceOptions])
+    setNewInsuranceOption("")
+    setShowInsuranceManager(true)
+  }
+
+  const handleAddInsuranceOption = () => {
+    const option = newInsuranceOption.trim()
+    if (!option) return
+    if (hasInsuranceOption(option, insuranceOptionsDraft)) {
+      showToast("Essa opção de plano/convênio já existe.")
+      return
+    }
+    setInsuranceOptionsDraft((current) => [...current, option])
+    setNewInsuranceOption("")
+  }
+
+  const handleRemoveInsuranceOption = (optionToRemove: string) => {
+    setInsuranceOptionsDraft((current) =>
+      current.filter((option) => option.toLowerCase() !== optionToRemove.toLowerCase())
+    )
+  }
+
+  const handleSaveInsuranceOptions = async () => {
+    setIsSavingInsuranceOptions(true)
+    try {
+      await updateHealthInsuranceOptionsMutation({ options: insuranceOptionsDraft })
+      setShowInsuranceManager(false)
+      showToast("Opções de plano/convênio salvas com sucesso!")
+    } catch (err: any) {
+      alert("Erro ao salvar opções: " + (err?.message || "Tente novamente."))
+    } finally {
+      setIsSavingInsuranceOptions(false)
+    }
   }
 
   // Filtragem
@@ -117,6 +222,8 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   ).length
 
   const handleOpenCreate = () => {
+    cepLookupSequence.current += 1
+    setIsLookingUpCep(false)
     setEditingPatientId(null)
     setName("")
     setCpf("")
@@ -124,10 +231,13 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
     setEmail("")
     setBirthDate("1990-01-01")
     setGender("Feminino")
+    setCep("")
     setAddress("")
     setEmergencyContact("")
     setEmergencyPhone("")
-    setHealthInsurance("Particular")
+    setHealthInsurance(hasInsuranceOption("Particular") ? "Particular" : "")
+    setShowInsuranceManager(false)
+    setCepFeedback(null)
     setNotes("")
     setActive(true)
     setIsModalOpen(true)
@@ -135,6 +245,8 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
   const handleOpenEdit = (patient: Patient) => {
     if (!canEditPatient) return
+    cepLookupSequence.current += 1
+    setIsLookingUpCep(false)
     setEditingPatientId(patient.id)
     setName(patient.name)
     setCpf(formatCpf(patient.documentCpf))
@@ -142,10 +254,13 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
     setEmail(patient.email || "")
     setBirthDate(patient.birthDate || "1990-01-01")
     setGender(patient.gender || "Feminino")
+    setCep(formatCep(patient.cep || ""))
     setAddress(patient.address || "")
     setEmergencyContact(patient.emergencyContact || "")
-    setEmergencyPhone(patient.emergencyPhone || "")
-    setHealthInsurance(patient.healthInsurance || "Particular")
+    setEmergencyPhone(formatPhone(patient.emergencyPhone || ""))
+    setHealthInsurance(patient.healthInsurance || (hasInsuranceOption("Particular") ? "Particular" : ""))
+    setShowInsuranceManager(false)
+    setCepFeedback(null)
     setNotes(patient.notes || "")
     setActive(patient.active)
     setIsModalOpen(true)
@@ -169,6 +284,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           email,
           birthDate,
           gender,
+          cep,
           address,
           emergencyContact,
           emergencyPhone,
@@ -185,6 +301,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           email,
           birthDate,
           gender,
+          cep,
           address,
           emergencyContact,
           emergencyPhone,
@@ -853,13 +970,36 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Endereço Residencial</label>
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Rua, Número, Bairro, Cidade"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">CEP</label>
+                  <div className="relative">
+                    <Input
+                      value={cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      placeholder="00000-000"
+                      inputMode="numeric"
+                      maxLength={9}
+                      aria-describedby={cepFeedback ? "patient-cep-feedback" : undefined}
+                    />
+                    {isLookingUpCep && (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary" />
+                    )}
+                  </div>
+                  {cepFeedback && (
+                    <p id="patient-cep-feedback" className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                      {cepFeedback}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Endereço Residencial</label>
+                  <Input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Rua, Número, Bairro, Cidade"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -875,19 +1015,114 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Telefone de Emergência</label>
                   <Input
                     value={emergencyPhone}
-                    onChange={(e) => setEmergencyPhone(e.target.value)}
+                    onChange={(e) => setEmergencyPhone(formatPhone(e.target.value))}
                     placeholder="(11) 99999-9999"
+                    inputMode="tel"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Plano / Convênio</label>
-                <Input
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label className="block text-xs font-semibold text-foreground/85">Plano / Convênio</label>
+                  {canEditPatient && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleOpenInsuranceManager}
+                      className="h-7 gap-1 px-2 text-[11px] text-primary"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                      Gerenciar opções
+                    </Button>
+                  )}
+                </div>
+                <Select
                   value={healthInsurance}
                   onChange={(e) => setHealthInsurance(e.target.value)}
-                  placeholder="Particular, Bradesco, Amil..."
-                />
+                >
+                  <option value="">Selecione uma opção</option>
+                  {healthInsuranceOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                  {healthInsurance && !hasInsuranceOption(healthInsurance) && (
+                    <option value={healthInsurance}>{healthInsurance} (opção removida)</option>
+                  )}
+                </Select>
+
+                {canEditPatient && showInsuranceManager && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Opções disponíveis</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Adicione ou remova opções sem alterar pacientes já cadastrados.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Input
+                        aria-label="Nova opção de plano ou convênio"
+                        value={newInsuranceOption}
+                        onChange={(e) => setNewInsuranceOption(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleAddInsuranceOption()
+                          }
+                        }}
+                        placeholder="Ex.: Golden Cross"
+                        className="h-9 text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleAddInsuranceOption}
+                        className="h-9 shrink-0 gap-1 px-3 text-xs"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {insuranceOptionsDraft.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">Nenhuma opção cadastrada.</span>
+                      ) : insuranceOptionsDraft.map((option) => (
+                        <span key={option} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground">
+                          {option}
+                          <button
+                            type="button"
+                            aria-label={`Remover opção ${option}`}
+                            onClick={() => handleRemoveInsuranceOption(option)}
+                            className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end gap-2 border-t border-border/60 pt-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setShowInsuranceManager(false)}
+                        className="h-8 px-3 text-xs"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSaveInsuranceOptions}
+                        disabled={isSavingInsuranceOptions}
+                        className="h-8 px-3 text-xs"
+                      >
+                        {isSavingInsuranceOptions ? "Salvando..." : "Salvar opções"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

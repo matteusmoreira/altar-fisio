@@ -13,6 +13,7 @@ export default defineSchema({
     logoStorageId: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
+    healthInsuranceOptions: v.optional(v.array(v.string())),
     // Regras de agendamento & reposição
     cancellationNoticeHours: v.number(), // Ex: 2 (horas de antecedência mínima para gerar reposição)
     replacementExpiryDays: v.number(), // Ex: 30 (dias para usar o crédito de reposição)
@@ -68,6 +69,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     birthDate: v.string(),
     gender: v.optional(v.string()),
+    cep: v.optional(v.string()),
     address: v.optional(v.string()),
     emergencyContact: v.optional(v.string()),
     emergencyPhone: v.optional(v.string()),

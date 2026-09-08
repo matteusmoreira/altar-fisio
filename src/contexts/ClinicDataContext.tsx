@@ -744,6 +744,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       email: patientData.email,
       birthDate: patientData.birthDate,
       gender: patientData.gender,
+      cep: patientData.cep,
       address: patientData.address,
       emergencyContact: patientData.emergencyContact,
       emergencyPhone: patientData.emergencyPhone,
@@ -753,8 +754,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }
 
   const updatePatient = async (id: string, data: Partial<Patient>) => {
-    const { name, documentCpf, phone, birthDate, active, email, gender, address, emergencyContact, emergencyPhone, healthInsurance, notes } = data
-    await updatePatientMutation({ id: id as any, name, documentCpf, phone, birthDate, active, email, gender, address, emergencyContact, emergencyPhone, healthInsurance, notes })
+    const { name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes } = data
+    await updatePatientMutation({ id: id as any, name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes })
   }
 
   const deletePatient = async (id: string) => {

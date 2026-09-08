@@ -28,3 +28,10 @@ export function formatPhone(value: string): string {
   const split = digits.length <= 10 ? 6 : 7
   return `(${digits.slice(0, 2)}) ${digits.slice(2, split)}-${digits.slice(split)}`
 }
+
+export const normalizeCep = (value: string) => value.replace(/\D/g, '').slice(0, 8)
+export function formatCep(value: string): string {
+  const digits = normalizeCep(value)
+  if (digits.length <= 5) return digits
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`
+}

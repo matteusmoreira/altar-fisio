@@ -39,6 +39,7 @@ export interface Patient {
   email?: string
   birthDate: string
   gender?: string
+  cep?: string
   address?: string
   emergencyContact?: string
   emergencyPhone?: string
