@@ -64,6 +64,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   initialRoomId,
 }) => {
   const { user, isProfessional, isAdmin } = useAuth()
+  const canManageAvailability = isAdmin
 
   // Queries Convex
   const rules = useQuery(api.availability.listRules, {}) || []
@@ -168,6 +169,10 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Abre Modal de Nova Regra Semanal
   const handleOpenCreateRule = () => {
+    if (!canManageAvailability) {
+      setRuleError("Somente administradores podem cadastrar horários semanais.")
+      return
+    }
     setEditingRuleId(null)
     setFormProfId(
       filterProfId !== "all"
@@ -188,6 +193,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Abre Modal de Edição de Regra Semanal
   const handleOpenEditRule = (rule: any) => {
+    if (!canManageAvailability) return
     setEditingRuleId(rule._id)
     setFormProfId(rule.professionalId)
     setFormRoomId(rule.roomId)
@@ -206,6 +212,11 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault()
     setRuleError(null)
+
+    if (!canManageAvailability) {
+      setRuleError("Somente administradores podem alterar os horários semanais.")
+      return
+    }
 
     if (!formProfId || !formRoomId) {
       setRuleError("Selecione um profissional e uma sala válidos.")
@@ -243,6 +254,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Excluir Regra Semanal
   const handleDeleteRule = async (ruleId: string) => {
+    if (!canManageAvailability) return
     if (!confirm("Deseja realmente remover esta regra de horário semanal? Os agendamentos de pacientes já marcados permanecerão intactos.")) {
       return
     }
@@ -257,6 +269,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   // Salvar Bloqueio (Folga/Férias)
   const handleSaveBlock = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canManageAvailability) return
     if (!blockProfId) {
       alert("Selecione o profissional.")
       return
@@ -285,6 +298,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   // Salvar Plantão / Atendimento Extra
   const handleSaveExtra = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canManageAvailability) return
     if (!extraProfId || !extraRoomId) {
       alert("Selecione o profissional e a sala.")
       return
@@ -317,6 +331,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Excluir Exceção
   const handleDeleteOverride = async (overrideId: string) => {
+    if (!canManageAvailability) return
     if (!confirm("Deseja remover esta exceção de agenda?")) return
     try {
       await deleteOverrideMutation({ id: overrideId as any })
@@ -427,14 +442,18 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                 </TabsTrigger>
               </TabsList>
 
-              {activeTab === "weekly" && (
+              {activeTab === "weekly" && canManageAvailability && (
                 <Button onClick={handleOpenCreateRule} size="sm" className="rounded-xl gap-1.5 font-semibold text-xs shadow-sm">
                   <Plus className="w-4 h-4" />
                   Novo Horário Semanal
                 </Button>
               )}
 
-              {activeTab === "blocks" && (
+              {activeTab === "weekly" && !canManageAvailability && (
+                <span className="text-xs font-semibold text-muted-foreground">Somente administradores alteram os horários</span>
+              )}
+
+              {activeTab === "blocks" && canManageAvailability && (
                 <Button
                   onClick={() => {
                     setBlockProfId(filterProfId !== "all" ? filterProfId : professionals[0]?._id || "")
@@ -453,7 +472,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                 </Button>
               )}
 
-              {activeTab === "extras" && (
+              {activeTab === "extras" && canManageAvailability && (
                 <Button
                   onClick={() => {
                     setExtraProfId(filterProfId !== "all" ? filterProfId : professionals[0]?._id || "")
@@ -481,10 +500,10 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1 mb-4">
                     Cadastre os dias e turnos em que os fisioterapeutas atendem em cada sala para liberar vagas na página pública de agendamento (/agendar) e na agenda interna.
                   </p>
-                  <Button onClick={handleOpenCreateRule} size="sm" className="rounded-xl gap-2 text-xs font-semibold">
+                  {canManageAvailability && <Button onClick={handleOpenCreateRule} size="sm" className="rounded-xl gap-2 text-xs font-semibold">
                     <Plus className="w-4 h-4" />
                     Adicionar Primeiro Horário
-                  </Button>
+                  </Button>}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -545,7 +564,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                        {canManageAvailability && <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -564,7 +583,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                             <Trash2 className="w-3.5 h-3.5 mr-1" />
                             Excluir
                           </Button>
-                        </div>
+                        </div>}
                       </div>
                     )
                   })}
@@ -608,7 +627,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-2 border-t border-border/40">
+                      {canManageAvailability && <div className="flex justify-end pt-2 border-t border-border/40">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -618,7 +637,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                           <Trash2 className="w-3.5 h-3.5 mr-1" />
                           Remover Bloqueio
                         </Button>
-                      </div>
+                      </div>}
                     </div>
                   ))}
                 </div>
@@ -659,7 +678,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-2 border-t border-border/40">
+                      {canManageAvailability && <div className="flex justify-end pt-2 border-t border-border/40">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -669,7 +688,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                           <Trash2 className="w-3.5 h-3.5 mr-1" />
                           Remover Plantão
                         </Button>
-                      </div>
+                      </div>}
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 
 function checkTimeOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
   return startA < endB && startB < endA
@@ -100,13 +100,20 @@ export const saveRule = mutation({
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin"]);
+    try {
+      await requireStaff(ctx, sessionToken, ["admin"])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Acesso negado."
+      if (message.includes("permissão")) throw new ConvexError("Somente administradores podem alterar os horários semanais.")
+      if (message.includes("Sessão inválida")) throw new ConvexError("Sua sessão expirou. Entre novamente para salvar o horário.")
+      throw error
+    }
 
     if (args.startTime >= args.endTime) {
-      throw new Error("O horário de início deve ser anterior ao término.")
+      throw new ConvexError("O horário de início deve ser anterior ao término.")
     }
     if (!Number.isInteger(args.slotDurationMinutes ?? 50) || (args.slotDurationMinutes ?? 50) <= 0 || !Number.isInteger(args.breakMinutes ?? 10) || (args.breakMinutes ?? 10) < 0) {
-      throw new Error("Informe uma duração inteira maior que zero e um intervalo inteiro de zero ou mais minutos.")
+      throw new ConvexError("Informe uma duração inteira maior que zero e um intervalo inteiro de zero ou mais minutos.")
     }
 
     // Busca todas as regras do mesmo dia da semana para checar conflitos
@@ -129,7 +136,7 @@ export const saveRule = mutation({
     if (roomConflict) {
       const room = await ctx.db.get(args.roomId)
       const prof = await ctx.db.get(roomConflict.professionalId)
-      throw new Error(
+      throw new ConvexError(
         `Conflito de Sala: A sala "${room?.name || "Ambiente"}" já está reservada das ${roomConflict.startTime} às ${roomConflict.endTime} para ${prof?.name || "outro profissional"}.`
       )
     }
@@ -143,7 +150,7 @@ export const saveRule = mutation({
 
     if (profConflict) {
       const room = await ctx.db.get(profConflict.roomId)
-      throw new Error(
+      throw new ConvexError(
         `Conflito de Profissional: O profissional já tem atendimento agendado na sala "${room?.name || "Ambiente"}" das ${profConflict.startTime} às ${profConflict.endTime}.`
       )
     }
