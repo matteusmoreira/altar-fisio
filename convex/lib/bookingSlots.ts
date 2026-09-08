@@ -1,6 +1,5 @@
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import type { Doc, Id } from '../_generated/dataModel'
-import { ConvexError } from 'convex/values'
 import { sliceTimeWindowIntoSlots } from '../availability'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
 
@@ -17,16 +16,17 @@ export async function resolveBookingService(ctx: QueryCtx | MutationCtx, args: P
   let serviceId = args.serviceId
   if (args.packageId) {
     const pkg = await ctx.db.get(args.packageId)
-    if (!pkg?.active || pkg.showInPublicBooking === false) throw new ConvexError('Plano indisponível.')
+    if (!pkg?.active || pkg.showInPublicBooking === false) return null
     serviceId = pkg.serviceId
   }
   const service = serviceId ? await ctx.db.get(serviceId) : null
-  if (serviceId && !service?.active) throw new ConvexError('Serviço indisponível.')
+  if (serviceId && !service?.active) return null
   return service
 }
 
 export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingSelection) {
   const service = await resolveBookingService(ctx, args)
+  if ((args.packageId || args.serviceId) && !service) return []
   const specialty = service?.specialty ?? args.specialty
   const rooms = await ctx.db.query('rooms').withIndex('by_active', q => q.eq('isActive', true)).collect()
   const professionals = await ctx.db.query('professionals').withIndex('by_active', q => q.eq('active', true)).collect()

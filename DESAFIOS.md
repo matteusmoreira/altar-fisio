@@ -1,5 +1,8 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-08] Agenda pública com serviço indisponível
+- Os logs remotos de `bookingBuilder:listPublicAvailableSlots` confirmaram `ConvexError: Serviço indisponível`. Planos públicos precisam ter serviço existente e ativo; a consulta de horários deve retornar lista vazia para seleções que ficaram indisponíveis, sem derrubar a página. A confirmação continua rejeitando a reserva. Regressões em `tests/group-booking.test.ts` cobrem serviço inativo/removido e plano inativo/oculto/removido.
+
 ### [2026-09-08] Build de produção e deploy Convex no Windows
 - O `.env.local` deste projeto aponta para o backend local; o guard do Vite rejeita esse valor no build de produção. Para validar sem alterar segredos, carregar `VITE_CONVEX_URL` HTTPS apenas no processo do comando.
 - Nesta versão da CLI Convex, `deploy --typecheck enable` retornou código 1 ao encontrar Node 25 e ausência de `convex/tsconfig.json`, embora o build local (`tsc -b`), testes, bundling e o `deploy --dry-run --typecheck disable` tenham passado. O deploy desta release foi feito com esse check desabilitado e a limitação deve ser resolvida em uma tarefa própria de tooling, preferencialmente com Node 24 e configuração Convex dedicada.

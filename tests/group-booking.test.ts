@@ -175,3 +175,22 @@ test('invalid legacy durations cannot hang slot generation', () => {
   expect(sliceTimeWindowIntoSlots('08:00', '10:00', 0, 0)).toEqual([])
   expect(sliceTimeWindowIntoSlots('08:00', '10:00', 30, -30)).toEqual([])
 })
+
+test.each(['inactive service', 'deleted service', 'inactive package', 'hidden package', 'deleted package'])('unavailable selection (%s) returns no slots and cannot be booked', async state => {
+  const f = await fixture()
+  const packageId = await f.t.run(ctx => ctx.db.insert('packages', { name: 'Plano', serviceId: f.serviceId, sessionCount: 1, validityDays: 30, price: 100, active: true }))
+  expect(await f.t.query(api.bookingBuilder.listPublicPackages, {})).toHaveLength(1)
+  expect((await query(f, { packageId })).length).toBeGreaterThan(0)
+  await f.t.run(async ctx => {
+    if (state === 'inactive service') await ctx.db.patch(f.serviceId, { active: false })
+    if (state === 'deleted service') await ctx.db.delete(f.serviceId)
+    if (state === 'inactive package') await ctx.db.patch(packageId, { active: false })
+    if (state === 'hidden package') await ctx.db.patch(packageId, { showInPublicBooking: false })
+    if (state === 'deleted package') await ctx.db.delete(packageId)
+  })
+  expect(await f.t.query(api.bookingBuilder.listPublicPackages, {})).toEqual([])
+  expect(await query(f, { packageId })).toEqual([])
+  if (state.endsWith('service')) expect(await query(f)).toEqual([])
+  await expect(reserve(f, 1, { packageId })).rejects.toThrow(/indisponível/)
+  expect(await f.t.run(ctx => ctx.db.query('schedules').collect())).toEqual([])
+})

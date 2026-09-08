@@ -286,9 +286,10 @@ export const listPublicPackages = query({
       (pkg) => pkg.active && pkg.showInPublicBooking !== false
     )
 
-    return await Promise.all(
+    const publicPackages = await Promise.all(
       activePublicPackages.map(async (pkg) => {
         const service = await ctx.db.get(pkg.serviceId)
+        if (!service?.active) return null
         return {
           ...pkg,
           serviceName: service?.name || "Serviço",
@@ -299,6 +300,7 @@ export const listPublicPackages = query({
         }
       })
     )
+    return publicPackages.filter(pkg => pkg !== null)
   },
 })
 
