@@ -20,6 +20,8 @@ import type * as consents from "../consents.js";
 import type * as crons from "../crons.js";
 import type * as finance from "../finance.js";
 import type * as lib_appointmentJobs from "../lib/appointmentJobs.js";
+import type * as lib_bookGroupSession from "../lib/bookGroupSession.js";
+import type * as lib_bookingSlots from "../lib/bookingSlots.js";
 import type * as lib_password from "../lib/password.js";
 import type * as lib_patientCredentials from "../lib/patientCredentials.js";
 import type * as lib_security from "../lib/security.js";
@@ -60,6 +62,8 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   finance: typeof finance;
   "lib/appointmentJobs": typeof lib_appointmentJobs;
+  "lib/bookGroupSession": typeof lib_bookGroupSession;
+  "lib/bookingSlots": typeof lib_bookingSlots;
   "lib/password": typeof lib_password;
   "lib/patientCredentials": typeof lib_patientCredentials;
   "lib/security": typeof lib_security;
