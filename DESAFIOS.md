@@ -296,3 +296,11 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-08] Presets incompletos no editor de modelos de mensagem
 - **Ponto de fricção**: O seletor de categoria do `MessageTemplateBuilder` atualizava o rótulo, mas só carregava conteúdo padrão para `booking_confirmation`. As demais categorias deixavam título, texto e controles da categoria anterior, criando um editor visualmente incoerente.
 - **Mitigação / Regra**: Manter presets centralizados para todas as categorias e aplicá-los apenas no modo de criação. Durante a edição de um modelo salvo, trocar a categoria não deve sobrescrever conteúdo manual. Cobrir os dois comportamentos com teste de componente.
+
+### [2026-09-08] Build local com ambiente Vercel de produção
+- **Ponto de fricção**: O `npm run build` local carrega o `.env.local` de desenvolvimento e a validação de produção rejeita `VITE_CONVEX_URL` apontando para `127.0.0.1`. O `vercel pull --environment=production` também pode gravar a URL com aspas literais no arquivo `.vercel/.env.production.local`, causando `Invalid URL` quando o valor é repassado diretamente ao Vite.
+- **Mitigação / Regra**: Executar `vercel pull --yes --environment=production` com o projeto já vinculado, ler somente `VITE_CONVEX_URL` para o processo temporário de build, remover aspas externas e conferir que o host é o backend HTTPS de produção. Nunca commitar o arquivo de ambiente local.
+
+### [2026-09-08] Confirmação assíncrona de deploy direto na Vercel
+- **Ponto de fricção**: `vercel deploy --prod` pode terminar o upload exibindo `Building...` antes de o deployment estar pronto; o retorno do CLI não é prova de `Ready`, e deploy direto pela CLI pode não registrar `gitCommitSha` nos metadados da Vercel.
+- **Mitigação / Regra**: Após o upload, executar `vercel inspect <deployment>`, aguardar `Ready`, consultar logs recentes e fazer smoke HTTP das rotas críticas. Confirmar separadamente que `origin/main` aponta para o commit publicado; não tratar alias ou HTTP 200 como prova de todos os fluxos de negócio.
