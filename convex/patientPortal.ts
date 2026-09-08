@@ -1,4 +1,6 @@
 import { requirePatient } from './lib/security'
+import { bookCredit, cancelReplacement, processWaitlist } from './lib/waitlist'
+import { cancelParticipantJobs, clinicToday, occupiesSeat, prepareReminders } from './lib/appointmentJobs'
 import { query, mutation } from "./_generated/server"
 import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
@@ -77,6 +79,7 @@ export const getPatientPortalData = query({
         canCancelWithCredit: isWithinNoticePolicy,
         isPast: sessionMs < now,
         notes: part.notes,
+        isWaitlistBooking: !!part.waitlistEntryId,
       }
 
       // Sessoes futuras ativas
@@ -225,7 +228,7 @@ export const cancelAppointmentByPatient = mutation({
       throw new Error("Acesso nao autorizado para este agendamento.")
     }
 
-    if (participant.status !== 'scheduled') throw new Error('Este agendamento já foi processado.')
+    if (!['scheduled', 'replacement'].includes(participant.status)) throw new Error('Este agendamento já foi processado.')
     const schedule = await ctx.db.get(participant.scheduleId)
     if (!schedule || schedule.status === 'cancelled') throw new Error("Sessao nao encontrada.")
 
@@ -237,6 +240,9 @@ export const cancelAppointmentByPatient = mutation({
     const now = Date.now()
     const hoursNotice = (sessionMs - now) / (1000 * 60 * 60)
     const isWithinPolicy = hoursNotice >= noticeHoursRequired
+
+    if (sessionMs <= now) throw new Error('Não é possível desmarcar uma sessão já iniciada.')
+    if (participant.replacementCreditId) return { ...await cancelReplacement(ctx, participant, isWithinPolicy, args.reason), hoursNotice }
 
     if (isWithinPolicy) {
       const expiry = new Date()
@@ -261,6 +267,8 @@ export const cancelAppointmentByPatient = mutation({
         status: "justified_absence",
         notes: note,
       })
+      await cancelParticipantJobs(ctx, normParticipantId)
+      await processWaitlist(ctx, schedule._id)
 
       // Dispara confirmacao via WhatsApp
       const patient = await ctx.db.get(normPatientId)
@@ -291,6 +299,9 @@ export const cancelAppointmentByPatient = mutation({
           ? `Desmarcado pelo aluno fora do prazo (${hoursNotice.toFixed(1)}h antes): ${args.reason}`
           : `Desmarcado pelo aluno com menos de ${noticeHoursRequired}h de antecedencia`,
       })
+
+      await cancelParticipantJobs(ctx, normParticipantId)
+      await processWaitlist(ctx, schedule._id)
 
       return {
         success: true,
@@ -323,7 +334,7 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const currentPart = await ctx.db.get(normParticipantId)
     if (!currentPart) throw new Error("Agendamento atual nao encontrado.")
-    if (currentPart.status !== 'scheduled') throw new Error('Este agendamento já foi processado.')
+    if (!['scheduled', 'replacement'].includes(currentPart.status)) throw new Error('Este agendamento já foi processado.')
     if (currentPart.patientId !== normPatientId) {
       throw new Error("Nao autorizado.")
     }
@@ -333,9 +344,16 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Novo horario selecionado nao encontrado.")
+    await processWaitlist(ctx, normTargetScheduleId)
     const settings = await ctx.db.query('clinicSettings').first()
     if (currentSchedule.status === 'cancelled' || parseDateTimeToMs(currentSchedule.date, currentSchedule.startTime) - Date.now() < (settings?.cancellationNoticeHours ?? 2) * 3600000) throw new Error('Prazo para remarcação encerrado. Fale com a recepção.')
     if (targetSchedule.status !== 'scheduled' || targetSchedule.specialty !== currentSchedule.specialty || parseDateTimeToMs(targetSchedule.date, targetSchedule.startTime) <= Date.now()) throw new Error('Horário de destino inválido.')
+    if (currentPart.replacementCreditId) {
+      if (currentSchedule._id === targetSchedule._id) throw new Error('Escolha outro horário.')
+      await cancelReplacement(ctx, currentPart, true, 'Reposição transferida para outro horário.')
+      const newParticipantId = await bookCredit(ctx, normPatientId, currentPart.replacementCreditId, normTargetScheduleId)
+      return { success: true, newParticipantId, newDate: targetSchedule.date, newStartTime: targetSchedule.startTime, message: 'Reposição remarcada com o mesmo crédito, sem alterar sua validade.' }
+    }
     if (currentPart.patientPackageId) {
       const pkg = await ctx.db.get(currentPart.patientPackageId)
       if (!pkg || pkg.patientId !== normPatientId || pkg.status !== 'active' || pkg.remainingSessions < 1 || pkg.expiryDate < targetSchedule.date) throw new Error('Plano indisponível para a data selecionada.')
@@ -353,7 +371,7 @@ export const rescheduleAppointmentByPatient = mutation({
       .withIndex("by_schedule", (q) => q.eq("scheduleId", normTargetScheduleId))
       .collect()
 
-    const activeParts = existingParts.filter((p) => p.status !== "justified_absence")
+    const activeParts = existingParts.filter(occupiesSeat)
     if (activeParts.length >= targetSchedule.maxCapacity) {
       throw new Error("O novo horario selecionado ja preencheu todas as vagas!")
     }
@@ -372,6 +390,9 @@ export const rescheduleAppointmentByPatient = mutation({
       patientPackageId: currentPart.patientPackageId,
       notes: `Remarcacao transferida da sessao de ${currentSchedule.date} as ${currentSchedule.startTime}`,
     })
+    await cancelParticipantJobs(ctx, normParticipantId)
+    await prepareReminders(ctx, newPartId)
+    await processWaitlist(ctx, currentSchedule._id)
 
     return {
       success: true,
@@ -409,7 +430,7 @@ export const useReplacementCreditToBook = mutation({
       throw new Error("Credito pertence a outro paciente.")
     }
 
-    const todayStr = new Date().toISOString().split("T")[0]
+    const todayStr = clinicToday()
     if (credit.expiryDate < todayStr) {
       await ctx.db.patch(normCreditId, { status: "expired" })
       throw new Error("Este credito de reposicao expirou em " + credit.expiryDate)
@@ -417,31 +438,8 @@ export const useReplacementCreditToBook = mutation({
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Horario nao encontrado.")
-
-    const existingParts = await ctx.db
-      .query("scheduleParticipants")
-      .withIndex("by_schedule", (q) => q.eq("scheduleId", normTargetScheduleId))
-      .collect()
-
-    const activeParts = existingParts.filter((p) => p.status !== "justified_absence")
-    if (activeParts.length >= targetSchedule.maxCapacity) {
-      throw new Error("Este horario ja atingiu o limite de capacidade!")
-    }
-
-    // 1. Marca credito como utilizado
-    await ctx.db.patch(normCreditId, {
-      status: "used",
-      usedInScheduleId: normTargetScheduleId,
-    })
-
-    // 2. Insere aluno como status "replacement"
-    const partId = await ctx.db.insert("scheduleParticipants", {
-      scheduleId: normTargetScheduleId,
-      patientId: normPatientId,
-      status: "replacement",
-      replacementCreditId: normCreditId,
-      notes: "Agendamento realizado via credito de reposicao",
-    })
+    await processWaitlist(ctx, normTargetScheduleId)
+    const partId = await bookCredit(ctx, normPatientId, normCreditId, normTargetScheduleId)
 
     return {
       success: true,
@@ -611,6 +609,7 @@ export const bookAppointmentFromPortal = mutation({
     }
 
     // 3. Validar se o paciente já está matriculado nesta aula
+    await processWaitlist(ctx, normScheduleId)
     const scheduleParts = await ctx.db
       .query("scheduleParticipants")
       .withIndex("by_schedule", (q) => q.eq("scheduleId", normScheduleId))
@@ -652,6 +651,7 @@ export const bookAppointmentFromPortal = mutation({
       patientPackageId: normPackageId,
       notes: args.notes || "Agendado pelo próprio aluno no Portal",
     })
+    await prepareReminders(ctx, participantId)
 
     // 7. Notificações
     const room = await ctx.db.get(schedule.roomId)

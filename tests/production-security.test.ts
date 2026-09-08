@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { convexTest } from 'convex-test'
 import schema from '../convex/schema'
 import { api, internal } from '../convex/_generated/api'
@@ -7,6 +7,9 @@ import { validateProductionUrl } from '../shared/deploymentConfig'
 import { sanitizeUazapiEndpoint } from '../convex/whatsapp'
 
 const modules = import.meta.glob('../convex/**/*.ts')
+// Agendamentos futuros agora criam trabalhos duráveis; não executar timers reais no teste.
+beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
 const settings = { clinicName: 'Clínica teste', clinicSubtitle: 'Teste', primaryColor: 'green', colorPreset: 'emerald', mode: 'light' as const, cancellationNoticeHours: 2, replacementExpiryDays: 30 }
 const patient = { name: 'Paciente fictício', documentCpf: '00000000000', phone: '00000000000', birthDate: '1990-01-01', active: true, createdAt: 1 }
 async function fixture() {

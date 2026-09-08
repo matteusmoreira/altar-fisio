@@ -1,3 +1,4 @@
+import { occupiesSeat } from '../../../shared/scheduleOccupancy'
 import React, { useState, useMemo } from "react"
 import type { Schedule } from "@/types"
 import { Card } from "@/components/ui/card"
@@ -171,7 +172,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
           <div className="space-y-2.5">
             {schedulesByDate[mobileSelectedDay].map((schedule) => {
               const occupied = (schedule.participants || []).filter(
-                (p) => p.status !== "justified_absence"
+                occupiesSeat
               ).length
               const isFull = occupied >= schedule.maxCapacity
               const vacancies = Math.max(0, schedule.maxCapacity - occupied)
@@ -317,7 +318,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   ) : (
                     daySchedules.map((schedule) => {
                       const occupied = (schedule.participants || []).filter(
-                        (p) => p.status !== "justified_absence"
+                        occupiesSeat
                       ).length
                       const isFull = occupied >= schedule.maxCapacity
                       const vacancies = Math.max(0, schedule.maxCapacity - occupied)

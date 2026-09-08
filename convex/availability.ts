@@ -13,6 +13,7 @@ export function sliceTimeWindowIntoSlots(
   slotDurationMinutes: number = 50,
   breakMinutes: number = 10
 ): Array<{ start: string; end: string }> {
+  if (!Number.isInteger(slotDurationMinutes) || slotDurationMinutes <= 0 || !Number.isInteger(breakMinutes) || breakMinutes < 0) return []
   const [startHour, startMin] = startTime.split(":").map(Number)
   const [endHour, endMin] = endTime.split(":").map(Number)
 
@@ -103,6 +104,9 @@ export const saveRule = mutation({
 
     if (args.startTime >= args.endTime) {
       throw new Error("O horário de início deve ser anterior ao término.")
+    }
+    if (!Number.isInteger(args.slotDurationMinutes ?? 50) || (args.slotDurationMinutes ?? 50) <= 0 || !Number.isInteger(args.breakMinutes ?? 10) || (args.breakMinutes ?? 10) < 0) {
+      throw new Error("Informe uma duração inteira maior que zero e um intervalo inteiro de zero ou mais minutos.")
     }
 
     // Busca todas as regras do mesmo dia da semana para checar conflitos
@@ -364,7 +368,7 @@ export const getAvailableSlotsForDate = query({
         rule.startTime,
         rule.endTime,
         rule.slotDurationMinutes || 50,
-        rule.breakMinutes || 10
+        rule.breakMinutes ?? 10
       )
 
       for (const slice of slices) {

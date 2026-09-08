@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { convexTest } from 'convex-test'
 import schema from '../convex/schema'
 import { api, internal } from '../convex/_generated/api'
@@ -6,6 +6,8 @@ import { hashToken } from '../convex/lib/security'
 import { DEFAULT_PATIENT_PASSWORD, isValidCpf, normalizePhone, formatCpf, formatPhone } from '../shared/patientIdentity'
 
 const modules = import.meta.glob('../convex/**/*.ts')
+beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }))
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
 const patient = { name: 'Paciente de teste', documentCpf: '52998224725', phone: '11987654321', birthDate: '1990-01-01' }
 async function fixture() {
   const t = convexTest(schema, modules)

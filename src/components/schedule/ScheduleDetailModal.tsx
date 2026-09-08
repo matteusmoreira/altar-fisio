@@ -1,3 +1,6 @@
+import { occupiesSeat } from '../../../shared/scheduleOccupancy'
+import { WaitlistPanel } from './WaitlistPanel'
+import type { Id } from '@convex/_generated/dataModel'
 import React, { useState } from "react"
 import type { Schedule, ScheduleParticipant } from "@/types"
 import {
@@ -58,7 +61,7 @@ export const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
   if (!schedule) return null
 
   const occupied = (schedule.participants || []).filter(
-    (p) => p.status !== "justified_absence"
+    occupiesSeat
   ).length
   const isFull = occupied >= schedule.maxCapacity
   const vacanciesLeft = Math.max(0, schedule.maxCapacity - occupied)
@@ -307,6 +310,8 @@ export const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
             </div>
           )}
         </div>
+
+        <WaitlistPanel key={schedule.id} scheduleId={schedule.id as Id<"schedules">} />
 
         <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t border-border">
           {onNavigateToDay && (

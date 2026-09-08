@@ -170,6 +170,18 @@ export const formatTimeBR = (
 }
 
 /**
+ * Calcula a duração, em minutos, de um intervalo no mesmo dia.
+ */
+export const getDurationMinutes = (startTime: string, endTime: string): number => {
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number)
+    return hours * 60 + minutes
+  }
+
+  return Math.max(0, toMinutes(endTime) - toMinutes(startTime))
+}
+
+/**
  * Formata data por extenso: "02 de setembro de 2026"
  */
 export const formatDateExtendedBR = (
@@ -458,4 +470,3 @@ export const getMonthCalendarGrid = (dateStr: string): CalendarDayCell[] => {
 
   return cells
 }
-

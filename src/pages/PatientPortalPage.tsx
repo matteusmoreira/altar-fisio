@@ -1,3 +1,6 @@
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { PatientWaitlist } from '@/components/patients/PatientWaitlist'
+import { isValidPhone } from '../../shared/patientIdentity'
 import React, { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation, useAction } from "convex/react"
 import { PortalLoginForm } from '@/components/patients/PortalLoginForm'
@@ -156,6 +159,8 @@ const PatientPortalContent: React.FC = () => {
 
   const cancelAppointmentMutation = useMutation(api.patientPortal.cancelAppointmentByPatient)
   const rescheduleAppointmentMutation = useMutation(api.patientPortal.rescheduleAppointmentByPatient)
+  const joinWaitlist = useMutation(api.waitlist.join)
+  const [waitlistConsent, setWaitlistConsent] = useState(false)
   const bookReplacementCreditMutation = useMutation(api.patientPortal.useReplacementCreditToBook)
   const bookAppointmentMutation = useMutation(api.patientPortal.bookAppointmentFromPortal)
 
@@ -174,14 +179,9 @@ const PatientPortalContent: React.FC = () => {
 
   // Vagas Livres para o Modal de Agendamento de Reposição
   const availableSlotsReplacement = useQuery(
-    api.patientPortal.listAvailableSlotsForBooking,
-    replacementBookingCredit
-      ? {
-          portalToken: portalToken!,
-          specialty: replacementBookingCredit.originSpecialty || "pilates",
-          startDate: replacementDate,
-          daysCount: 1,
-        }
+    api.waitlist.slots,
+    replacementBookingCredit && portalToken
+      ? { portalToken, creditId: replacementBookingCredit._id, date: replacementDate }
       : "skip"
   )
 
@@ -219,6 +219,7 @@ const PatientPortalContent: React.FC = () => {
       showToast(res.message, res.generatedCredit ? "success" : "error")
       setCancelModalItem(null)
       setCancelReason("")
+      if (res.generatedCredit) setActiveTab("replacements")
     } catch (err: any) {
       showToast(err?.message || "Erro ao desmarcar sessão.", "error")
     } finally {
@@ -251,15 +252,18 @@ const PatientPortalContent: React.FC = () => {
     if (!replacementBookingCredit || !replacementTargetSlot || !patientId) return
     setIsBookingReplacement(true)
     try {
-      const res = await bookReplacementCreditMutation({ portalToken: portalToken!,
-        creditId: replacementBookingCredit._id,
-        targetScheduleId: replacementTargetSlot.scheduleId,
-        patientId: patientId as any,
-      })
-      showToast(res.message)
+      if (replacementTargetSlot.vacanciesLeft === 0) {
+        if (!waitlistConsent) throw new Error("Confirme que aceita o encaixe automático.")
+        await joinWaitlist({ portalToken: portalToken!, creditId: replacementBookingCredit._id, scheduleId: replacementTargetSlot.scheduleId })
+        showToast("Inscrição registrada. Acompanhe sua fila nas reposições.")
+      } else {
+        const res = await bookReplacementCreditMutation({ portalToken: portalToken!, creditId: replacementBookingCredit._id, targetScheduleId: replacementTargetSlot.scheduleId, patientId: patientId as any })
+        showToast(res.message)
+      }
+      setWaitlistConsent(false)
       setReplacementBookingCredit(null)
       setReplacementTargetSlot(null)
-      setActiveTab("schedule")
+      setActiveTab("replacements")
     } catch (err: any) {
       showToast(err?.message || "Erro ao agendar reposição.", "error")
     } finally {
@@ -516,6 +520,7 @@ const PatientPortalContent: React.FC = () => {
                           </div>
                         </div>
 
+                        {item.isWaitlistBooking && <p className="text-xs font-semibold text-primary">Reposição — encaixe pela fila</p>}
                         {/* Data e Horário em Destaque */}
                         <div>
                           <div className="text-base font-black text-foreground">
@@ -546,8 +551,8 @@ const PatientPortalContent: React.FC = () => {
                           )}
                           <span className="leading-tight">
                             {item.canCancelWithCredit
-                              ? "Desmarcar agora gera crédito automático de reposição (30 dias)."
-                              : "Menos de 2h para o início: desmarcação sem crédito automático."}
+                              ? (item.replacementCreditId ? "Desmarcar agora devolve o crédito com a validade original." : `Desmarcar agora gera crédito de reposição válido por ${policy.replacementExpiryDays} dias.`)
+                              : `Menos de ${policy.cancellationNoticeHours}h para o início: desmarcação sem devolução de crédito.`}
                           </span>
                         </div>
 
@@ -608,6 +613,11 @@ const PatientPortalContent: React.FC = () => {
               </div>
             </div>
 
+            <PatientWaitlist portalToken={portalToken!} onChangeSlot={creditId => {
+              const credit = replacementCredits.find((c: any) => c._id === creditId)
+              if (credit) { setReplacementBookingCredit(credit); setReplacementTargetSlot(null); setWaitlistConsent(false) }
+            }} />
+
             {replacementCredits.length === 0 ? (
               <Card className="border-dashed border-border/80 rounded-3xl p-8 text-center space-y-3 bg-muted/10">
                 <div className="h-12 w-12 rounded-2xl bg-muted text-muted-foreground flex items-center justify-center mx-auto">
@@ -655,8 +665,11 @@ const PatientPortalContent: React.FC = () => {
                         className="w-full rounded-2xl text-xs font-bold h-10 shadow-sm gap-1.5"
                       >
                         <Calendar className="h-3.5 w-3.5" />
-                        <span>Agendar Esta Reposição</span>
+                        <span>Agendar reposição</span>
                       </Button>
+                      <Button size="sm" variant="outline" className="w-full rounded-2xl text-xs h-10" onClick={() => {
+                        setReplacementBookingCredit(credit); setReplacementTargetSlot(null); setWaitlistConsent(false)
+                      }}>Entrar na fila de espera</Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -967,11 +980,11 @@ const PatientPortalContent: React.FC = () => {
               <div>
                 <span className="font-bold block">
                   {cancelModalItem.canCancelWithCredit
-                    ? "Você receberá 1 crédito de reposição!"
+                    ? (cancelModalItem.replacementCreditId ? "Seu crédito será devolvido com a validade original." : "Você receberá 1 crédito de reposição!")
                     : "Atenção à regra de antecedência"}
                 </span>
                 {cancelModalItem.canCancelWithCredit
-                  ? `Faltam ${cancelModalItem.hoursUntilSession}h para a sessão. Como você está desmarcando com mais de ${policy.cancellationNoticeHours}h de antecedência, seu crédito terá validade de ${policy.replacementExpiryDays} dias.`
+                  ? (cancelModalItem.replacementCreditId ? `A devolução não renova a validade original do crédito. Créditos vencidos não poderão ser usados novamente.` : `Faltam ${cancelModalItem.hoursUntilSession}h para a sessão. Seu crédito terá validade de ${policy.replacementExpiryDays} dias.`)
                   : `Faltam apenas ${cancelModalItem.hoursUntilSession}h para a sessão. Como a antecedência mínima da clínica é de ${policy.cancellationNoticeHours}h, esta desmarcação não gerará crédito automático de reposição.`}
               </div>
             </div>
@@ -1142,30 +1155,26 @@ const PatientPortalContent: React.FC = () => {
       {/* MODAL 3: AGENDAR REPOSIÇÃO                                            */}
       {/* ===================================================================== */}
       {replacementBookingCredit && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-card border border-border/80 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+        <Dialog open onOpenChange={open => { if (!open && !isBookingReplacement) { setReplacementBookingCredit(null); setReplacementTargetSlot(null); setWaitlistConsent(false) } }}>
+          <DialogContent className="w-full max-w-md bg-card border-border/80 rounded-3xl p-5 gap-4 max-h-[90vh] overflow-y-auto">
+            <DialogDescription className="sr-only">Escolha uma data e horário para agendar sua reposição ou aguardar uma vaga.</DialogDescription>
             <div className="flex items-center justify-between pb-1 border-b border-border/50">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600">
                   <Calendar className="h-4 w-4" />
                 </div>
-                <h4 className="text-sm font-black text-foreground">Agendar Reposição</h4>
+                <DialogTitle className="text-sm font-black text-foreground pr-5">Reposição ou fila de espera</DialogTitle>
               </div>
-              <button
-                onClick={() => {
-                  setReplacementBookingCredit(null)
-                  setReplacementTargetSlot(null)
-                }}
-                className="p-1 rounded-xl text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
+
             </div>
 
             <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800">
-              Você está utilizando seu crédito de reposição de <strong>{replacementBookingCredit.originTitle}</strong> (Válido até {formatDateBR(replacementBookingCredit.expiryDate)}).
+              Você está escolhendo onde utilizar seu crédito de reposição de <strong>{replacementBookingCredit.originTitle}</strong> (Válido até {formatDateBR(replacementBookingCredit.expiryDate)}).
             </div>
 
+            <label className="block text-xs font-semibold">Data da reposição
+              <input type="date" aria-label="Data da reposição" className="mt-1 w-full rounded-xl border bg-background p-2" min={getTodayDateString()} max={replacementBookingCredit.expiryDate} value={replacementDate} onChange={e => { if (e.target.value) setReplacementDate(e.target.value); setReplacementTargetSlot(null); setWaitlistConsent(false) }} />
+            </label>
             {/* Seletor de Datas */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-foreground">Escolha a Data da Reposição:</label>
@@ -1192,11 +1201,11 @@ const PatientPortalContent: React.FC = () => {
 
             {/* Lista de Vagas */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-foreground">Horários com Vagas Livres:</label>
+              <label className="text-xs font-bold text-foreground">Horários disponíveis e filas:</label>
 
               {!availableSlotsReplacement || availableSlotsReplacement.length === 0 ? (
                 <div className="p-4 rounded-2xl bg-muted/20 text-center text-xs text-muted-foreground">
-                  Nenhuma vaga livre encontrada nesta data. Tente outro dia acima.
+                  Nenhum horário elegível nesta data. Escolha outro dia dentro da validade do crédito.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -1206,7 +1215,9 @@ const PatientPortalContent: React.FC = () => {
                     return (
                       <div
                         key={slot.scheduleId}
-                        onClick={() => setReplacementTargetSlot(slot)}
+                        role="button" tabIndex={0} aria-pressed={isSelected}
+                        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReplacementTargetSlot(slot); setWaitlistConsent(false) } }}
+                        onClick={() => { setReplacementTargetSlot(slot); setWaitlistConsent(false) }}
                         className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                           isSelected
                             ? "border-primary bg-primary/10 shadow-sm"
@@ -1232,7 +1243,7 @@ const PatientPortalContent: React.FC = () => {
                         </div>
 
                         <Badge variant="secondary" className="text-[10px]">
-                          {slot.vacanciesLeft} vaga(s)
+                          {slot.vacanciesLeft > 0 ? `${slot.vacanciesLeft} vaga(s)` : "Fila de espera"}
                         </Badge>
                       </div>
                     )
@@ -1241,6 +1252,13 @@ const PatientPortalContent: React.FC = () => {
               )}
             </div>
 
+            {replacementTargetSlot?.vacanciesLeft === 0 && <div className="rounded-2xl border p-3 space-y-2 text-xs">
+              <p>Se surgir uma vaga até 90 minutos antes, sua reposição será agendada automaticamente e avisaremos neste WhatsApp.</p>
+              <p className="font-semibold">WhatsApp: {portalData?.patient.phone || 'Não cadastrado'}</p>
+              {!isValidPhone(portalData?.patient.phone || '') && <p role="alert" className="text-destructive">Peça à recepção para corrigir seu WhatsApp antes de entrar na fila.</p>}
+              <label className="flex gap-2 items-start"><input type="checkbox" checked={waitlistConsent} onChange={e => setWaitlistConsent(e.target.checked)} className="mt-0.5" />Aceito o encaixe automático somente nesta data e horário.</label>
+              <p className="text-muted-foreground">Ao trocar, você entra no fim da nova fila. Seus horários fixos não mudam.</p>
+            </div>}
             <div className="grid grid-cols-2 gap-2 pt-2">
               <Button
                 variant="outline"
@@ -1255,15 +1273,15 @@ const PatientPortalContent: React.FC = () => {
               </Button>
               <Button
                 size="sm"
-                disabled={!replacementTargetSlot || isBookingReplacement}
+                disabled={!replacementTargetSlot || isBookingReplacement || (replacementTargetSlot.vacanciesLeft === 0 && (!waitlistConsent || !isValidPhone(portalData?.patient.phone || "")))}
                 onClick={handleConfirmReplacementBooking}
                 className="h-11 rounded-2xl text-xs font-bold shadow-md shadow-primary/25"
               >
-                {isBookingReplacement ? "Agendando..." : "Confirmar Reposição"}
+                {isBookingReplacement ? "Salvando..." : replacementTargetSlot?.vacanciesLeft === 0 ? "Entrar na fila" : "Confirmar reposição"}
               </Button>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* ===================================================================== */}

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as appointmentNotifications from "../appointmentNotifications.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as authActions from "../authActions.js";
@@ -18,10 +19,12 @@ import type * as clinical from "../clinical.js";
 import type * as consents from "../consents.js";
 import type * as crons from "../crons.js";
 import type * as finance from "../finance.js";
+import type * as lib_appointmentJobs from "../lib/appointmentJobs.js";
 import type * as lib_password from "../lib/password.js";
 import type * as lib_patientCredentials from "../lib/patientCredentials.js";
 import type * as lib_security from "../lib/security.js";
 import type * as lib_validation from "../lib/validation.js";
+import type * as lib_waitlist from "../lib/waitlist.js";
 import type * as maintenance from "../maintenance.js";
 import type * as notifications from "../notifications.js";
 import type * as packages from "../packages.js";
@@ -35,6 +38,7 @@ import type * as schedules from "../schedules.js";
 import type * as security from "../security.js";
 import type * as seed from "../seed.js";
 import type * as services from "../services.js";
+import type * as waitlist from "../waitlist.js";
 import type * as whatsapp from "../whatsapp.js";
 
 import type {
@@ -44,6 +48,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  appointmentNotifications: typeof appointmentNotifications;
   audit: typeof audit;
   auth: typeof auth;
   authActions: typeof authActions;
@@ -54,10 +59,12 @@ declare const fullApi: ApiFromModules<{
   consents: typeof consents;
   crons: typeof crons;
   finance: typeof finance;
+  "lib/appointmentJobs": typeof lib_appointmentJobs;
   "lib/password": typeof lib_password;
   "lib/patientCredentials": typeof lib_patientCredentials;
   "lib/security": typeof lib_security;
   "lib/validation": typeof lib_validation;
+  "lib/waitlist": typeof lib_waitlist;
   maintenance: typeof maintenance;
   notifications: typeof notifications;
   packages: typeof packages;
@@ -71,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   security: typeof security;
   seed: typeof seed;
   services: typeof services;
+  waitlist: typeof waitlist;
   whatsapp: typeof whatsapp;
 }>;
 

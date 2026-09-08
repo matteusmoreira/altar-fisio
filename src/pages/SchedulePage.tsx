@@ -1,3 +1,4 @@
+import { occupiesSeat } from '../../shared/scheduleOccupancy'
 import React, { useState } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
@@ -365,7 +366,7 @@ export const SchedulePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Button
             variant="outline"
             onClick={() => setIsAvailabilityModalOpen(true)}
@@ -582,7 +583,7 @@ export const SchedulePage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5 animate-fade-in">
           {dayFilteredSchedules.map((schedule) => {
             const occupied = schedule.participants.filter(
-              (p) => p.status !== "justified_absence"
+              occupiesSeat
             ).length
             const isFull = occupied >= schedule.maxCapacity
 
@@ -603,6 +604,7 @@ export const SchedulePage: React.FC = () => {
                           <h3 className="font-bold text-sm text-foreground leading-tight">
                             {schedule.title}
                           </h3>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedDetailSchedule(schedule)}>Fila de espera</Button>
                           <Badge
                             variant={schedule.type === "turma" ? "purple" : "info"}
                             className="text-[9px] px-1.5 py-0"
@@ -781,7 +783,7 @@ export const SchedulePage: React.FC = () => {
         <div className="space-y-4 animate-fade-in">
           {dayFilteredSchedules.map((schedule) => {
             const occupied = schedule.participants.filter(
-              (p) => p.status !== "justified_absence"
+              occupiesSeat
             ).length
             const isFull = occupied >= schedule.maxCapacity
 
@@ -789,15 +791,16 @@ export const SchedulePage: React.FC = () => {
               <Card key={schedule.id} className="overflow-hidden border-border shadow-xs">
                 {/* Cabeçalho do Card */}
                 <div className="p-4 bg-muted/20 border-b border-border flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="h-10 w-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20">
                       {schedule.startTime}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold text-sm text-foreground">
                           {schedule.title}
                         </h3>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelectedDetailSchedule(schedule)}>Fila de espera</Button>
                         <Badge
                           variant={schedule.type === "turma" ? "purple" : "info"}
                           className="text-[10px]"
@@ -814,7 +817,7 @@ export const SchedulePage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground font-mono">
                       Capacidade: {occupied}/{schedule.maxCapacity}
                     </span>
@@ -1599,7 +1602,7 @@ export const SchedulePage: React.FC = () => {
 
       {/* Modal Detalhado de Agendamento (Interatividade das visões Semana e Mês) */}
       <ScheduleDetailModal
-        schedule={selectedDetailSchedule}
+        schedule={schedules.find(s => s.id === selectedDetailSchedule?.id) || selectedDetailSchedule}
         isOpen={!!selectedDetailSchedule}
         onClose={() => setSelectedDetailSchedule(null)}
         onCheckIn={checkIn}

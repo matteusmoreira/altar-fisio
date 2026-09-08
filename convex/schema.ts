@@ -25,6 +25,9 @@ export default defineSchema({
     activeWhatsappInstanceToken: v.optional(v.string()),
     activeReminder24hTemplateId: v.optional(v.id("messageTemplates")),
     activeReminder2hTemplateId: v.optional(v.id("messageTemplates")),
+    activeReminder1hTemplateId: v.optional(v.id("messageTemplates")),
+    activeReminder30mTemplateId: v.optional(v.id("messageTemplates")),
+    activeWaitlistTemplateId: v.optional(v.id("messageTemplates")),
     activeConfirmationTemplateId: v.optional(v.id("messageTemplates")),
     resendApiKey: v.optional(v.string()),
     resendFromEmail: v.optional(v.string()),
@@ -173,11 +176,42 @@ export default defineSchema({
     ),
     patientPackageId: v.optional(v.id("patientPackages")),
     replacementCreditId: v.optional(v.id("replacementCredits")),
+    waitlistEntryId: v.optional(v.id("waitlistEntries")),
     checkedInAt: v.optional(v.number()),
     notes: v.optional(v.string()),
   }).index("by_schedule", ["scheduleId"]).index("by_patient", ["patientId"]),
 
   // Créditos de Reposição Gerados por Desmarcações Antecipadas
+  waitlistEntries: defineTable({
+    patientId: v.id("patients"),
+    creditId: v.id("replacementCredits"),
+    scheduleId: v.id("schedules"),
+    joinedAt: v.number(),
+    cutoffAt: v.number(),
+    status: v.union(v.literal("waiting"), v.literal("booked"), v.literal("cancelled"), v.literal("closed")),
+    reason: v.optional(v.string()),
+    participantId: v.optional(v.id("scheduleParticipants")),
+  }).index("by_schedule_status", ["scheduleId", "status", "joinedAt"])
+    .index("by_patient", ["patientId"])
+    .index("by_credit_status", ["creditId", "status"]),
+
+  appointmentJobs: defineTable({
+    patientId: v.id("patients"),
+    scheduleId: v.id("schedules"),
+    participantId: v.optional(v.id("scheduleParticipants")),
+    entryId: v.optional(v.id("waitlistEntries")),
+    kind: v.union(v.literal("reminder_24h"), v.literal("reminder_1h"), v.literal("reminder_30m"), v.literal("waitlist_booked"), v.literal("waitlist_closed")),
+    fingerprint: v.string(),
+    dueAt: v.number(),
+    status: v.union(v.literal("queued"), v.literal("sending"), v.literal("sent"), v.literal("failed"), v.literal("uncertain"), v.literal("skipped")),
+    scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    error: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    attemptedAt: v.optional(v.number()),
+  }).index("by_participant", ["participantId"])
+    .index("by_schedule", ["scheduleId"])
+    .index("by_status_due", ["status", "dueAt"]),
+
   replacementCredits: defineTable({
     patientId: v.id("patients"),
     originScheduleId: v.id("schedules"),
@@ -428,7 +462,7 @@ export default defineSchema({
     ),
     category: v.union(
       v.literal("reminder_24h"),
-      v.literal("reminder_2h"),
+      v.literal("reminder_2h"), v.literal("reminder_1h"), v.literal("reminder_30m"), v.literal("waitlist_booked"),
       v.literal("booking_confirmation"),
       v.literal("broadcast"),
       v.literal("custom")
@@ -561,6 +595,7 @@ export default defineSchema({
       v.literal("confirmed"),
       v.literal("rejected")
     ),
+    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
     serviceId: v.optional(v.id("services")),
     packageId: v.optional(v.id("packages")),
     packageName: v.optional(v.string()),

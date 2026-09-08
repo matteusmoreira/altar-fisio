@@ -196,7 +196,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
     setFormStartTime(rule.startTime)
     setFormEndTime(rule.endTime)
     setFormSlotDuration(rule.slotDurationMinutes || 50)
-    setFormBreakMinutes(rule.breakMinutes || 10)
+    setFormBreakMinutes(rule.breakMinutes ?? 10)
     setFormIsActive(rule.isActive)
     setRuleError(null)
     setIsRuleFormOpen(true)
@@ -540,7 +540,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
                             <div className="text-[11px] text-muted-foreground/80 pt-1 flex items-center gap-3">
                               <span>⏱ Sessões: <b>{rule.slotDurationMinutes || 50} min</b></span>
-                              <span>☕ Intervalo: <b>{rule.breakMinutes || 10} min</b></span>
+                              <span>☕ Intervalo: <b>{rule.breakMinutes ?? 10} min</b></span>
                             </div>
                           </div>
                         </div>
@@ -826,7 +826,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                       value={formSlotDuration}
                       onChange={(e) => setFormSlotDuration(Number(e.target.value))}
                     />
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Ex: 50 min para Fisio</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Ex.: 30 min para sessões de meia hora</span>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-foreground/85 mb-1">Intervalo entre Sessões (min)</label>
@@ -838,9 +838,13 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                       value={formBreakMinutes}
                       onChange={(e) => setFormBreakMinutes(Number(e.target.value))}
                     />
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Ex: 10 min de respiro</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">Use 0 para horários seguidos: 08:00, 08:30, 09:00.</span>
                   </div>
                 </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Cada horário reúne os pacientes da sessão. Para atender 8 pessoas, configure a sala com capacidade 8 e o serviço como turma com 8 vagas. A disponibilidade segue os dias e o profissional desta regra.
+                </p>
 
                 <div className="flex items-center gap-2 pt-2">
                   <input

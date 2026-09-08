@@ -1,5 +1,7 @@
 import { validDate, validateSchedule } from './lib/validation'
 import { requireStaff } from './lib/security'
+import { bookCredit, cancelReplacement, closeScheduleQueue, processWaitlist } from './lib/waitlist'
+import { cancelParticipantJobs, occupiesSeat, prepareReminders, scheduleFingerprint } from './lib/appointmentJobs'
 import { query, mutation } from "./_generated/server"
 import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
@@ -77,7 +79,7 @@ export async function enrichSchedule(ctx: any, schedule: any) {
 
   // Vagas consideram apenas participantes ativos (ausências justificadas liberam a vaga)
   const activeCount = participants.filter(
-    (p: any) => p.status !== "justified_absence"
+    occupiesSeat
   ).length
 
   return {
@@ -331,11 +333,12 @@ export const createRecurringScheduleSeries = mutation({
       // Matricular alunos fixos na série
       if (args.enrolledPatientIds && args.enrolledPatientIds.length > 0) {
         for (const patientId of args.enrolledPatientIds) {
-          await ctx.db.insert("scheduleParticipants", {
+          const reminderParticipantId = await ctx.db.insert("scheduleParticipants", {
             scheduleId,
             patientId,
             status: "scheduled",
           })
+          await prepareReminders(ctx, reminderParticipantId)
         }
       }
 
@@ -366,6 +369,12 @@ export const addParticipantToSchedule = mutation({
 
     const schedule = await ctx.db.get(args.scheduleId)
     if (!schedule) throw new Error("Agendamento não encontrado")
+    if (schedule.status !== 'scheduled' || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now()) throw new Error('Sessão indisponível.')
+    await processWaitlist(ctx, args.scheduleId)
+    if (args.isReplacement) {
+      if (!args.replacementCreditId) throw new Error('Selecione um crédito de reposição.')
+      return bookCredit(ctx, args.patientId, args.replacementCreditId, args.scheduleId)
+    }
 
     const participants = await ctx.db
       .query("scheduleParticipants")
@@ -374,36 +383,22 @@ export const addParticipantToSchedule = mutation({
 
     // Considerar apenas alunos ativos (não liberados por desmarcação)
     const activeParticipants = participants.filter(
-      (p) => p.status !== "justified_absence"
+      occupiesSeat
     )
 
     if (activeParticipants.length >= schedule.maxCapacity) {
       throw new Error("Esta turma já atingiu a sua capacidade máxima!")
     }
 
-    // Se estiver usando crédito de reposição, validar e consumir
-    if (args.isReplacement && args.replacementCreditId) {
-      const credit = await ctx.db.get(args.replacementCreditId)
-      if (!credit || credit.status !== "available") {
-        throw new Error("Crédito de reposição inválido ou já utilizado.")
-      }
-      if (credit.patientId !== args.patientId) {
-        throw new Error("Este crédito de reposição pertence a outro paciente.")
-      }
-
-      await ctx.db.patch(args.replacementCreditId, {
-        status: "used",
-        usedInScheduleId: args.scheduleId,
-      })
-    }
-
-    return await ctx.db.insert("scheduleParticipants", {
+    if (activeParticipants.some(p => p.patientId === args.patientId)) throw new Error('Paciente já inscrito nesta sessão.')
+    const participantId = await ctx.db.insert("scheduleParticipants", {
       scheduleId: args.scheduleId,
       patientId: args.patientId,
-      status: args.isReplacement ? "replacement" : "scheduled",
-      replacementCreditId: args.replacementCreditId,
+      status: "scheduled",
       notes: args.notes,
     })
+    await prepareReminders(ctx, participantId)
+    return participantId
   },
 })
 
@@ -427,6 +422,13 @@ export const checkInParticipant = mutation({
     const isNowPresent = args.status === "present"
     const isNowAbsence = args.status === "absence"
     const isNowScheduled = args.status === "scheduled"
+    if ((isNowScheduled || isNowPresent) && !occupiesSeat(participant)) {
+      if (!schedule || schedule.status === 'cancelled') throw new Error('Sessão indisponível.')
+      await processWaitlist(ctx, participant.scheduleId)
+      const active = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', participant.scheduleId)).collect()
+      if (active.filter(occupiesSeat).length >= schedule.maxCapacity) throw new Error('A vaga foi ocupada. Não é possível reativar este participante.')
+      if (participant.replacementCreditId) throw new Error('Agende novamente usando o crédito de reposição disponível.')
+    }
 
     let deductedPackageId = participant.patientPackageId
     let resultMessage = ""
@@ -556,6 +558,8 @@ export const checkInParticipant = mutation({
       checkedInAt: args.status === "present" ? Date.now() : undefined,
       notes: updatedNotes,
     })
+    await prepareReminders(ctx, args.participantId)
+    if (isNowAbsence) await processWaitlist(ctx, participant.scheduleId)
 
     return {
       success: true,
@@ -588,7 +592,7 @@ export const batchCheckInClass = mutation({
 
     for (const p of participants) {
       // Pular se já estiver presente ou se desmarcou com reposição
-      if (p.status === "present" || p.status === "justified_absence") continue
+      if (p.status === "present" || !occupiesSeat(p)) continue
 
       let deductedPackageId = p.patientPackageId
 
@@ -637,6 +641,7 @@ export const batchCheckInClass = mutation({
         patientPackageId: deductedPackageId,
         checkedInAt: Date.now(),
       })
+      await cancelParticipantJobs(ctx, p._id)
       updatedCount++
     }
 
@@ -665,6 +670,8 @@ export const cancelWithReplacementCredit = mutation({
     const schedule = await ctx.db.get(participant.scheduleId)
     if (!schedule) throw new Error("Agendamento não encontrado")
 
+    if (!['scheduled', 'replacement'].includes(participant.status)) throw new Error('Este agendamento já foi processado.')
+
     const settings = await ctx.db.query("clinicSettings").first()
     const noticeHoursRequired = settings?.cancellationNoticeHours ?? 2
     const expiryDays = settings?.replacementExpiryDays ?? 30
@@ -676,6 +683,8 @@ export const cancelWithReplacementCredit = mutation({
 
     const isWithinPolicy = hoursNotice >= noticeHoursRequired
     const shouldGrantCredit = isWithinPolicy || !!args.forceExemption
+    if (sessionTimeMs <= nowMs) throw new Error('Não é possível desmarcar uma sessão já iniciada.')
+    if (participant.replacementCreditId) return { ...await cancelReplacement(ctx, participant, isWithinPolicy, args.reason), hoursNotice, isExemption: false }
 
     if (shouldGrantCredit) {
       // Calcula expiração
@@ -701,6 +710,8 @@ export const cancelWithReplacementCredit = mutation({
         status: "justified_absence",
         notes: args.reason ? `${notePrefix}: ${args.reason}` : notePrefix,
       })
+      await cancelParticipantJobs(ctx, participant._id)
+      await processWaitlist(ctx, schedule._id)
 
       // 3. Notificação Imediata WhatsApp: Notificar o paciente do crédito gerado
       const patient = await ctx.db.get(participant.patientId)
@@ -731,6 +742,8 @@ export const cancelWithReplacementCredit = mutation({
           ? `Desmarcado fora do prazo (${hoursNotice.toFixed(1)}h antes): ${args.reason}`
           : `Desmarcado fora do prazo (${hoursNotice.toFixed(1)}h antes - mínimo ${noticeHoursRequired}h)`,
       })
+      await cancelParticipantJobs(ctx, participant._id)
+      await processWaitlist(ctx, schedule._id)
 
       return {
         success: true,
@@ -830,7 +843,7 @@ export const listAvailableTurmasForReplacement = query({
           .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
           .collect()
 
-        const activeCount = participants.filter((p) => p.status !== "justified_absence").length
+        const activeCount = participants.filter(occupiesSeat).length
         const vacancies = s.maxCapacity - activeCount
 
         if (vacancies <= 0) return null
@@ -888,6 +901,13 @@ export const updateSchedule = mutation({
     for (const key of Object.keys(data)) if (data[key as keyof typeof data] === undefined) delete data[key as keyof typeof data]
     await validateSchedule(ctx, { ...existing, ...data }, id)
     await ctx.db.patch(id, data)
+    const updated = await ctx.db.get(id)
+    if (updated && (scheduleFingerprint(existing) !== scheduleFingerprint(updated) || updated.status !== 'scheduled')) {
+      await closeScheduleQueue(ctx, id, 'A sessão foi alterada ou cancelada pela clínica. Escolha outra data no portal.')
+    }
+    const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', id)).collect()
+    for (const p of participants) await prepareReminders(ctx, p._id)
+    await processWaitlist(ctx, id)
     return id
   },
 })
@@ -912,12 +932,14 @@ export const deleteSchedule = mutation({
         .collect()
 
       for (const s of series) {
+        await closeScheduleQueue(ctx, s._id, 'Sessão removida pela clínica. Escolha outro horário.')
         // Remover participantes
         const parts = await ctx.db
           .query("scheduleParticipants")
           .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
           .collect()
         for (const p of parts) {
+          await cancelParticipantJobs(ctx, p._id)
           await ctx.db.delete(p._id)
         }
         await ctx.db.delete(s._id)
@@ -925,11 +947,13 @@ export const deleteSchedule = mutation({
       return { success: true, count: series.length }
     } else {
       // Excluir apenas este agendamento e seus participantes
+      await closeScheduleQueue(ctx, args.id, 'Sessão removida pela clínica. Escolha outro horário.')
       const parts = await ctx.db
         .query("scheduleParticipants")
         .withIndex("by_schedule", (q) => q.eq("scheduleId", args.id))
         .collect()
       for (const p of parts) {
+        await cancelParticipantJobs(ctx, p._id)
         await ctx.db.delete(p._id)
       }
       await ctx.db.delete(args.id)
@@ -950,8 +974,17 @@ export const removeParticipantFromSchedule = mutation({
 
     const part = await ctx.db.get(args.participantRecordId)
     if (!part) throw new Error("Participante não encontrado")
+    if (part.scheduleId !== args.scheduleId) throw new Error('Participante não pertence à sessão.')
+    if (part.replacementCreditId && ['scheduled', 'replacement'].includes(part.status)) {
+      const s = await ctx.db.get(part.scheduleId)
+      const settings = await ctx.db.query('clinicSettings').first()
+      const inPolicy = !!s && parseDateTimeToMs(s.date, s.startTime) - Date.now() >= (settings?.cancellationNoticeHours ?? 2) * 3600000
+      return cancelReplacement(ctx, part, inPolicy, 'Reposição retirada pela recepção.')
+    }
 
+    await cancelParticipantJobs(ctx, part._id)
     await ctx.db.delete(args.participantRecordId)
+    await processWaitlist(ctx, part.scheduleId)
     return { success: true }
   },
 })

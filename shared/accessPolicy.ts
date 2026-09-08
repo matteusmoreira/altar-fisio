@@ -1,5 +1,16 @@
 // UI query gating only. Server guards independently enforce these permissions.
 export const accessPolicy: Record<string, 'public' | 'patient' | readonly string[]> = {
+  "waitlist:forStaff": ["admin", "professional", "reception"],
+  "waitlist:staffCredits": ["admin", "professional", "reception"],
+  "waitlist:staffJoin": ["admin", "reception"],
+  "waitlist:staffLeave": ["admin", "reception"],
+  "waitlist:mine": "patient",
+  "waitlist:slots": "patient",
+  "waitlist:join": "patient",
+  "waitlist:leave": "patient",
+  "appointmentNotifications:problems": ["admin", "reception"],
+  "appointmentNotifications:retry": ["admin", "reception"],
+  "appointmentNotifications:scan": ["admin", "reception"],
   "clinic:getNotificationSettings": ["admin", "reception"],
   "clinic:getHealthInsuranceOptions": ["admin", "professional", "reception"],
   "clinic:updateHealthInsuranceOptions": ["admin"],

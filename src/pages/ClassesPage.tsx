@@ -1,3 +1,4 @@
+import { occupiesSeat } from '../../shared/scheduleOccupancy'
 import React, { useState } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { ReplacementCredit, Schedule, Room, RoomType, Specialty } from "@/types"
@@ -223,7 +224,7 @@ export const ClassesPage: React.FC = () => {
 
   // Turmas com vagas livres
   const turmasWithVacancies = classSchedules.filter((s) => {
-    const activeStudents = s.participants.filter((p) => p.status !== "justified_absence")
+    const activeStudents = s.participants.filter(occupiesSeat)
     return activeStudents.length < s.maxCapacity
   })
 
@@ -638,7 +639,7 @@ export const ClassesPage: React.FC = () => {
             <div className={turmasViewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in" : "space-y-4 animate-fade-in"}>
               {filteredTurmas.map((schedule) => {
                 const activeParticipants = schedule.participants.filter(
-                  (p) => p.status !== "justified_absence"
+                  occupiesSeat
                 )
                 const vacancies = schedule.maxCapacity - activeParticipants.length
                 const isFull = vacancies <= 0

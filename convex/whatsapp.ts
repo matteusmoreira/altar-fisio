@@ -768,7 +768,7 @@ export const listTemplates = query({
     category: v.optional(
       v.union(
         v.literal("reminder_24h"),
-        v.literal("reminder_2h"),
+        v.literal("reminder_2h"), v.literal("reminder_1h"), v.literal("reminder_30m"), v.literal("waitlist_booked"),
         v.literal("booking_confirmation"),
         v.literal("broadcast"),
         v.literal("custom")
@@ -839,7 +839,7 @@ export const saveTemplate = mutation({
     ),
     category: v.union(
       v.literal("reminder_24h"),
-      v.literal("reminder_2h"),
+      v.literal("reminder_2h"), v.literal("reminder_1h"), v.literal("reminder_30m"), v.literal("waitlist_booked"),
       v.literal("booking_confirmation"),
       v.literal("broadcast"),
       v.literal("custom")
@@ -886,7 +886,7 @@ export const deleteTemplate = mutation({
 
 export const assignReminderTemplate = mutation({
   args: { sessionToken: v.string(),
-    target: v.union(v.literal("reminder_24h"), v.literal("reminder_2h"), v.literal("booking_confirmation")),
+    target: v.union(v.literal("reminder_24h"), v.literal("reminder_2h"), v.literal("reminder_1h"), v.literal("reminder_30m"), v.literal("waitlist_booked"), v.literal("booking_confirmation")),
     templateId: v.optional(v.id("messageTemplates")),
   },
   handler: async (ctx, input) => {
@@ -900,6 +900,12 @@ export const assignReminderTemplate = mutation({
       await ctx.db.patch(settings._id, { activeReminder24hTemplateId: args.templateId })
     } else if (args.target === "reminder_2h") {
       await ctx.db.patch(settings._id, { activeReminder2hTemplateId: args.templateId })
+    } else if (args.target === "reminder_1h") {
+      await ctx.db.patch(settings._id, { activeReminder1hTemplateId: args.templateId })
+    } else if (args.target === "reminder_30m") {
+      await ctx.db.patch(settings._id, { activeReminder30mTemplateId: args.templateId })
+    } else if (args.target === "waitlist_booked") {
+      await ctx.db.patch(settings._id, { activeWaitlistTemplateId: args.templateId })
     } else if (args.target === "booking_confirmation") {
       await ctx.db.patch(settings._id, { activeConfirmationTemplateId: args.templateId })
     }

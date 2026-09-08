@@ -44,6 +44,17 @@ beforeEach(() => {
 
 afterEach(() => cleanup())
 
+test.each([
+  ['reminder_1h', 'Lembrete 1h', '1 hora'],
+  ['reminder_30m', 'Lembrete 30 minutos', '30 minutos'],
+  ['waitlist_booked', 'Encaixe pela fila', 'somente nesta data'],
+])('novo preset %s tem conteúdo correspondente', (category, title, phrase) => {
+  render(<MessageTemplateBuilder />)
+  fireEvent.change(getCategorySelect(), { target: { value: category } })
+  expect(screen.getAllByRole('textbox').some(element => (element as HTMLInputElement).value === title)).toBe(true)
+  expect(getContentEditor().value).toContain(phrase)
+})
+
 test("trocar a categoria de um novo modelo carrega o preset correspondente no editor", () => {
   render(<MessageTemplateBuilder />)
 

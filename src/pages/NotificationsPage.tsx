@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext'
+import { AppointmentDeliveryProblems } from '@/components/whatsapp/AppointmentDeliveryProblems'
 import React, { useState, useMemo } from "react"
 import { useQuery, useAction } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
@@ -181,9 +182,9 @@ export const NotificationsPage: React.FC = () => {
     try {
       const res = await triggerUpcomingRemindersNow()
       if (res?.success) {
-        const sent24 = res.reminders24h?.sentCount ?? 0
-        const sent2 = res.reminders2h?.sentCount ?? 0
-        showToast(`Varredura concluída! Disparados: ${sent24} lembretes (24h) e ${sent2} lembretes (2h).`)
+        const sent24 = res.reminders24h?.queuedCount ?? 0
+
+        showToast(`Varredura concluída! ${sent24} avisos de véspera enfileirados. Preparação dos lembretes de 1h e 30min iniciada.`)
       } else {
         showToast("Varredura manual concluída com sucesso.")
       }
@@ -198,6 +199,14 @@ export const NotificationsPage: React.FC = () => {
     switch (type) {
       case "lembrete_24h":
         return { label: "Lembrete 24h", variant: "default" as const, color: "bg-blue-500/10 text-blue-600 border-blue-500/20" }
+      case "reminder_1h":
+        return { label: "Lembrete 1h", variant: "warning" as const, color: "text-amber-600" }
+      case "reminder_30m":
+        return { label: "Lembrete 30min", variant: "warning" as const, color: "text-amber-600" }
+      case "waitlist_booked":
+        return { label: "Encaixe pela fila", variant: "default" as const, color: "text-emerald-600" }
+      case "waitlist_closed":
+        return { label: "Fila encerrada", variant: "default" as const, color: "text-muted-foreground" }
       case "lembrete_2h":
         return { label: "Lembrete 2h", variant: "warning" as const, color: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
       case "credito_reposicao":
@@ -259,6 +268,7 @@ export const NotificationsPage: React.FC = () => {
 
 
       {/* Abas Principais do Módulo */}
+      <AppointmentDeliveryProblems />
       <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
         <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex flex-wrap gap-1">
           <TabsTrigger
@@ -372,7 +382,7 @@ export const NotificationsPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-bold text-purple-600">{notificationStats.todayCount}</div>
-          <span className="text-[10px] text-muted-foreground">Próximas 24h & 2h</span>
+          <span className="text-[10px] text-muted-foreground">Véspera, 1h e 30min</span>
         </Card>
       </div>
           {/* 4. Tabela de Logs de Disparo em Tempo Real */}
@@ -557,12 +567,12 @@ export const NotificationsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="font-bold text-foreground flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-amber-500" />
-                <span>Lembrete 2h Antes</span>
+                <span>Lembretes 1h e 30min</span>
               </span>
-              <Badge variant="outline" className="text-[9px]">A cada 30 min</Badge>
+              <Badge variant="outline" className="text-[9px]">Por compromisso</Badge>
             </div>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
-              Avisa o paciente 2 horas antes da sessão com lembrete de pontualidade e recomendação de meias antiderrapantes para aulas de Pilates.
+              Envia duas mensagens: uma hora e trinta minutos antes. Inclui os encaixes pela fila e acompanha alterações e cancelamentos.
             </p>
           </div>
 

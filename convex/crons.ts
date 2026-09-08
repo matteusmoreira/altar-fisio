@@ -11,12 +11,12 @@ crons.daily(
   {}
 )
 
-// 2. A cada 30 minutos verifica e dispara lembretes de 2h antes (para turmas e atendimentos do dia)
+// Prepara lembretes futuros existentes sem disparar janelas já vencidas.
 crons.interval(
-  "disparo-lembretes-2h",
-  { minutes: 30 },
-  internal.notifications.checkAndSendUpcomingReminders2hAction,
-  {}
+  "preparar-lembretes-1h-30min",
+  { minutes: 5 },
+  internal.appointmentNotifications.backfill,
+  { paginationOpts: { numItems: 10, cursor: null } }
 )
 
 // 3. A cada 30 minutos processa campanhas recorrentes do disparador em massa

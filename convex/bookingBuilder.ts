@@ -1,5 +1,4 @@
-import { validDate, validateSchedule } from './lib/validation'
-import type { QueryCtx, MutationCtx } from './_generated/server'
+import { validDate } from './lib/validation'
 import { requireStaff } from './lib/security'
 import { query, mutation, action, internalMutation } from "./_generated/server"
 import { credentialFields, ensurePatientCredential, findPatients } from './lib/patientCredentials'
@@ -7,7 +6,8 @@ import { isValidCpf, isValidPhone, normalizeCpf, normalizePhone } from '../share
 import type { Id, Doc } from './_generated/dataModel'
 import { api, internal } from "./_generated/api"
 import { v, ConvexError } from "convex/values"
-import { sliceTimeWindowIntoSlots } from "./availability"
+import { getPublicSlots } from './lib/bookingSlots'
+import { bookGroupSession } from './lib/bookGroupSession'
 
 export const DEFAULT_BOOKING_STEPS = [
   {
@@ -272,6 +272,8 @@ export const listPublicAvailableSlots = query({
     date: v.string(), // YYYY-MM-DD
     specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
     professionalId: v.optional(v.id("professionals")),
+    serviceId: v.optional(v.id("services")),
+    packageId: v.optional(v.id("packages")),
   },
   handler: getPublicSlots,
 })
@@ -347,13 +349,6 @@ export const persistPublicBooking = internalMutation({
     if (!args.name.trim() || args.name.length > 200 || args.answers.length > 50 || args.answers.some(a => a.answer.length > 5000) || (args.notes?.length || 0) > 5000) throw new ConvexError('Dados de agendamento inválidos.')
     if (!isValidCpf(args.documentCpf) || !isValidPhone(args.phone)) throw new ConvexError('CPF ou telefone inválido.')
     if (new Date(args.date + 'T' + args.startTime + ':00-03:00').getTime() <= now) throw new ConvexError('Selecione um horário futuro.')
-    const slots = await getPublicSlots(ctx, { date: args.date, specialty: args.specialty, professionalId: args.professionalId })
-    const selected = slots.find(slot => slot.startTime === args.startTime && slot.endTime === args.endTime && slot.isAvailable)
-    const selectedRoom = selected?.rooms.find(room => !args.roomId || room.roomId === args.roomId)
-    const selectedProfessional = selected?.availableProfessionals.find(prof => !args.professionalId || prof.id === args.professionalId)
-    if (!selectedRoom || !selectedProfessional) throw new ConvexError('Horário indisponível. Atualize a agenda e selecione novamente.')
-    args.roomId = selectedRoom.roomId
-    args.professionalId = selectedProfessional.id
     if (args.packageId) {
       const pkg = await ctx.db.get(args.packageId)
       if (!pkg?.active || pkg.showInPublicBooking === false) throw new ConvexError('Plano indisponível.')
@@ -366,6 +361,14 @@ export const persistPublicBooking = internalMutation({
       if (!service?.active) throw new ConvexError('Serviço indisponível.')
       args.selectedPrice = service.defaultPrice; args.specialty = service.specialty
     } else { args.selectedPrice = undefined }
+
+    const slots = await getPublicSlots(ctx, args)
+    const selected = slots.find(slot => slot.startTime === args.startTime && slot.endTime === args.endTime && slot.isAvailable)
+    const selectedRoom = selected?.rooms.find(room => (!args.roomId || room.roomId === args.roomId) && (!args.professionalId || room.professionalId === args.professionalId))
+    if (!selectedRoom) throw new ConvexError('Horário indisponível. Atualize a agenda e selecione novamente.')
+    args.roomId = selectedRoom.roomId
+    args.professionalId = selectedRoom.professionalId
+    args.specialty = selectedRoom.specialty
 
     // 1. Busca ou cadastra o paciente pelo CPF ou Telefone
     const cleanCpf = normalizeCpf(args.documentCpf)
@@ -406,92 +409,14 @@ export const persistPublicBooking = internalMutation({
     const requireApproval = config?.requireApproval ?? false
     const initialStatus = requireApproval ? "pending_approval" : "confirmed"
 
-    let assignedScheduleId: any = undefined
-
-    // 3. Se for auto-confirmação, aloca ou cria o agendamento no sistema
-    if (!requireApproval) {
-      // Localiza sala e profissional adequados
-      let roomId = args.roomId
-      let profId = args.professionalId
-
-      if (!roomId) {
-        const rooms = await ctx.db.query("rooms").collect()
-        const matchedRoom = rooms.find((r) =>
-          args.specialty === "pilates"
-            ? r.type.includes("pilates")
-            : args.specialty === "rpg"
-            ? r.type === "rpg"
-            : true
-        )
-        roomId = matchedRoom?._id || rooms[0]?._id
-      }
-
-      if (!profId) {
-        const profs = await ctx.db.query("professionals").collect()
-        profId = profs[0]?._id
-      }
-
-      if (roomId && profId) {
-        // Procura turma/sessão existente no mesmo horário e sala
-        const existingSchedule = await ctx.db
-          .query("schedules")
-          .withIndex("by_room_date", (q) => q.eq("roomId", roomId!).eq("date", args.date))
-          .filter((q) => q.eq(q.field("startTime"), args.startTime))
-          .first()
-
-        if (existingSchedule) {
-          if (existingSchedule.status === 'cancelled' || existingSchedule.endTime !== args.endTime || existingSchedule.professionalId !== profId) throw new ConvexError('Horário indisponível.')
-          const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', existingSchedule._id)).collect()
-          const active = participants.filter(p => !['absence','justified_absence'].includes(p.status))
-          if (active.length >= existingSchedule.maxCapacity || active.some(p => p.patientId === patient!._id)) throw new ConvexError('Horário lotado ou já reservado para este paciente.')
-          assignedScheduleId = existingSchedule._id
-          // Adiciona participante
-          await ctx.db.insert("scheduleParticipants", {
-            scheduleId: existingSchedule._id,
-            patientId: patient._id,
-            status: "scheduled",
-            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
-          })
-        } else {
-          // Cria novo agendamento
-          const specialty = args.specialty || "fisioterapia"
-          const room = await ctx.db.get(roomId)
-          await validateSchedule(ctx, { roomId, professionalId: profId, date: args.date, startTime: args.startTime, endTime: args.endTime, maxCapacity: room?.capacity || 1 })
-          const newScheduleId = await ctx.db.insert("schedules", {
-            title: args.packageName
-              ? `${args.packageName} (Online)`
-              : specialty === "pilates"
-              ? "Pilates Studio (Online)"
-              : "Atendimento Fisioterapia (Online)",
-            type: specialty === "pilates" ? "turma" : "individual",
-            specialty,
-            roomId,
-            professionalId: profId,
-            date: args.date,
-            startTime: args.startTime,
-            endTime: args.endTime,
-            maxCapacity: room?.capacity || 1,
-            status: "scheduled",
-            notes: `Agendado via Portal Público pelo paciente ${args.name}`,
-          })
-
-          await ctx.db.insert("scheduleParticipants", {
-            scheduleId: newScheduleId,
-            patientId: patient._id,
-            status: "scheduled",
-            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
-          })
-
-          assignedScheduleId = newScheduleId
-        }
-      }
-    }
+    const assignedScheduleId = requireApproval ? undefined : await bookGroupSession(ctx, { ...args, patientId: patient._id })
 
     // 4. Salva a submissão do agendamento público com as respostas da triagem
     const publicBookingId = await ctx.db.insert("publicBookings", {
       patientId: patient._id,
       scheduleId: assignedScheduleId,
       status: initialStatus,
+      specialty: args.specialty,
       serviceId: args.serviceId,
       packageId: args.packageId,
       packageName: args.packageName,
@@ -640,43 +565,8 @@ export const updatePublicBookingStatus = mutation({
     const now = Date.now()
 
     if (args.status === "confirmed" && !booking.scheduleId) {
-      // Cria a sessão na agenda se ainda não estava vinculada
-      const patient = await ctx.db.get(booking.patientId)
-      const rooms = await ctx.db.query("rooms").collect()
-      const profs = await ctx.db.query("professionals").collect()
-
-      const roomId = booking.roomId || rooms[0]?._id
-      const profId = booking.professionalId || profs[0]?._id
-
-      if (roomId && profId) {
-        const room = await ctx.db.get(roomId)
-        await validateSchedule(ctx, { roomId, professionalId: profId, date: booking.date, startTime: booking.startTime, endTime: booking.endTime, maxCapacity: room?.capacity || 1 })
-        const newScheduleId = await ctx.db.insert("schedules", {
-          title: "Atendimento Clínico (Aprovado Online)",
-          type: "individual",
-          specialty: "fisioterapia",
-          roomId,
-          professionalId: profId,
-          date: booking.date,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-          maxCapacity: room?.capacity || 1,
-          status: "scheduled",
-          notes: `Aprovado pela recepção. Paciente: ${patient?.name}`,
-        })
-
-        await ctx.db.insert("scheduleParticipants", {
-          scheduleId: newScheduleId,
-          patientId: booking.patientId,
-          status: "scheduled",
-          notes: "Agendamento online aprovado pela equipe",
-        })
-
-        await ctx.db.patch(args.bookingId, {
-          status: "confirmed",
-          scheduleId: newScheduleId,
-        })
-      }
+      const scheduleId = await bookGroupSession(ctx, { ...booking, specialty: booking.specialty })
+      await ctx.db.patch(args.bookingId, { status: 'confirmed', scheduleId })
     } else {
       await ctx.db.patch(args.bookingId, {
         status: args.status,
@@ -696,282 +586,3 @@ export const updatePublicBookingStatus = mutation({
     return { success: true }
   },
 })
-
-export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: { date: string; specialty?: 'pilates' | 'fisioterapia' | 'rpg'; professionalId?: import('./_generated/dataModel').Id<'professionals'> }) {
-    // Busca salas ativas
-    const rooms = await ctx.db
-      .query("rooms")
-      .withIndex("by_active", (q) => q.eq("isActive", true))
-      .collect()
-
-    // Busca profissionais ativos
-    let professionals = await ctx.db
-      .query("professionals")
-      .withIndex("by_active", (q) => q.eq("active", true))
-      .collect()
-
-    if (args.professionalId) {
-      professionals = professionals.filter((p) => p._id === args.professionalId)
-    } else if (args.specialty) {
-      const specFilter = args.specialty.toLowerCase()
-      professionals = professionals.filter((p) =>
-        p.specialties.some((s) => s.toLowerCase().includes(specFilter))
-      )
-    }
-
-    // Busca agendamentos existentes no dia
-    const existingSchedules = await ctx.db
-      .query("schedules")
-      .withIndex("by_date", (q) => q.eq("date", args.date))
-      .collect()
-
-    // Busca participantes de cada agendamento
-    const schedulesWithParticipants = await Promise.all(
-      existingSchedules.map(async (sch) => {
-        const participants = await ctx.db
-          .query("scheduleParticipants")
-          .withIndex("by_schedule", (q) => q.eq("scheduleId", sch._id))
-          .collect()
-        return {
-          ...sch,
-          currentParticipantsCount: participants.filter((p) => p.status !== "absence").length,
-        }
-      })
-    )
-
-    // Busca regras de disponibilidade configuradas na clínica
-    const allConfiguredRules = await ctx.db.query("availabilityRules").collect()
-    const activeClinicRules = allConfiguredRules.filter((r) => r.isActive)
-
-    // Se houver regras cadastradas na clínica, gera os horários dinamicamente a partir delas
-    if (activeClinicRules.length > 0) {
-      const dateObj = new Date(`${args.date}T12:00:00-03:00`)
-      const dayOfWeek = dateObj.getDay()
-
-      let rulesForDay = activeClinicRules.filter((r) => r.dayOfWeek === dayOfWeek)
-      if (args.specialty) {
-        rulesForDay = rulesForDay.filter((r) => r.specialty === args.specialty)
-      }
-      if (args.professionalId) {
-        rulesForDay = rulesForDay.filter((r) => r.professionalId === args.professionalId)
-      }
-
-      // Exceções do dia (bloqueios e extras)
-      const overrides = await ctx.db
-        .query("availabilityOverrides")
-        .withIndex("by_date", (q) => q.eq("date", args.date))
-        .collect()
-
-      const blocks = overrides.filter((o) => o.type === "block")
-      const extras = overrides.filter((o) => o.type === "extra")
-
-      // Mapeamento de slots calculados a partir das regras
-      const timeSlotsMap = new Map<
-        string,
-        { start: string; end: string; ruleRooms: Set<any>; ruleProfs: Set<any> }
-      >()
-
-      for (const rule of rulesForDay) {
-        // Bloqueio de dia inteiro
-        const isFullDayBlocked = blocks.some(
-          (b) =>
-            b.professionalId === rule.professionalId &&
-            (!b.roomId || b.roomId === rule.roomId) &&
-            !b.startTime &&
-            !b.endTime
-        )
-        if (isFullDayBlocked) continue
-
-        const slices = sliceTimeWindowIntoSlots(
-          rule.startTime,
-          rule.endTime,
-          rule.slotDurationMinutes || 50,
-          rule.breakMinutes || 10
-        )
-
-        for (const slice of slices) {
-          const isTimeBlocked = blocks.some(
-            (b) =>
-              b.professionalId === rule.professionalId &&
-              (!b.roomId || b.roomId === rule.roomId) &&
-              b.startTime &&
-              b.endTime &&
-              slice.start < b.endTime &&
-              b.startTime < slice.end
-          )
-          if (isTimeBlocked) continue
-
-          const key = slice.start
-          if (!timeSlotsMap.has(key)) {
-            timeSlotsMap.set(key, {
-              start: slice.start,
-              end: slice.end,
-              ruleRooms: new Set([rule.roomId]),
-              ruleProfs: new Set([rule.professionalId]),
-            })
-          } else {
-            const entry = timeSlotsMap.get(key)!
-            entry.ruleRooms.add(rule.roomId)
-            entry.ruleProfs.add(rule.professionalId)
-          }
-        }
-      }
-
-      // Adiciona plantões extras
-      for (const extra of extras) {
-        if (args.specialty && extra.specialty && extra.specialty !== args.specialty) continue
-        if (args.professionalId && extra.professionalId !== args.professionalId) continue
-        if (extra.startTime && extra.endTime && extra.roomId) {
-          const slices = sliceTimeWindowIntoSlots(extra.startTime, extra.endTime, 50, 10)
-          for (const slice of slices) {
-            const key = slice.start
-            if (!timeSlotsMap.has(key)) {
-              timeSlotsMap.set(key, {
-                start: slice.start,
-                end: slice.end,
-                ruleRooms: new Set([extra.roomId]),
-                ruleProfs: new Set([extra.professionalId]),
-              })
-            } else {
-              const entry = timeSlotsMap.get(key)!
-              entry.ruleRooms.add(extra.roomId)
-              entry.ruleProfs.add(extra.professionalId)
-            }
-          }
-        }
-      }
-
-      const sortedSlots = Array.from(timeSlotsMap.values()).sort((a, b) =>
-        a.start.localeCompare(b.start)
-      )
-
-      return sortedSlots.map((slot) => {
-        const schedulesAtTime = schedulesWithParticipants.filter(
-          (s) => s.startTime === slot.start && s.status !== "cancelled"
-        )
-
-        const compatibleRooms = rooms.filter((r) => slot.ruleRooms.has(r._id))
-        const availableRoomsWithSpots = compatibleRooms.map((room) => {
-          const scheduleInRoom = schedulesAtTime.find((s) => s.roomId === room._id)
-          if (!scheduleInRoom) {
-            return {
-              roomId: room._id,
-              roomName: room.name,
-              capacity: room.capacity,
-              occupied: 0,
-              availableSpots: room.capacity,
-              existingScheduleId: null,
-            }
-          }
-          const occupied = scheduleInRoom.currentParticipantsCount
-          const spots = Math.max(0, room.capacity - occupied)
-          return {
-            roomId: room._id,
-            roomName: room.name,
-            capacity: room.capacity,
-            occupied,
-            availableSpots: spots,
-            existingScheduleId: scheduleInRoom._id,
-          }
-        })
-
-        const totalSpots = availableRoomsWithSpots.reduce((acc, r) => acc + r.availableSpots, 0)
-        const hasRoomAvailable = availableRoomsWithSpots.some((r) => r.availableSpots > 0)
-        const compatibleProfs = professionals.filter((p) => slot.ruleProfs.has(p._id))
-        const hasProfAvailable = compatibleProfs.length > 0
-
-        return {
-          startTime: slot.start,
-          endTime: slot.end,
-          isAvailable: hasRoomAvailable && hasProfAvailable && totalSpots > 0,
-          totalAvailableSpots: totalSpots,
-          rooms: availableRoomsWithSpots.filter((r) => r.availableSpots > 0),
-          availableProfessionals: compatibleProfs.map((p) => ({
-            id: p._id,
-            name: p.name,
-            specialties: p.specialties,
-          })),
-        }
-      })
-    }
-
-    // Fallback gracioso: Horários padrão de atendimento da clínica (07:00 até 20:00)
-    const timeSlots = [
-      { start: "07:00", end: "07:55" },
-      { start: "08:00", end: "08:55" },
-      { start: "09:00", end: "09:55" },
-      { start: "10:00", end: "10:55" },
-      { start: "11:00", end: "11:55" },
-      { start: "14:00", end: "14:55" },
-      { start: "15:00", end: "15:55" },
-      { start: "16:00", end: "16:55" },
-      { start: "17:00", end: "17:55" },
-      { start: "18:00", end: "18:55" },
-      { start: "19:00", end: "19:55" },
-    ]
-
-    const slotsResult = timeSlots.map((slot) => {
-      // Verifica se já existem turmas ou agendamentos nesse horário
-      const schedulesAtTime = schedulesWithParticipants.filter(
-        (s) => s.startTime === slot.start && s.status !== "cancelled"
-      )
-
-      // Salas compatíveis com a especialidade
-      let compatibleRooms = rooms
-      if (args.specialty === "pilates") {
-        compatibleRooms = rooms.filter(
-          (r) => r.type === "pilates_aparelhos" || r.type === "pilates_solo"
-        )
-      } else if (args.specialty === "rpg") {
-        compatibleRooms = rooms.filter((r) => r.type === "rpg")
-      } else if (args.specialty === "fisioterapia") {
-        compatibleRooms = rooms.filter(
-          (r) => r.type === "fisioterapia" || r.type === "consultorio"
-        )
-      }
-
-      // Procura salas com vagas restantes
-      const availableRoomsWithSpots = compatibleRooms.map((room) => {
-        const scheduleInRoom = schedulesAtTime.find((s) => s.roomId === room._id)
-        if (!scheduleInRoom) {
-          return {
-            roomId: room._id,
-            roomName: room.name,
-            capacity: room.capacity,
-            occupied: 0,
-            availableSpots: room.capacity,
-            existingScheduleId: null,
-          }
-        }
-        const occupied = scheduleInRoom.currentParticipantsCount
-        const spots = Math.max(0, room.capacity - occupied)
-        return {
-          roomId: room._id,
-          roomName: room.name,
-          capacity: room.capacity,
-          occupied,
-          availableSpots: spots,
-          existingScheduleId: scheduleInRoom._id,
-        }
-      })
-
-      const totalSpots = availableRoomsWithSpots.reduce((acc, r) => acc + r.availableSpots, 0)
-      const hasRoomAvailable = availableRoomsWithSpots.some((r) => r.availableSpots > 0)
-      const hasProfAvailable = professionals.length > 0
-
-      return {
-        startTime: slot.start,
-        endTime: slot.end,
-        isAvailable: hasRoomAvailable && hasProfAvailable && totalSpots > 0,
-        totalAvailableSpots: totalSpots,
-        rooms: availableRoomsWithSpots.filter((r) => r.availableSpots > 0),
-        availableProfessionals: professionals.map((p) => ({
-          id: p._id,
-          name: p.name,
-          specialties: p.specialties,
-        })),
-      }
-    })
-
-    return slotsResult
-  }

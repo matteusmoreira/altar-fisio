@@ -50,7 +50,7 @@ interface CarouselCardItem {
   buttonPayload: string
 }
 
-type MessageCategory = "reminder_24h" | "reminder_2h" | "booking_confirmation" | "broadcast" | "custom"
+type MessageCategory = "reminder_24h" | "reminder_2h" | "reminder_1h" | "reminder_30m" | "waitlist_booked" | "booking_confirmation" | "broadcast" | "custom"
 type MessageType = "text" | "button" | "list" | "carousel"
 
 interface MessageTemplatePreset {
@@ -64,6 +64,22 @@ interface MessageTemplatePreset {
 }
 
 const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
+  reminder_1h: {
+    title: "Lembrete 1h", type: "text",
+    content: "Olá, *{{paciente}}*! Seu compromisso começa em 1 hora.\n\nClínica: {{clinica}}\nData: {{data}}\nHorário: {{horario}}\nProfissional: {{profissional}}\nSala: {{sala}}",
+    footerText: "", buttons: [], listButtonText: "", carouselCards: [],
+  },
+  reminder_30m: {
+    title: "Lembrete 30 minutos", type: "text",
+    content: "Olá, *{{paciente}}*! Seu compromisso começa em 30 minutos.\n\nClínica: {{clinica}}\nData: {{data}}\nHorário: {{horario}}\nProfissional: {{profissional}}\nSala: {{sala}}",
+    footerText: "", buttons: [], listButtonText: "", carouselCards: [],
+  },
+  waitlist_booked: {
+    title: "Encaixe pela fila", type: "text",
+    content: "Olá, *{{paciente}}*! Sua reposição foi agendada automaticamente pela fila de espera, somente nesta data.\n\nClínica: {{clinica}}\nData: {{data}}\nHorário: {{horario}}\nProfissional: {{profissional}}\nSala: {{sala}}",
+    footerText: "", buttons: [], listButtonText: "", carouselCards: [],
+  },
+
   booking_confirmation: {
     title: "Confirmação Imediata de Agendamento",
     type: "button",
@@ -334,15 +350,10 @@ export const MessageTemplateBuilder: React.FC = () => {
   }
 
   // Vincular a lembretes e confirmações automáticas
-  const handleAssignReminder = async (target: "reminder_24h" | "reminder_2h" | "booking_confirmation", templateId?: any) => {
+  const handleAssignReminder = async (target: "reminder_24h" | "reminder_2h" | "reminder_1h" | "reminder_30m" | "waitlist_booked" | "booking_confirmation", templateId?: any) => {
     try {
       await assignReminderMutation({ target, templateId })
-      const label =
-        target === "reminder_24h"
-          ? "Lembrete 24h"
-          : target === "reminder_2h"
-          ? "Lembrete 2h"
-          : "Confirmação ao Agendar"
+      const label = ({ reminder_24h: 'Véspera', reminder_2h: '2h (desativado)', reminder_1h: '1h', reminder_30m: '30 minutos', waitlist_booked: 'Encaixe pela fila', booking_confirmation: 'Confirmação' })[target]
       showToast(`Template vinculado com sucesso ao ${label}!`)
     } catch (err: any) {
       showToast("Erro ao vincular template")
@@ -462,22 +473,17 @@ export const MessageTemplateBuilder: React.FC = () => {
               </select>
             </div>
 
-            {/* Lembrete 2h */}
-            <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
-              <span className="font-medium text-muted-foreground">Lembrete 2h:</span>
-              <select
-                className="bg-transparent font-semibold text-teal-700 dark:text-teal-400 outline-none cursor-pointer max-w-[160px] truncate"
-                value={clinicSettings?.activeReminder2hTemplateId || ""}
-                onChange={(e) => handleAssignReminder("reminder_2h", e.target.value ? (e.target.value as any) : undefined)}
-              >
-                <option value="">Texto Padrão da Clínica</option>
-                {templates.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.title} ({t.type})
-                  </option>
-                ))}
+            {([
+              ['reminder_1h', 'Lembrete 1h', clinicSettings?.activeReminder1hTemplateId],
+              ['reminder_30m', 'Lembrete 30 minutos', clinicSettings?.activeReminder30mTemplateId],
+              ['waitlist_booked', 'Encaixe pela fila', clinicSettings?.activeWaitlistTemplateId],
+            ] as const).map(([target, label, value]) => <label key={target} className="flex flex-wrap items-center gap-2 bg-background/80 p-2 rounded-lg border text-xs">
+              {label}
+              <select className="bg-background max-w-[160px] truncate" value={value || ''} onChange={e => handleAssignReminder(target, e.target.value || undefined)}>
+                <option value="">Texto padrão</option>
+                {templates.map(t => <option key={t._id} value={t._id}>{t.title} ({t.type})</option>)}
               </select>
-            </div>
+            </label>)}
           </div>
         </CardContent>
       </Card>
@@ -538,7 +544,7 @@ export const MessageTemplateBuilder: React.FC = () => {
                           <Badge className="bg-emerald-600 text-white text-[9px] py-0">24h Ativo</Badge>
                         )}
                         {is2hDefault && (
-                          <Badge className="bg-teal-600 text-white text-[9px] py-0">2h Ativo</Badge>
+                          <Badge className="bg-teal-600 text-white text-[9px] py-0">2h Desativado</Badge>
                         )}
                       </div>
 
@@ -600,7 +606,10 @@ export const MessageTemplateBuilder: React.FC = () => {
                     >
                       <option value="booking_confirmation">Confirmação ao Agendar (Imediata)</option>
                       <option value="reminder_24h">Lembrete de Véspera (24h)</option>
-                      <option value="reminder_2h">Lembrete Imediato (2h)</option>
+                      <option value="reminder_2h">Lembrete 2h (legado, desativado)</option>
+                      <option value="reminder_1h">Lembrete 1 hora</option>
+                      <option value="reminder_30m">Lembrete 30 minutos</option>
+                      <option value="waitlist_booked">Encaixe pela fila</option>
                       <option value="broadcast">Disparador em Massa</option>
                       <option value="custom">Geral / Personalizado</option>
                     </select>

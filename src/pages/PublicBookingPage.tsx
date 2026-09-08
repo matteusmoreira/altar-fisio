@@ -1,3 +1,4 @@
+import type { Id } from "@convex/_generated/dataModel"
 import { formatCpf, formatPhone, isValidCpf, isValidPhone } from '../../shared/patientIdentity'
 import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useQuery, useAction } from "convex/react"
@@ -37,7 +38,7 @@ import {
   Award,
   RotateCcw,
 } from "lucide-react"
-import { formatDateBR, formatDateWithWeekdayBR, addDaysSafe, getTodayDateString } from "@/lib/dateUtils"
+import { formatDateBR, formatDateWithWeekdayBR, addDaysSafe, getDurationMinutes, getTodayDateString } from "@/lib/dateUtils"
 
 interface AnswerMap {
   [key: string]: string
@@ -147,10 +148,19 @@ export const PublicBookingPage: React.FC = () => {
   const [bookingSuccessData, setBookingSuccessData] = useState<any>(null)
 
   // Consulta de Horários Disponíveis
-  const availableSlots = useQuery(api.bookingBuilder.listPublicAvailableSlots, {
+  const slotsByTime = useQuery(api.bookingBuilder.listPublicAvailableSlots, {
     date: selectedDate,
     specialty: selectedSpecialty,
+    packageId: selectedPackageId ? selectedPackageId as Id<"packages"> : undefined,
   })
+
+  const availableSlots = useMemo(() => slotsByTime?.flatMap(slot =>
+    slot.rooms.length === 0 ? [slot] : slot.rooms.map(room => ({
+      ...slot,
+      rooms: [room],
+      totalAvailableSpots: room.availableSpots,
+    }))
+  ), [slotsByTime])
 
   // Lista de etapas ordenadas
   const steps = useMemo(() => {
@@ -234,6 +244,11 @@ export const PublicBookingPage: React.FC = () => {
       afternoon,
       evening,
     }
+  }, [availableSlots])
+
+  const displayedDurationMinutes = useMemo(() => {
+    const firstSlot = availableSlots?.find((slot) => slot.isAvailable) ?? availableSlots?.[0]
+    return firstSlot ? getDurationMinutes(firstSlot.startTime, firstSlot.endTime) : null
   }, [availableSlots])
 
   // Validação do Step Atual
@@ -1299,7 +1314,7 @@ export const PublicBookingPage: React.FC = () => {
                         <span>3. Horários Disponíveis</span>
                       </label>
                       <p className="text-xs text-muted-foreground mt-1.5">
-                        Para <strong className="text-foreground">{formatDateBR(selectedDate)}</strong> • Sessões com 55 minutos de duração
+                        Para <strong className="text-foreground">{formatDateBR(selectedDate)}</strong> • {displayedDurationMinutes ? `Sessões com ${displayedDurationMinutes} minutos de duração` : "Duração conforme a disponibilidade configurada"}
                       </p>
                     </div>
 
@@ -1395,7 +1410,7 @@ export const PublicBookingPage: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
                       {filteredSlots.map((slot) => {
-                        const isSelected = selectedSlot?.startTime === slot.startTime
+                        const isSelected = selectedSlot?.startTime === slot.startTime && selectedSlot?.endTime === slot.endTime && selectedSlot?.roomId === slot.rooms[0]?.roomId && selectedSlot?.professionalId === slot.rooms[0]?.professionalId
                         const firstRoom = slot.rooms[0]
                         const period = getSlotPeriod(slot.startTime)
 
@@ -1419,7 +1434,7 @@ export const PublicBookingPage: React.FC = () => {
 
                         return (
                           <button
-                            key={slot.startTime}
+                            key={`${slot.startTime}-${slot.endTime}-${firstRoom?.roomId}-${firstRoom?.professionalId}`}
                             type="button"
                             disabled={!slot.isAvailable}
                             onClick={() => {
@@ -1428,7 +1443,7 @@ export const PublicBookingPage: React.FC = () => {
                                 endTime: slot.endTime,
                                 roomId: firstRoom?.roomId,
                                 roomName: firstRoom?.roomName,
-                                professionalId: slot.availableProfessionals[0]?.id,
+                                professionalId: firstRoom?.professionalId,
                               })
                               if (formErrors.slot) {
                                 setFormErrors((prev) => {
@@ -1529,7 +1544,7 @@ export const PublicBookingPage: React.FC = () => {
                                   isSelected ? "text-white/80" : "text-muted-foreground/80"
                                 }`}
                               >
-                                55 min
+                                {getDurationMinutes(slot.startTime, slot.endTime)} min
                               </span>
                             </div>
                           </button>

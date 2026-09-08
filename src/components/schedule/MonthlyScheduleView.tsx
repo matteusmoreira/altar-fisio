@@ -1,3 +1,4 @@
+import { occupiesSeat } from '../../../shared/scheduleOccupancy'
 import React, { useState, useMemo } from "react"
 import type { Schedule } from "@/types"
 import { Card } from "@/components/ui/card"
@@ -187,7 +188,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                             0,
                             s.maxCapacity -
                               (s.participants?.filter(
-                                (p) => p.status !== "justified_absence"
+                                occupiesSeat
                               ).length || 0)
                           ),
                         0
@@ -272,7 +273,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
               ) : (
                 selectedDaySchedules.map((schedule) => {
                   const occupied = (schedule.participants || []).filter(
-                    (p) => p.status !== "justified_absence"
+                    occupiesSeat
                   ).length
                   const isFull = occupied >= schedule.maxCapacity
                   const vacancies = Math.max(0, schedule.maxCapacity - occupied)

@@ -13,6 +13,12 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 
 ---
 
+### [2026-09-08] Duração fixa na agenda pública
+- **Ponto de fricção**: A agenda pública calculava os horários a partir das regras de disponibilidade, mas exibia `55` minutos fixos no cabeçalho e nos cards. Assim, uma regra configurada para 30 minutos mostrava uma duração incorreta embora os intervalos fossem `07:00–07:30`.
+- **Mitigação**: Exibir a duração derivada do intervalo real do slot com `getDurationMinutes`, cobrindo o cálculo com teste unitário. Não alterar o fallback de clínicas sem regra ativa, pois ele é um comportamento separado do caso configurado.
+
+---
+
 ### [2026-09-02] Codificação de Caracteres em Scripts PowerShell no Windows
 - **Ponto de Fricção**: No Windows PowerShell 5.1 / PowerShell Core, o comando padrão `Set-Content` sem flag de encoding grava em ANSI/Windows-1252, gerando o erro de build no Vite/Rolldown: `stream did not contain valid UTF-8`.
 - **Mitigação / Regra**: Sempre salvar novos arquivos de código `.ts`, `.tsx`, `.json` e `.md` usando UTF-8 sem BOM explícito via `[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))` ou ferramentas nativas do assistente.
@@ -313,3 +319,19 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-08] Confirmação assíncrona de deploy direto na Vercel
 - **Ponto de fricção**: `vercel deploy --prod` pode terminar o upload exibindo `Building...` antes de o deployment estar pronto; o retorno do CLI não é prova de `Ready`, e deploy direto pela CLI pode não registrar `gitCommitSha` nos metadados da Vercel.
 - **Mitigação / Regra**: Após o upload, executar `vercel inspect <deployment>`, aguardar `Ready`, consultar logs recentes e fazer smoke HTTP das rotas críticas. Confirmar separadamente que `origin/main` aponta para o commit publicado; não tratar alias ou HTTP 200 como prova de todos os fluxos de negócio.
+
+### [2026-09-08] Limpeza seletiva de logs no Convex de produção
+- **Ponto de fricção**: O `.env.local` aponta para um deployment local/anônimo; executar uma mutação destrutiva sem selecionar explicitamente a produção poderia atingir o alvo errado. A CLI Convex no Windows também exige o runtime Node 24 usado pelo projeto para evitar falhas do Node 25.
+- **Mitigação / Regra**: Para limpeza autorizada, reconfirmar contagens e totais no host HTTPS de produção, executar uma `internalMutation` temporária com pré-condições exatas, verificar os zeros e a preservação das demais tabelas, remover a rotina destrutiva e publicar novamente o código limpo.
+
+
+### [2026-09-08] Fila de espera: permissões de consulta e validação móvel
+- Consultas usadas por `src/lib/staffConvex.ts` precisam constar também em `shared/accessPolicy.ts`. Sem o registro, a consulta é silenciosamente pulada e o painel permanece carregando, mesmo com a autorização correta no backend. As consultas da fila e de falhas de entrega foram registradas; `tests/waitlist-ui.test.tsx` cobre o wrapper real.
+- O teste de agenda a 390px revelou overflow no cabeçalho de ações e na linha do título. Manter quebra de linha, `min-w-0` e horário sem encolhimento ao adicionar o botão da fila. Portal e agenda foram conferidos com largura do documento igual à viewport.
+- Para testar sem mensagens a pacientes reais, usar backend Convex anônimo isolado em `.artifacts/fila-e2e`, sem copiar `.env*` ou instâncias UAZAPI. O fluxo autenticado local comprova o encaixe e a falha sinalizada, mas não comprova entrega física no WhatsApp.
+
+
+### [2026-09-08] Validação local do agendamento em grupo por sala
+- Listagem e confirmação precisam usar o mesmo par sala/profissional e o menor limite entre serviço, sala e sessão. A aprovação pela recepção também deve reutilizar a sessão e respeitar a fila de espera. As regressões estão cobertas em `tests/group-booking.test.ts` e `tests/group-booking-ui.test.tsx`.
+- Pedidos pendentes continuam sem ocupar vaga até a aprovação; a confirmação revalida disponibilidade e capacidade. Novos pedidos guardam a especialidade; o campo é opcional para preservar registros anteriores. Sessões antigas classificadas como individuais não são convertidas automaticamente em turmas.
+- Nesta tarefa, o build local foi validado com `VITE_CONVEX_URL=https://build-validation.convex.cloud` somente no processo, sem acesso ao backend. O `dist` resultante é de validação: antes de qualquer publicação futura, gerar novamente com a URL real do deployment. Nenhum cadastro ou deployment de produção foi alterado.

@@ -1,3 +1,4 @@
+import { occupiesSeat } from '../../../shared/scheduleOccupancy'
 import React, { useMemo } from "react"
 import type { Schedule } from "@/types"
 import { Calendar, Users, CheckCircle2, TrendingUp } from "lucide-react"
@@ -19,7 +20,7 @@ export const ScheduleMetricsBar: React.FC<ScheduleMetricsBarProps> = ({
     const totalEnrolled = schedules.reduce(
       (acc, s) =>
         acc +
-        (s.participants || []).filter((p) => p.status !== "justified_absence").length,
+        (s.participants || []).filter(occupiesSeat).length,
       0
     )
     const availableVacancies = Math.max(0, totalCapacity - totalEnrolled)

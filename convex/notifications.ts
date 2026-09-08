@@ -474,176 +474,16 @@ export const sendEmailNotificationAction = action({
 
 export const checkAndSendDailyReminders24hAction = internalAction({
   args: { targetDate: v.optional(v.string()) },
-  handler: async (
-    ctx,
-    args
-  ): Promise<{ scannedCount: number; sentCount: number; failedCount: number; targetDate: string }> => {
-    const { dateStr: tomorrowDefault } = getBrasiliaDateInfo(1)
-    const targetDate = args.targetDate || tomorrowDefault
-
-    const candidates: any[] = await ctx.runQuery(
-      internal.notifications.getTomorrowCandidatesInternal,
-      { tomorrowDate: targetDate }
-    )
-
-    const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
-    const noticeHours = settings?.cancellationNoticeHours || 2
-    const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
-    const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
-    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
-
-    let template24: any = null
-    if (settings?.activeReminder24hTemplateId) {
-      template24 = await ctx.runQuery(internal.whatsapp.getTemplateByIdInternal, {
-        id: settings.activeReminder24hTemplateId,
-      })
-    }
-
-    let sentCount = 0
-    let failedCount = 0
-
-    for (const c of candidates) {
-      const vars: Record<string, string> = {
-        paciente: c.patientName,
-        data: formatDateBR(c.date),
-        horario: c.startTime,
-        profissional: c.professionalName,
-        sala: c.roomName,
-        clinica: clinicName,
-        regras: `Caso precise desmarcar, avise com no mínimo ${noticeHours}h de antecedência para liberar seu crédito de reposição automático.`,
-        telefone_clinica: settings?.phone || "",
-      }
-
-      let success = false
-      if (template24 && effectiveToken) {
-        const res = await sendUazapiInteractiveMessage(baseUrl, effectiveToken, c.phone, template24, vars)
-        success = res.success
-
-        await ctx.runMutation(internal.notifications.logNotificationInternal, {
-          channel: "whatsapp_uazapi",
-          recipientName: c.patientName,
-          recipientContact: c.phone,
-          triggerType: "lembrete_24h",
-          content: `[Template: ${template24.title}] Lembrete 24h para ${c.patientName}`,
-          status: success ? "sent" : "failed",
-          scheduleId: c.scheduleId,
-          timestamp: Date.now(),
-          errorMessage: res.error,
-        })
-      } else {
-        const defaultMsg = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(c.date)}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
-        const res = await sendWhatsAppDirectHelper(ctx, {
-          recipientName: c.patientName,
-          phone: c.phone,
-          message: defaultMsg,
-          triggerType: "lembrete_24h",
-          scheduleId: c.scheduleId,
-        })
-        success = res.success
-      }
-
-      if (success) sentCount++
-      else failedCount++
-    }
-
-    return {
-      scannedCount: candidates.length,
-      sentCount,
-      failedCount,
-      targetDate,
-    }
+  handler: async (ctx, args): Promise<{ queuedCount: number }> => {
+    const date = args.targetDate || getBrasiliaDateInfo(1).dateStr
+    return ctx.runMutation(internal.appointmentNotifications.prepareDaily, { date })
   },
 })
 
+// Mantido como no-op para chamadas agendadas na versão anterior.
 export const checkAndSendUpcomingReminders2hAction = internalAction({
   args: {},
-  handler: async (ctx): Promise<{ scannedCount: number; sentCount: number; failedCount: number }> => {
-    const { dateStr, hours, minutes } = getBrasiliaDateInfo(0)
-
-    const currentTotalMinutes = hours * 60 + minutes
-    const minMins = currentTotalMinutes + 90
-    const maxMins = currentTotalMinutes + 150
-
-    const minTime = `${String(Math.floor(minMins / 60)).padStart(2, "0")}:${String(minMins % 60).padStart(2, "0")}`
-    const maxTime = `${String(Math.floor(maxMins / 60)).padStart(2, "0")}:${String(maxMins % 60).padStart(2, "0")}`
-
-    const candidates: any[] = await ctx.runQuery(
-      internal.notifications.getUpcoming2hCandidatesInternal,
-      { todayDate: dateStr, minTime, maxTime }
-    )
-
-    const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
-    const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
-    const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
-    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
-
-    let template2h: any = null
-    if (settings?.activeReminder2hTemplateId) {
-      template2h = await ctx.runQuery(internal.whatsapp.getTemplateByIdInternal, {
-        id: settings.activeReminder2hTemplateId,
-      })
-    }
-
-    let sentCount = 0
-    let failedCount = 0
-
-    for (const c of candidates) {
-      const isPilates = c.specialty === "pilates"
-      const tip = isPilates
-        ? "\n🧦 *Dica:* Lembre-se de trazer suas meias antiderrapantes para a aula de Pilates!"
-        : ""
-
-      const vars: Record<string, string> = {
-        paciente: c.patientName,
-        data: formatDateBR(c.date),
-        horario: c.startTime,
-        profissional: c.professionalName,
-        sala: c.roomName,
-        clinica: clinicName,
-        dica: tip,
-        telefone_clinica: settings?.phone || "",
-      }
-
-      let success = false
-      if (template2h && effectiveToken) {
-        const res = await sendUazapiInteractiveMessage(baseUrl, effectiveToken, c.phone, template2h, vars)
-        success = res.success
-
-        await ctx.runMutation(internal.notifications.logNotificationInternal, {
-          channel: "whatsapp_uazapi",
-          recipientName: c.patientName,
-          recipientContact: c.phone,
-          triggerType: "lembrete_2h",
-          content: `[Template: ${template2h.title}] Lembrete 2h para ${c.patientName}`,
-          status: success ? "sent" : "failed",
-          scheduleId: c.scheduleId,
-          timestamp: Date.now(),
-          errorMessage: res.error,
-        })
-      } else {
-        const defaultMsg = `Olá, *${c.patientName}*! ⏰\n\nFalta pouco para seu atendimento na *${clinicName}*!\n\n📅 *Hoje às ${c.startTime}*\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}${tip}\n\nAté logo!`
-        const res = await sendWhatsAppDirectHelper(ctx, {
-          recipientName: c.patientName,
-          phone: c.phone,
-          message: defaultMsg,
-          triggerType: "lembrete_2h",
-          scheduleId: c.scheduleId,
-        })
-        success = res.success
-      }
-
-      if (success) sentCount++
-      else failedCount++
-    }
-
-    return {
-      scannedCount: candidates.length,
-      sentCount,
-      failedCount,
-    }
-  },
+  handler: async () => ({ scannedCount: 0, sentCount: 0, failedCount: 0 }),
 })
 
 export const sendReplacementCreditNoticeAction = internalAction({
@@ -762,66 +602,13 @@ export const sendReceiptNotificationAction = action({
 
 export const triggerManualScanAction = action({
   args: { sessionToken: v.string(), },
-  handler: async (ctx, input) => {
+  handler: async (ctx, input): Promise<{ success: boolean; reminders24h: { queuedCount: number }; remindersPrepared: boolean; executedAt: number }> => {
     const { sessionToken, ...args } = input
     await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
 
-    // 1. Executa 24h
-    const { dateStr: tomorrowDefault } = getBrasiliaDateInfo(1)
-    const candidates24: any[] = await ctx.runQuery(
-      internal.notifications.getTomorrowCandidatesInternal,
-      { tomorrowDate: tomorrowDefault }
-    )
-    const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
-    const noticeHours = settings?.cancellationNoticeHours || 2
-
-    let sent24 = 0
-    for (const c of candidates24) {
-      const message = `Olá, *${c.patientName}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(c.date)}\n⏰ *Horário:* ${c.startTime}\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}\n\n⚠️ *Regra de Reposição:* Caso precise desmarcar, avise com no mínimo *${noticeHours}h de antecedência* para liberar seu crédito de reposição automático.\n\nEstamos te esperando!`
-      const res = await sendWhatsAppDirectHelper(ctx, {
-        recipientName: c.patientName,
-        phone: c.phone,
-        message,
-        triggerType: "lembrete_24h",
-        scheduleId: c.scheduleId,
-      })
-      if (res.success) sent24++
-    }
-
-    // 2. Executa 2h
-    const { dateStr, hours, minutes } = getBrasiliaDateInfo(0)
-    const currentTotalMinutes = hours * 60 + minutes
-    const minMins = currentTotalMinutes + 90
-    const maxMins = currentTotalMinutes + 150
-    const minTime = `${String(Math.floor(minMins / 60)).padStart(2, "0")}:${String(minMins % 60).padStart(2, "0")}`
-    const maxTime = `${String(Math.floor(maxMins / 60)).padStart(2, "0")}:${String(maxMins % 60).padStart(2, "0")}`
-
-    const candidates2h: any[] = await ctx.runQuery(
-      internal.notifications.getUpcoming2hCandidatesInternal,
-      { todayDate: dateStr, minTime, maxTime }
-    )
-
-    let sent2 = 0
-    for (const c of candidates2h) {
-      const tip = c.specialty === "pilates" ? "\n🧦 *Dica:* Lembre-se de trazer suas meias antiderrapantes para o Pilates!" : ""
-      const message = `Olá, *${c.patientName}*! ⏰\n\nFalta pouco para seu atendimento na *${clinicName}*!\n\n📅 *Hoje às ${c.startTime}*\n👨‍⚕️ *Profissional:* ${c.professionalName}\n📍 *Local:* ${c.roomName}${tip}\n\nAté logo!`
-      const res = await sendWhatsAppDirectHelper(ctx, {
-        recipientName: c.patientName,
-        phone: c.phone,
-        message,
-        triggerType: "lembrete_2h",
-        scheduleId: c.scheduleId,
-      })
-      if (res.success) sent2++
-    }
-
-    return {
-      success: true,
-      reminders24h: { scannedCount: candidates24.length, sentCount: sent24 },
-      reminders2h: { scannedCount: candidates2h.length, sentCount: sent2 },
-      executedAt: Date.now(),
-    }
+    const daily = await ctx.runMutation(internal.appointmentNotifications.prepareDaily, { date: getBrasiliaDateInfo(1).dateStr })
+    await ctx.runMutation(internal.appointmentNotifications.backfill, { paginationOpts: { numItems: 10, cursor: null } })
+    return { success: true, reminders24h: daily, remindersPrepared: true, executedAt: Date.now() }
   },
 })
 
