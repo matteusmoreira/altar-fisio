@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useTheme } from "@/contexts/ThemeContext"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"

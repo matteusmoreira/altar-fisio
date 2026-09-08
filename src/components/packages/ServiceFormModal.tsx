@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select-native"
-import { Sparkles, Clock, DollarSign, Stethoscope, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Sparkles, Clock, DollarSign, UsersRound, AlertCircle } from "lucide-react"
 
 interface ServiceFormModalProps {
   open: boolean
@@ -32,8 +32,10 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   const [name, setName] = useState("")
   const [specialty, setSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">("pilates")
   const [modality, setModality] = useState<"individual" | "turma">("turma")
+  const [maxCapacity, setMaxCapacity] = useState(4)
   const [durationMinutes, setDurationMinutes] = useState(55)
   const [defaultPrice, setDefaultPrice] = useState(90)
+  const [packagePricePerSession, setPackagePricePerSession] = useState<number | "">("")
   const [description, setDescription] = useState("")
   const [active, setActive] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -46,16 +48,20 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       setName(serviceToEdit.name)
       setSpecialty(serviceToEdit.specialty)
       setModality(serviceToEdit.modality)
+      setMaxCapacity(serviceToEdit.maxCapacity ?? (serviceToEdit.modality === "turma" ? 4 : 1))
       setDurationMinutes(serviceToEdit.durationMinutes)
       setDefaultPrice(serviceToEdit.defaultPrice)
+      setPackagePricePerSession(serviceToEdit.packagePricePerSession ?? "")
       setDescription(serviceToEdit.description || "")
       setActive(serviceToEdit.active)
     } else {
       setName("")
       setSpecialty("pilates")
       setModality("turma")
+      setMaxCapacity(4)
       setDurationMinutes(55)
       setDefaultPrice(90)
+      setPackagePricePerSession("")
       setDescription("")
       setActive(true)
     }
@@ -68,18 +74,26 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
     if (!isEditing) {
       if (val === "pilates") {
         setModality("turma")
+        setMaxCapacity(4)
         setDurationMinutes(55)
         setDefaultPrice(90)
       } else if (val === "fisioterapia") {
         setModality("individual")
+        setMaxCapacity(1)
         setDurationMinutes(50)
         setDefaultPrice(180)
       } else if (val === "rpg") {
         setModality("individual")
+        setMaxCapacity(1)
         setDurationMinutes(60)
         setDefaultPrice(220)
       }
     }
+  }
+
+  const handleModalityChange = (value: "individual" | "turma") => {
+    setModality(value)
+    setMaxCapacity(value === "individual" ? 1 : maxCapacity > 1 ? maxCapacity : 4)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,6 +116,16 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       return
     }
 
+    if (modality === "turma" && (!Number.isInteger(maxCapacity) || maxCapacity < 2 || maxCapacity > 100)) {
+      setErrorMsg("A capacidade da turma deve ser um número inteiro entre 2 e 100 alunos.")
+      return
+    }
+
+    if (packagePricePerSession !== "" && packagePricePerSession < 0) {
+      setErrorMsg("O preço por sessão em pacote não pode ser negativo.")
+      return
+    }
+
     setIsSubmitting(true)
     try {
       if (isEditing && serviceToEdit) {
@@ -109,8 +133,11 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
           name: trimmedName,
           specialty,
           modality,
+          maxCapacity: modality === "turma" ? Number(maxCapacity) : 1,
           durationMinutes: Number(durationMinutes),
           defaultPrice: Number(defaultPrice),
+          packagePricePerSession:
+            packagePricePerSession === "" ? null : Number(packagePricePerSession),
           description: description.trim() || undefined,
           active,
         })
@@ -121,8 +148,11 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
           name: trimmedName,
           specialty,
           modality,
+          maxCapacity: modality === "turma" ? Number(maxCapacity) : 1,
           durationMinutes: Number(durationMinutes),
           defaultPrice: Number(defaultPrice),
+          packagePricePerSession:
+            packagePricePerSession === "" ? undefined : Number(packagePricePerSession),
           description: description.trim() || undefined,
           active,
         })
@@ -138,9 +168,9 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
+          <DialogHeader className="pr-10">
             <div className="flex items-center gap-2 mb-1 text-primary">
               <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Sparkles className="h-5 w-5 text-primary" />
@@ -201,17 +231,39 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                 </label>
                 <Select
                   value={modality}
-                  onChange={(e) => setModality(e.target.value as any)}
+                  onChange={(e) => handleModalityChange(e.target.value as "individual" | "turma")}
                   required
                 >
                   <option value="individual">Individual (1 paciente por horário)</option>
-                  <option value="turma">Turma em Grupo (até 4 alunos)</option>
+                  <option value="turma">Turma em Grupo (capacidade configurável)</option>
                 </Select>
               </div>
             </div>
 
-            {/* Duração e Preço Padrão */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {modality === "turma" && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5 flex items-center gap-1.5">
+                  <UsersRound className="h-3.5 w-3.5 text-primary" />
+                  <span>Capacidade da Turma (alunos) *</span>
+                </label>
+                <Input
+                  type="number"
+                  min={2}
+                  max={100}
+                  step={1}
+                  value={maxCapacity}
+                  onChange={(e) => setMaxCapacity(Number(e.target.value))}
+                  required
+                  className="h-10 rounded-xl max-w-[180px]"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Informe o limite real desta modalidade, por exemplo 6 ou 8 alunos.
+                </span>
+              </div>
+            )}
+
+            {/* Duração e Preços */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-foreground/85 mb-1.5 flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -235,7 +287,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-foreground/85 mb-1.5 flex items-center gap-1.5">
                   <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>Preço Padrão da Sessão Avulsa (R$) *</span>
+                  <span>Preço da Sessão Avulsa (R$) *</span>
                 </label>
                 <Input
                   type="number"
@@ -248,6 +300,25 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                 />
                 <span className="text-[10px] text-muted-foreground mt-1 block">
                   Valor base avulso de tabela (sem pacote).
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground/85 mb-1.5 flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Preço por Sessão no Pacote (R$)</span>
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={packagePricePerSession}
+                  onChange={(e) => setPackagePricePerSession(e.target.value ? Number(e.target.value) : "")}
+                  placeholder="Opcional"
+                  className="h-10 rounded-xl"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Referência para montar pacotes. O total é definido em Pacotes.
                 </span>
               </div>
             </div>

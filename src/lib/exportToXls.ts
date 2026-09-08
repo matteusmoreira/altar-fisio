@@ -1,4 +1,5 @@
 import { formatDateBR } from "./dateUtils"
+import { escapeSpreadsheetCell } from '../../shared/exportSafety'
 
 interface PublicBookingExportItem {
   _id: string
@@ -21,8 +22,15 @@ interface PublicBookingExportItem {
   createdAt?: number
 }
 
+function safeBooking(booking: PublicBookingExportItem): PublicBookingExportItem {
+  const safe = Object.fromEntries(Object.entries(booking).map(([key, value]) => [key, typeof value === 'string' ? escapeSpreadsheetCell(value) : value])) as unknown as PublicBookingExportItem
+  safe.answers = booking.answers?.map(answer => ({ ...answer, questionLabel: escapeSpreadsheetCell(answer.questionLabel), answer: escapeSpreadsheetCell(answer.answer) }))
+  return safe
+}
+
 // 1. Exportar Ficha Individual do Paciente em XLS
 export function exportSingleBookingToXls(booking: PublicBookingExportItem) {
+  booking = safeBooking(booking)
   const statusLabel =
     booking.status === "confirmed"
       ? "Confirmado"
@@ -67,7 +75,7 @@ export function exportSingleBookingToXls(booking: PublicBookingExportItem) {
           <td colspan="2" class="subheader">Dr. Marcelo • Fisioterapia, Studio de Pilates & RPG</td>
         </tr>
         <tr><td colspan="2" style="height: 10px; border: none;"></td></tr>
-        
+
         <tr>
           <td colspan="2" class="section-title">1. DADOS DO PACIENTE</td>
         </tr>
@@ -87,7 +95,7 @@ export function exportSingleBookingToXls(booking: PublicBookingExportItem) {
           <td class="label">Status do Agendamento:</td>
           <td class="value font-bold">${statusLabel}</td>
         </tr>
-        
+
         <tr><td colspan="2" style="height: 10px; border: none;"></td></tr>
         <tr>
           <td colspan="2" class="section-title">2. DETALHES DA SESSÃO RESERVADA</td>
@@ -157,6 +165,7 @@ export function exportSingleBookingToXls(booking: PublicBookingExportItem) {
 
 // 2. Exportar Todos os Agendamentos Consolidados em XLS
 export function exportAllBookingsToXls(bookings: PublicBookingExportItem[]) {
+  bookings = bookings.map(safeBooking)
   // Extrai todas as perguntas únicas da triagem para virarem colunas
   const questionLabelsSet = new Set<string>()
   bookings.forEach((b) => {

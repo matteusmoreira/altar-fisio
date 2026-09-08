@@ -1,3 +1,4 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
@@ -15,22 +16,57 @@ export const getSettings = query({
     }
 
     return {
-      ...settings,
+      clinicName: settings.clinicName,
+      clinicSubtitle: settings.clinicSubtitle,
+      primaryColor: settings.primaryColor,
+      colorPreset: settings.colorPreset,
+      mode: settings.mode,
+      phone: settings.phone,
+      address: settings.address,
+      cancellationNoticeHours: settings.cancellationNoticeHours,
+      replacementExpiryDays: settings.replacementExpiryDays,
       logoUrl,
     }
   },
 })
 
+export const getAdminSettings = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin'])
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (!settings) return null
+    const { uazapiToken, uazapiAdminToken, activeWhatsappInstanceToken, resendApiKey, ...safe } = settings
+    return { ...safe,
+      logoUrl: settings.logoStorageId ? await ctx.storage.getUrl(settings.logoStorageId) ?? undefined : settings.logoUrl,
+      uazapiConfigured: Boolean(uazapiToken || activeWhatsappInstanceToken),
+      uazapiAdminConfigured: Boolean(uazapiAdminToken), resendConfigured: Boolean(resendApiKey),
+    }
+  },
+})
+
+export const getNotificationSettings = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'reception'])
+    const settings = await ctx.db.query('clinicSettings').first()
+    return { activeConfirmationTemplateId: settings?.activeConfirmationTemplateId, activeReminder24hTemplateId: settings?.activeReminder24hTemplateId, activeReminder2hTemplateId: settings?.activeReminder2hTemplateId }
+  },
+})
+
 // Gera URL segura e temporária para upload direto no Convex File Storage
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     return await ctx.storage.generateUploadUrl()
   },
 })
 
 export const updateSettings = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     clinicName: v.string(),
     clinicSubtitle: v.string(),
     primaryColor: v.string(),
@@ -50,7 +86,19 @@ export const updateSettings = mutation({
     resendApiKey: v.optional(v.string()),
     resendFromEmail: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
+    for (const key of ['uazapiToken', 'uazapiAdminToken', 'activeWhatsappInstanceToken', 'resendApiKey'] as const) {
+      if (!args[key]?.trim()) delete args[key]
+    }
+    if (args.uazapiEndpoint) {
+      const url = new URL(args.uazapiEndpoint)
+      if (url.protocol !== 'https:' || !url.hostname.endsWith('.uazapi.com') || url.username || url.password || url.port || url.search || url.hash) throw new Error('Use um endpoint HTTPS oficial da UAZAPI.')
+      args.uazapiEndpoint = url.origin
+    }
+    if (!Number.isFinite(args.cancellationNoticeHours) || args.cancellationNoticeHours < 0 || !Number.isInteger(args.replacementExpiryDays) || args.replacementExpiryDays < 1) throw new Error('Regras de cancelamento inválidas.')
     const existing = await ctx.db.query("clinicSettings").first()
     if (existing) {
       // Se a logoStorageId mudou ou foi limpa, deletar o arquivo antigo do storage
@@ -72,8 +120,11 @@ export const updateSettings = mutation({
 
 // Remove logotipo e limpa o arquivo do Convex Storage
 export const removeLogo = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const existing = await ctx.db.query("clinicSettings").first()
     if (!existing) return false
 

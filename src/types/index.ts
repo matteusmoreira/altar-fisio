@@ -310,8 +310,10 @@ export interface ClinicService {
   name: string
   modality: "individual" | "turma"
   specialty: "fisioterapia" | "pilates" | "rpg"
+  maxCapacity?: number
   durationMinutes: number
   defaultPrice: number
+  packagePricePerSession?: number
   description?: string
   active: boolean
   packageCount?: number

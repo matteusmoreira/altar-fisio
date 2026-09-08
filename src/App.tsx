@@ -114,7 +114,7 @@ function AppContent() {
   }
 
   return (
-    <AppLayout currentSection={currentSection} onNavigate={setCurrentSection}>
+    <ClinicDataProvider key={user?.id}><AppLayout currentSection={currentSection} onNavigate={setCurrentSection}>
       <Suspense fallback={<PageLoadingFallback />}>
         {currentSection === "dashboard" && (
           <DashboardPage onNavigate={setCurrentSection} />
@@ -136,7 +136,7 @@ function AppContent() {
         {currentSection === "booking_builder" && canAccessSection("booking_builder") && <BookingBuilderPage />}
         {currentSection === "settings" && canAccessSection("settings") && <SettingsPage />}
       </Suspense>
-    </AppLayout>
+    </AppLayout></ClinicDataProvider>
   )
 }
 
@@ -145,9 +145,7 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ClinicDataProvider>
-          <AppContent />
-        </ClinicDataProvider>
+        <AppContent />
       </AuthProvider>
     </ThemeProvider>
   )

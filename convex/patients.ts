@@ -1,9 +1,13 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
 export const listPatients = query({
-  args: { search: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  search: v.optional(v.string()) },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     if (!args.search || args.search.trim() === "") {
       return await ctx.db
         .query("patients")
@@ -55,14 +59,17 @@ export const listPatients = query({
 })
 
 export const getPatient = query({
-  args: { id: v.id("patients") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  id: v.id("patients") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.get(args.id)
   },
 })
 
 export const createPatient = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     name: v.string(),
     documentCpf: v.string(),
     phone: v.string(),
@@ -75,7 +82,10 @@ export const createPatient = mutation({
     healthInsurance: v.optional(v.string()),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.insert("patients", {
       ...args,
       active: true,
@@ -85,23 +95,29 @@ export const createPatient = mutation({
 })
 
 export const updatePatient = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("patients"),
-    name: v.string(),
-    documentCpf: v.string(),
-    phone: v.string(),
+    name: v.optional(v.string()),
+    documentCpf: v.optional(v.string()),
+    phone: v.optional(v.string()),
     email: v.optional(v.string()),
-    birthDate: v.string(),
+    birthDate: v.optional(v.string()),
     gender: v.optional(v.string()),
     address: v.optional(v.string()),
     emergencyContact: v.optional(v.string()),
     emergencyPhone: v.optional(v.string()),
     healthInsurance: v.optional(v.string()),
     notes: v.optional(v.string()),
-    active: v.boolean(),
+    active: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const { id, ...data } = args
+    for (const key of Object.keys(data)) if (data[key as keyof typeof data] === undefined) delete data[key as keyof typeof data]
+    if (data.name !== undefined && !data.name.trim()) throw new Error('Nome obrigatório.')
+    if (!await ctx.db.get(id)) throw new Error('Paciente não encontrado.')
     await ctx.db.patch(id, data)
     return id
   },
@@ -109,10 +125,13 @@ export const updatePatient = mutation({
 
 // Exclusão com cascata completa para manter o banco Convex sem arquivos ou registros órfãos
 export const deletePatient = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("patients"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const patient = await ctx.db.get(args.id)
     if (!patient) throw new Error("Paciente não encontrado")
 

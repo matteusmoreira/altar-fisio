@@ -1,26 +1,52 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
 // Geração de URL temporária assinada para upload seguro no Convex Storage
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     return await ctx.storage.generateUploadUrl()
+  },
+})
+
+export const attachPosturalPhoto = mutation({
+  args: { sessionToken: v.string(), patientId: v.id('patients'), view: v.union(v.literal('anterior'), v.literal('posterior'), v.literal('lateralRight'), v.literal('lateralLeft')), storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'professional'])
+    const record = await ctx.db.query('clinicalRecords').withIndex('by_patient', q => q.eq('patientId', args.patientId)).first()
+    if (!record) throw new Error('Salve a avaliação clínica antes de anexar fotos.')
+    const file = await ctx.db.system.get(args.storageId)
+    if (!file || file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.contentType || '')) throw new Error('Use imagem JPG, PNG ou WebP de até 5 MB.')
+    const field = `${args.view}StorageId` as const
+    const previous = record[field]
+    await ctx.db.patch(record._id, { [field]: args.storageId, [`${args.view}PhotoUrl`]: undefined, updatedAt: Date.now() })
+    if (previous && previous !== args.storageId) await ctx.storage.delete(previous)
+    return await ctx.storage.getUrl(args.storageId)
   },
 })
 
 // Obtenção da URL pública de visualização para um storageId
 export const getStorageUrl = query({
-  args: { storageId: v.string() },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  storageId: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     return await ctx.storage.getUrl(args.storageId)
   },
 })
 
 // Prontuário e Ficha de Avaliação com resolução automática das fotos posturais
 export const getClinicalRecord = query({
-  args: { patientId: v.id("patients") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  patientId: v.id("patients") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const record = await ctx.db
       .query("clinicalRecords")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -65,7 +91,7 @@ export const getClinicalRecord = query({
 })
 
 export const saveClinicalRecord = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
     chiefComplaint: v.string(),
     hpi: v.string(),
@@ -88,7 +114,10 @@ export const saveClinicalRecord = mutation({
     testsAndMeasures: v.optional(v.string()),
     clinicalGoals: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const existing = await ctx.db
       .query("clinicalRecords")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -125,8 +154,11 @@ export const saveClinicalRecord = mutation({
 
 // Listagem de evoluções diárias SOAP em ordem cronológica decrescente
 export const listEvolutions = query({
-  args: { patientId: v.id("patients") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  patientId: v.id("patients") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     return await ctx.db
       .query("clinicalEvolutions")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -137,7 +169,7 @@ export const listEvolutions = query({
 
 // Registro oficial de evolução diária no modelo SOAP com assinatura digital e trava legal
 export const addSoapEvolution = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
     professionalId: v.id("professionals"),
     scheduleId: v.optional(v.id("schedules")),
@@ -149,7 +181,10 @@ export const addSoapEvolution = mutation({
     painScaleAfter: v.optional(v.number()),
     techniqueCategory: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const prof = await ctx.db.get(args.professionalId)
     if (!prof) throw new Error("Profissional de saúde não encontrado no cadastro")
 
@@ -170,8 +205,11 @@ export const addSoapEvolution = mutation({
 
 // Consulta agregada para a série temporal do gráfico de dor (Escala EVA)
 export const getPainEvolutionHistory = query({
-  args: { patientId: v.id("patients") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  patientId: v.id("patients") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const record = await ctx.db
       .query("clinicalRecords")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -219,7 +257,11 @@ export const getPainEvolutionHistory = query({
 
 // Visão Geral e Painel de Prontuários de Todos os Pacientes
 export const listAllClinicalOverview = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const patients = await ctx.db.query("patients").collect()
 
     const overview = await Promise.all(
@@ -268,7 +310,7 @@ export const listAllClinicalOverview = query({
 
 // Edição de Evolução Diária SOAP
 export const updateSoapEvolution = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("clinicalEvolutions"),
     subjective: v.string(),
     objective: v.string(),
@@ -278,7 +320,10 @@ export const updateSoapEvolution = mutation({
     techniqueCategory: v.optional(v.string()),
     date: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const { id, ...data } = args
     const evo = await ctx.db.get(id)
     if (!evo) throw new Error("Evolução não encontrada")
@@ -290,10 +335,13 @@ export const updateSoapEvolution = mutation({
 
 // Exclusão de Evolução Diária SOAP
 export const deleteSoapEvolution = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("clinicalEvolutions"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const evo = await ctx.db.get(args.id)
     if (!evo) throw new Error("Evolução não encontrada")
 
@@ -304,10 +352,16 @@ export const deleteSoapEvolution = mutation({
 
 // Exclusão de Prontuário Clínico Completo (Anamnese com limpeza de storage)
 export const deleteClinicalRecord = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    const actor = await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
+    const patient = await ctx.db.get(args.patientId)
+    if (!patient) throw new Error("Paciente não encontrado")
+
     const record = await ctx.db
       .query("clinicalRecords")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -319,6 +373,18 @@ export const deleteClinicalRecord = mutation({
       if (record.lateralRightStorageId) await ctx.storage.delete(record.lateralRightStorageId).catch(() => {})
       if (record.lateralLeftStorageId) await ctx.storage.delete(record.lateralLeftStorageId).catch(() => {})
       await ctx.db.delete(record._id)
+
+      await ctx.db.insert("auditLogs", {
+        userId: actor._id,
+        userName: actor.name,
+        userRole: actor.role,
+        action: "delete_clinical_record",
+        patientId: args.patientId,
+        patientName: patient.name,
+        details: "Exclusão da ficha de anamnese, avaliação clínica e fotos posturais.",
+        timestamp: Date.now(),
+      })
+
       return { success: true, id: record._id }
     }
     return { success: false, message: "Prontuário não encontrado" }
@@ -331,10 +397,13 @@ export const deleteClinicalRecord = mutation({
 
 // Listagem de laudos clínicos por paciente ou geral
 export const listClinicalReports = query({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.optional(v.id("patients")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     if (args.patientId) {
       return await ctx.db
         .query("clinicalReports")
@@ -348,15 +417,18 @@ export const listClinicalReports = query({
 
 // Consulta de um laudo específico por ID
 export const getClinicalReport = query({
-  args: { id: v.id("clinicalReports") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  id: v.id("clinicalReports") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     return await ctx.db.get(args.id)
   },
 })
 
 // Criação oficial de novo laudo clínico com autenticidade COFFITO
 export const createClinicalReport = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
     professionalId: v.id("professionals"),
     type: v.union(
@@ -382,7 +454,10 @@ export const createClinicalReport = mutation({
     paymentMethod: v.optional(v.string()),
     serviceDescription: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const prof = await ctx.db.get(args.professionalId)
     if (!prof) throw new Error("Profissional de saúde não encontrado no cadastro")
 
@@ -403,7 +478,7 @@ export const createClinicalReport = mutation({
 
 // Atualização de laudo clínico existente
 export const updateClinicalReport = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("clinicalReports"),
     title: v.optional(v.string()),
     date: v.optional(v.string()),
@@ -423,7 +498,10 @@ export const updateClinicalReport = mutation({
     serviceDescription: v.optional(v.string()),
     professionalId: v.optional(v.id("professionals")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const { id, professionalId, ...data } = args
     const existing = await ctx.db.get(id)
     if (!existing) throw new Error("Laudo clínico não encontrado")
@@ -449,8 +527,11 @@ export const updateClinicalReport = mutation({
 
 // Exclusão de laudo clínico
 export const deleteClinicalReport = mutation({
-  args: { id: v.id("clinicalReports") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  id: v.id("clinicalReports") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const existing = await ctx.db.get(args.id)
     if (!existing) throw new Error("Laudo clínico não encontrado")
 

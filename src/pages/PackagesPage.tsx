@@ -164,6 +164,18 @@ export const PackagesPage: React.FC = () => {
     setIsAssignModalOpen(true)
   }
 
+  const handleNewPackageServiceChange = (serviceId: string) => {
+    setPkgServiceId(serviceId)
+    const service = services.find((item) => item.id === serviceId)
+
+    if (service?.packagePricePerSession !== undefined && service.packagePricePerSession > 0) {
+      setPkgPrice(Number((service.packagePricePerSession * pkgSessionCount).toFixed(2)))
+    }
+    if (service?.modality === "turma") {
+      setPkgGroupDetails(`Grupo de até ${service.maxCapacity ?? 4} alunos`)
+    }
+  }
+
   // Criar Pacote Comercial
   const handleCreatePackage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -412,7 +424,7 @@ export const PackagesPage: React.FC = () => {
       {activeTab === "services" ? (
         <ServicesCatalogTab
           onCreatePackageForService={(serviceId) => {
-            setPkgServiceId(serviceId)
+            handleNewPackageServiceChange(serviceId)
             setActiveTab("packages")
             setIsNewPackageModalOpen(true)
           }}
@@ -894,7 +906,7 @@ export const PackagesPage: React.FC = () => {
                 </div>
                 <Select
                   value={pkgServiceId}
-                  onChange={(e) => setPkgServiceId(e.target.value)}
+                  onChange={(e) => handleNewPackageServiceChange(e.target.value)}
                   required
                 >
                   {services.map((svc) => (

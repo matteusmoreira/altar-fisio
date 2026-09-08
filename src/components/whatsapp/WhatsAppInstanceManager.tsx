@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { useQuery, useAction, useMutation } from "convex/react"
+import { useQuery, useAction, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -102,13 +102,13 @@ export const WhatsAppInstanceManager: React.FC = () => {
 
   // Polling em tempo real e auto-refresh do QR Code enquanto o modal estiver aberto
   useEffect(() => {
-    if (!isQrModalOpen || !selectedInstance?.token || isJustConnected) return
+    if (!isQrModalOpen || !selectedInstance?._id || isJustConnected) return
 
     setQrCountdown(20)
 
     const pollInterval = setInterval(async () => {
       try {
-        const res = await checkInstanceStatusAction({ token: selectedInstance.token })
+        const res = await checkInstanceStatusAction({ instanceId: selectedInstance._id })
         if (res.success && res.connected) {
           setIsJustConnected(true)
           showToast(`WhatsApp "${selectedInstance.name}" conectado com sucesso!`, "success")
@@ -125,7 +125,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
     const timerInterval = setInterval(() => {
       setQrCountdown((prev) => {
         if (prev <= 1) {
-          getQrCodeAction({ token: selectedInstance.token }).then((res) => {
+          getQrCodeAction({ instanceId: selectedInstance._id }).then((res) => {
             if (res.success && res.qrcode) {
               setCurrentQrCode(res.qrcode)
             }
@@ -140,7 +140,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
       clearInterval(pollInterval)
       clearInterval(timerInterval)
     }
-  }, [isQrModalOpen, selectedInstance?.token, isJustConnected])
+  }, [isQrModalOpen, selectedInstance?._id, isJustConnected])
 
   // 1. Criar Nova Instância
   const handleCreateInstance = async (e: React.FormEvent) => {
@@ -209,7 +209,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
     setIsLoading(true)
     try {
       const res = await connectExistingTokenAction({
-        token: inst.token,
+        token: inst.id,
         name: inst.name,
       })
 
@@ -240,7 +240,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
     setIsLoading(true)
 
     try {
-      const res = await getQrCodeAction({ token: inst.token })
+      const res = await getQrCodeAction({ instanceId: inst._id })
       if (res.success && res.qrcode) {
         setCurrentQrCode(res.qrcode)
       }
@@ -265,7 +265,8 @@ export const WhatsAppInstanceManager: React.FC = () => {
   const handleDisconnect = async (token: string) => {
     setIsLoading(true)
     try {
-      await disconnectAction({ token })
+      const result = await disconnectAction({ instanceId: token as any })
+      if (!result.success) throw new Error(result.error || 'Falha ao desconectar.')
       showToast("Sessão do WhatsApp desconectada.")
     } catch (err: any) {
       showToast("Erro ao desconectar", "error")
@@ -279,7 +280,8 @@ export const WhatsAppInstanceManager: React.FC = () => {
     if (!selectedInstance) return
     setIsLoading(true)
     try {
-      await deleteAction({ token: selectedInstance.token })
+      const result = await deleteAction({ instanceId: selectedInstance._id })
+      if (!result.success) throw new Error(result.error || 'Falha ao excluir.')
       showToast(`Instância "${selectedInstance.name}" excluída com sucesso.`)
       setIsDeleteModalOpen(false)
       setSelectedInstance(null)
@@ -479,7 +481,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span>Token:</span>
                     <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded text-foreground truncate max-w-[170px]">
-                      {inst.token.slice(0, 8)}...{inst.token.slice(-6)}
+                      {inst._id.slice(0, 8)}...{inst._id.slice(-6)}
                     </span>
                   </div>
 
@@ -500,7 +502,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDisconnect(inst.token)}
+                        onClick={() => handleDisconnect(inst._id)}
                         className="h-8 text-xs gap-1 text-muted-foreground hover:text-red-500"
                       >
                         <PowerOff className="w-3.5 h-3.5" /> Desconectar
@@ -663,7 +665,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
                     const isConn = inst.status === "connected"
                     return (
                       <div
-                        key={inst.token || inst.id}
+                        key={inst._id || inst.id}
                         className="p-3 rounded-xl border bg-card/60 hover:bg-card flex items-center justify-between gap-3 transition-colors"
                       >
                         <div className="min-w-0 flex-1">

@@ -1,3 +1,5 @@
+import { validAmount, validDate } from './lib/validation'
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
@@ -8,13 +10,16 @@ const getTodayStr = () => new Date().toISOString().split("T")[0]
  * Lista todas as transações financeiras com filtros e status de atraso derivado
  */
 export const listTransactions = query({
-  args: {
+  args: { sessionToken: v.string(),
     type: v.optional(v.union(v.literal("income"), v.literal("expense"))),
     status: v.optional(v.union(v.literal("pending"), v.literal("paid"), v.literal("cancelled"))),
     monthYear: v.optional(v.string()), // YYYY-MM
     category: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     let transactions
     if (args.monthYear) {
       const start = `${args.monthYear}-01`
@@ -77,10 +82,13 @@ export const listTransactions = query({
  * Resumo consolidado do Fluxo de Caixa (DRE Operacional)
  */
 export const getCashFlowSummary = query({
-  args: {
+  args: { sessionToken: v.string(),
     monthYear: v.optional(v.string()), // YYYY-MM
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     let transactions
     if (args.monthYear) {
       const start = `${args.monthYear}-01`
@@ -148,7 +156,7 @@ export const getCashFlowSummary = query({
  * Criação de uma transação financeira (Receita ou Despesa)
  */
 export const createTransaction = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     type: v.union(v.literal("income"), v.literal("expense")),
     category: v.string(),
     description: v.string(),
@@ -168,7 +176,13 @@ export const createTransaction = mutation({
     packageId: v.optional(v.id("packages")),
     receiptIssued: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
+    validAmount(args.amount)
+    validDate(args.dueDate)
+    if (args.paymentDate) validDate(args.paymentDate)
     return await ctx.db.insert("financialTransactions", {
       ...args,
       receiptIssued: args.receiptIssued ?? false,
@@ -181,7 +195,7 @@ export const createTransaction = mutation({
  * Atualização dos dados de uma transação
  */
 export const updateTransaction = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("financialTransactions"),
     category: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -200,8 +214,15 @@ export const updateTransaction = mutation({
     status: v.optional(v.union(v.literal("pending"), v.literal("paid"), v.literal("cancelled"))),
     receiptIssued: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const { id, ...data } = args
+    if (data.amount !== undefined) validAmount(data.amount)
+    if (data.dueDate !== undefined) validDate(data.dueDate)
+    if (data.paymentDate !== undefined) validDate(data.paymentDate)
+    if (!await ctx.db.get(id)) throw new Error("Lançamento não encontrado.")
     await ctx.db.patch(id, data)
   },
 })
@@ -210,7 +231,7 @@ export const updateTransaction = mutation({
  * Baixa e conciliação de pagamento
  */
 export const markTransactionPaid = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("financialTransactions"),
     paymentDate: v.string(),
     paymentMethod: v.optional(
@@ -223,7 +244,10 @@ export const markTransactionPaid = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const patchData: any = {
       status: "paid",
       paymentDate: args.paymentDate,
@@ -239,10 +263,13 @@ export const markTransactionPaid = mutation({
  * Cancelamento de uma transação
  */
 export const cancelTransaction = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("financialTransactions"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     await ctx.db.patch(args.id, {
       status: "cancelled",
     })
@@ -253,10 +280,13 @@ export const cancelTransaction = mutation({
  * Exclusão definitiva de uma transação
  */
 export const deleteTransaction = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("financialTransactions"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     await ctx.db.delete(args.id)
   },
 })
@@ -267,8 +297,11 @@ export const deleteTransaction = mutation({
  * e verifica se o período já foi fechado.
  */
 export const calculateProfessionalCommissions = query({
-  args: { monthYear: v.string() }, // YYYY-MM
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  monthYear: v.string() }, // YYYY-MM
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const professionals = await ctx.db.query("professionals").collect()
     const services = await ctx.db.query("services").collect()
 
@@ -408,7 +441,7 @@ export const calculateProfessionalCommissions = query({
  * gerando a despesa de repasse correspondente no Fluxo de Caixa.
  */
 export const closeProfessionalCommission = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     professionalId: v.id("professionals"),
     periodMonthYear: v.string(), // YYYY-MM
     totalAttendances: v.number(),
@@ -418,9 +451,16 @@ export const closeProfessionalCommission = mutation({
     notes: v.optional(v.string()),
     autoCreateExpense: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
+    if (args.totalCommissionAmount !== 0) validAmount(args.totalCommissionAmount)
+    if (args.totalGrossAmount !== 0) validAmount(args.totalGrossAmount)
+    if (!Number.isInteger(args.totalAttendances) || args.totalAttendances < 0 || !/^\d{4}-(0[1-9]|1[0-2])$/.test(args.periodMonthYear)) throw new Error('Fechamento inválido.')
     const todayStr = getTodayStr()
     const prof = await ctx.db.get(args.professionalId)
+    if (!prof) throw new Error('Profissional não encontrado.')
     const profName = prof?.name || "Profissional"
 
     // Verifica se já existe registro na tabela commissions
@@ -456,7 +496,7 @@ export const closeProfessionalCommission = mutation({
     }
 
     // Criação automática da despesa na tabela financialTransactions (se solicitada)
-    if (args.autoCreateExpense !== false) {
+    if (args.autoCreateExpense !== false && args.totalCommissionAmount > 0) {
       await ctx.db.insert("financialTransactions", {
         type: "expense",
         category: "Repasse de Comissão",
@@ -483,7 +523,11 @@ export const closeProfessionalCommission = mutation({
  * Lista o histórico de comissões fechadas
  */
 export const listCommissions = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const items = await ctx.db.query("commissions").order("desc").collect()
 
     return await Promise.all(

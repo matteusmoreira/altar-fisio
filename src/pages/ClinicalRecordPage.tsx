@@ -1,3 +1,5 @@
+import { useQuery } from '@/lib/staffConvex'
+import { api } from '@convex/_generated/api'
 import React, { useState, useRef, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
@@ -77,7 +79,6 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
     updateSoapEvolution,
     deleteSoapEvolution,
     uploadPosturalPhoto,
-    getPainEvolutionHistory,
     getClinicalReports,
     createClinicalReport,
     updateClinicalReport,
@@ -163,33 +164,36 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
   const [techniqueCategory, setTechniqueCategory] = useState<string>("Pilates")
 
   // Anamnese Form State
-  const currentRecord = getClinicalRecord(selectedPatientId)
+  const currentRecord = useQuery(api.clinical.getClinicalRecord, selectedPatientId ? { patientId: selectedPatientId as any } : 'skip')
   const [chiefComplaint, setChiefComplaint] = useState(
-    currentRecord?.chiefComplaint || "Lombalgia com irradiação para membro inferior direito."
+    currentRecord?.chiefComplaint || ""
   )
   const [hpi, setHpi] = useState(
-    currentRecord?.hpi || "Dor iniciada há 3 meses após esforço repetitivo."
+    currentRecord?.hpi || ""
   )
   const [medicalHistory, setMedicalHistory] = useState(
-    currentRecord?.medicalHistory || "Sedentarismo, sem histórico cirúrgico."
+    currentRecord?.medicalHistory || ""
   )
   const [medications, setMedications] = useState(
-    currentRecord?.medications || "Anti-inflamatório sob demanda."
+    currentRecord?.medications || ""
   )
-  const [painScaleEva, setPainScaleEva] = useState(currentRecord?.painScaleEva || 5)
+  const [painScaleEva, setPainScaleEva] = useState(currentRecord?.painScaleEva ?? 0)
   const [painLocation, setPainLocation] = useState(
-    currentRecord?.painLocation || "Lombar baixa L4-L5 e glúteo direito."
+    currentRecord?.painLocation || ""
   )
   const [clinicalGoals, setClinicalGoals] = useState(
-    currentRecord?.clinicalGoals || "Alívio da dor, fortalecimento do core e reeducação postural."
+    currentRecord?.clinicalGoals || ""
   )
   const [posturalNotes, setPosturalNotes] = useState(
-    currentRecord?.posturalNotes || "Desvio lateral em escoliose em C tóraco-lombar."
+    currentRecord?.posturalNotes || ""
   )
 
   const patient = patients.find((p) => p.id === selectedPatientId)
-  const evolutions = getEvolutions(selectedPatientId).sort((a, b) => b.timestamp - a.timestamp)
-  const painPoints = getPainEvolutionHistory(selectedPatientId)
+  const deletingRecordPatient = patients.find((p) => p.id === deletingRecordPatientId)
+  const serverEvolutions = useQuery(api.clinical.listEvolutions, selectedPatientId ? { patientId: selectedPatientId as any } : 'skip')
+  const evolutions = (serverEvolutions || []).map(e => ({ ...e, id: e._id, patientName: patient?.name || "", professionalName: e.signedProfessionalName })).sort((a, b) => b.timestamp - a.timestamp)
+  const painPoints = useQuery(api.clinical.getPainEvolutionHistory, selectedPatientId ? { patientId: selectedPatientId as any } : 'skip') || []
+  const consentRows = useQuery(api.consents.getPatientConsents, selectedPatientId ? { patientId: selectedPatientId as any } : 'skip')
   const patientReports = selectedPatientId ? getClinicalReports(selectedPatientId) : []
 
   const handleOpenNewReport = (docType: ClinicalDocumentType = "report") => {
@@ -300,11 +304,11 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
   }
 
   // Salvar Anamnese
-  const handleSaveAnamnesis = (e: React.FormEvent) => {
+  const handleSaveAnamnesis = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPatientId) return
 
-    saveClinicalRecord({
+    try { await saveClinicalRecord({
       patientId: selectedPatientId,
       chiefComplaint,
       hpi,
@@ -328,10 +332,11 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
     })
 
     showToast("Anamnese e Avaliação Clínica salvas com sucesso!")
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Não foi possível salvar. Tente novamente.') }
   }
 
   // Submeter Nova Evolução SOAP
-  const handleAddEvolution = (e: React.FormEvent) => {
+  const handleAddEvolution = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPatientId || !subjective || !plan) {
       alert("Por favor, preencha os campos obrigatórios do método SOAP.")
@@ -339,9 +344,10 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
     }
 
     const prof = professionals.find((p) => p.id === selectedProfId) || professionals[0]
+    if (!prof) { showToast('Cadastre ou selecione um profissional antes de registrar a evolução.'); return }
     const today = getTodayDateString()
 
-    addSoapEvolution({
+    try { await addSoapEvolution({
       patientId: selectedPatientId,
       patientName: patient?.name || "Paciente",
       professionalId: prof.id,
@@ -364,6 +370,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
     setPlan("")
     setPainScaleAfter(2)
     showToast("Evolução SOAP registrada com sucesso!")
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Não foi possível salvar. Tente novamente.') }
   }
 
   // Abrir Modal de Edição de Evolução
@@ -755,6 +762,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                           onClick={() => setDeletingRecordPatientId(item.patientId)}
                           className="text-xs h-7.5 px-2 text-muted-foreground hover:text-destructive"
                           title="Excluir prontuário deste paciente"
+                          aria-label={`Excluir prontuário de ${item.patientName}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -885,6 +893,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                               onClick={() => setDeletingRecordPatientId(item.patientId)}
                               className="h-8 w-8 text-muted-foreground hover:text-destructive"
                               title="Excluir Prontuário"
+                              aria-label={`Excluir prontuário de ${item.patientName}`}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -977,6 +986,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                         onClick={() => setDeletingRecordPatientId(item.patientId)}
                         className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                         title="Excluir"
+                        aria-label={`Excluir prontuário de ${item.patientName}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -997,8 +1007,9 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
               </div>
               <DialogTitle>Excluir Prontuário Clínico</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja excluir toda a ficha de anamnese e avaliações deste paciente?
-                Os dados de evolução e fotos posturais serão desvinculados do prontuário.
+                Tem certeza que deseja excluir a ficha de anamnese e avaliação clínica de{" "}
+                <strong>{deletingRecordPatient?.name || "este paciente"}</strong>? A ação removerá também as fotos posturais.
+                As evoluções SOAP e os laudos permanecerão no histórico do paciente.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2 sm:gap-0">
@@ -1022,6 +1033,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
   // =========================================================================
   // MODO 2: FICHA CLÍNICA INDIVIDUAL DO PACIENTE (COM VOLTAR PARA CENTRAL)
   // =========================================================================
+  if (currentRecord === undefined) return <div className="p-6" role="status">Carregando prontuário…</div>
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
       {/* Toast Feedback */}
@@ -1168,7 +1180,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
         <TabsContent value="evolutions" className="space-y-6">
           <PainEvolutionChart
             points={painPoints}
-            initialPain={currentRecord?.painScaleEva || 5}
+            initialPain={currentRecord?.painScaleEva ?? 0}
             patientName={patient?.name}
           />
 
@@ -1444,16 +1456,19 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                 </div>
 
                 {/* Botões de Ação na Anamnese */}
-                <div className="pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setDeletingRecordPatientId(selectedPatientId)}
-                    className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Excluir Prontuário deste Paciente</span>
-                  </Button>
+                <div className={`pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center gap-3 ${currentRecord ? "justify-between" : "justify-end"}`}>
+                  {currentRecord && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDeletingRecordPatientId(selectedPatientId)}
+                      className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+                      aria-label={`Excluir prontuário de ${patient?.name || "este paciente"}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Excluir Prontuário deste Paciente</span>
+                    </Button>
+                  )}
 
                   <Button type="submit" className="gap-2 font-semibold shadow-xs">
                     <CheckCircle2 className="h-4 w-4" />
@@ -2156,6 +2171,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
           onOpenChange={setIsLgpdModalOpen}
           patient={patient}
           onSaveConsent={savePatientConsent}
+          consents={(consentRows || []).map(c => ({ ...c, id: c._id }))}
         />
       )}
 

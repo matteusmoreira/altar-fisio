@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation, useAction } from "convex/react"
 import { api } from "@convex/_generated/api"
 
 export type UserRole = "admin" | "professional" | "reception"
@@ -31,7 +31,6 @@ interface AuthContextType {
   canAccessNotifications: boolean
   canAccessBookingBuilder: boolean
   login: (email: string, password: string) => Promise<void>
-  fastLogin: (role: UserRole) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -41,7 +40,7 @@ const TOKEN_KEY = "altar_auth_session_token"
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem(TOKEN_KEY) || null
+    return sessionStorage.getItem(TOKEN_KEY) || null
   })
 
   // Query reativa ao Convex pelo usuário atual usando o token
@@ -50,8 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     token ? { token } : "skip"
   )
 
-  const loginMutation = useMutation(api.auth.login)
-  const fastLoginMutation = useMutation(api.auth.fastLogin)
+  const loginMutation = useAction(api.authActions.login)
   const logoutMutation = useMutation(api.auth.logout)
 
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -67,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (convexUser !== undefined) {
       if (convexUser === null) {
         // Token inválido ou expirado no backend
-        localStorage.removeItem(TOKEN_KEY)
+        sessionStorage.removeItem(TOKEN_KEY)
         setToken(null)
         setUser(null)
       } else {
@@ -81,19 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true)
     try {
       const res = await loginMutation({ email, password })
-      localStorage.setItem(TOKEN_KEY, res.token)
-      setToken(res.token)
-      setUser(res.user as AuthUser)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fastLogin = async (targetRole: UserRole) => {
-    setIsLoading(true)
-    try {
-      const res = await fastLoginMutation({ role: targetRole })
-      localStorage.setItem(TOKEN_KEY, res.token)
+      sessionStorage.setItem(TOKEN_KEY, res.token)
       setToken(res.token)
       setUser(res.user as AuthUser)
     } finally {
@@ -109,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn("Erro ao invalidar sessão no backend:", err)
       }
     }
-    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
     setToken(null)
     setUser(null)
   }
@@ -172,7 +158,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         canAccessNotifications,
         canAccessBookingBuilder,
         login,
-        fastLogin,
         logout,
       }}
     >

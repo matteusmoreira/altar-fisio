@@ -31,7 +31,7 @@ import {
   CalendarCheck,
   Sparkles,
 } from "lucide-react"
-import { useQuery } from "convex/react"
+import { useQuery } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 
 export type NavSection =

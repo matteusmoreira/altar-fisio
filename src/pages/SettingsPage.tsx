@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react"
 import { useTheme, PRESET_COLORS, type ColorPreset } from "@/contexts/ThemeContext"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { AuditTrailViewer } from "@/components/clinical/AuditTrailViewer"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -36,7 +36,7 @@ export const SettingsPage: React.FC = () => {
   const { testUazapiConnection, testResendConnection, auditLogs } = useClinicData()
 
 
-  const convexSettings = useQuery(api.clinic.getSettings)
+  const convexSettings = useQuery(api.clinic.getAdminSettings)
   const updateSettingsMutation = useMutation(api.clinic.updateSettings)
   const generateUploadUrlMutation = useMutation(api.clinic.generateUploadUrl)
   const removeLogoMutation = useMutation(api.clinic.removeLogo)
@@ -62,6 +62,7 @@ export const SettingsPage: React.FC = () => {
   // Chaves de API & Endpoints
   const [uazapiEndpoint, setUazapiEndpoint] = useState("https://whatpress.uazapi.com")
   const [uazapiToken, setUazapiToken] = useState("")
+  const [uazapiAdminToken, setUazapiAdminToken] = useState("")
   const [uazapiInstanceId, setUazapiInstanceId] = useState("altar_fisio_live")
   const [resendApiKey, setResendApiKey] = useState("")
   const [resendFromEmail, setResendFromEmail] = useState("contato@altarfisio.com.br")
@@ -85,9 +86,7 @@ export const SettingsPage: React.FC = () => {
       if (convexSettings.replacementExpiryDays !== undefined)
         setExpiryDays(convexSettings.replacementExpiryDays)
       if (convexSettings.uazapiEndpoint) setUazapiEndpoint(convexSettings.uazapiEndpoint)
-      if (convexSettings.uazapiToken) setUazapiToken(convexSettings.uazapiToken)
       if (convexSettings.uazapiInstanceId) setUazapiInstanceId(convexSettings.uazapiInstanceId)
-      if (convexSettings.resendApiKey) setResendApiKey(convexSettings.resendApiKey)
       if (convexSettings.resendFromEmail) setResendFromEmail(convexSettings.resendFromEmail)
     }
   }, [convexSettings])
@@ -200,6 +199,7 @@ export const SettingsPage: React.FC = () => {
           ? "https://whatpress.uazapi.com"
           : (uazapiEndpoint.trim().replace(/\/+$/, "").replace(/\/(v1|api)$/i, "") || "https://whatpress.uazapi.com"),
         uazapiToken,
+        uazapiAdminToken,
         uazapiInstanceId,
         resendApiKey,
         resendFromEmail,
@@ -634,8 +634,8 @@ export const SettingsPage: React.FC = () => {
                   </CardDescription>
                 </div>
               </div>
-              <Badge variant={uazapiToken ? "success" : "warning"} className="text-[10px]">
-                {uazapiToken ? "Configurado" : "Modo Sandbox (Simulado)"}
+              <Badge variant={(uazapiToken || convexSettings?.uazapiConfigured) ? "success" : "warning"} className="text-[10px]">
+                {(uazapiToken || convexSettings?.uazapiConfigured) ? "Configurado" : "Não configurado"}
               </Badge>
             </div>
           </CardHeader>
@@ -669,14 +669,19 @@ export const SettingsPage: React.FC = () => {
                 type="password"
                 value={uazapiToken}
                 onChange={(e) => setUazapiToken(e.target.value)}
-                placeholder="Insira seu token da UAZAPI (ou deixe vazio para modo sandbox)"
+                placeholder="Novo token; vazio mantém o atual"
                 className="font-mono text-xs"
               />
               <span className="text-[11px] text-muted-foreground">
-                Se o token estiver em branco, o sistema executa os disparos no modo simulado, registrando os logs com integridade.
+                Deixe vazio para manter o token salvo no servidor.
               </span>
             </div>
 
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground">Token administrativo UAZAPI</label>
+              <Input type="password" value={uazapiAdminToken} onChange={(e) => setUazapiAdminToken(e.target.value)} placeholder="Novo token; vazio mantém o atual" className="font-mono text-xs" />
+              <span className="text-[11px] text-muted-foreground">Necessário para criar e listar instâncias no servidor.</span>
+            </div>
             <div className="pt-1 flex justify-end">
               <Button
                 type="button"
@@ -708,8 +713,8 @@ export const SettingsPage: React.FC = () => {
                   </CardDescription>
                 </div>
               </div>
-              <Badge variant={resendApiKey ? "success" : "warning"} className="text-[10px]">
-                {resendApiKey ? "API Ativa" : "Modo Sandbox (Simulado)"}
+              <Badge variant={(resendApiKey || convexSettings?.resendConfigured) ? "success" : "warning"} className="text-[10px]">
+                {(resendApiKey || convexSettings?.resendConfigured) ? "API Ativa" : "Não configurado"}
               </Badge>
             </div>
           </CardHeader>

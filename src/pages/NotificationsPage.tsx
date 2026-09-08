@@ -1,5 +1,6 @@
+import { useAuth } from '@/contexts/AuthContext'
 import React, { useState, useMemo } from "react"
-import { useQuery, useAction } from "convex/react"
+import { useQuery, useAction } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useTheme } from "@/contexts/ThemeContext"
@@ -46,6 +47,7 @@ import { MessageTemplateBuilder } from "@/components/whatsapp/MessageTemplateBui
 import { BroadcastSender } from "@/components/whatsapp/BroadcastSender"
 
 export const NotificationsPage: React.FC = () => {
+  const { isAdmin } = useAuth()
   const {
     notificationLogs,
     notificationStats,
@@ -99,7 +101,7 @@ export const NotificationsPage: React.FC = () => {
 
   // Abas de Navegação Principal
   const [mainTab, setMainTab] = useState<"whatsapp_hub" | "logs" | "automations">("whatsapp_hub")
-  const [whatsappSubTab, setWhatsappSubTab] = useState<"instances" | "templates" | "broadcast">("instances")
+  const [whatsappSubTab, setWhatsappSubTab] = useState<"instances" | "templates" | "broadcast">(isAdmin ? "instances" : "templates")
 
   // Filtragem dos Logs
   const filteredLogs = useMemo(() => {
@@ -255,7 +257,7 @@ export const NotificationsPage: React.FC = () => {
         </Button>
       </div>
 
-      
+
       {/* Abas Principais do Módulo */}
       <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
         <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex flex-wrap gap-1">
@@ -301,7 +303,7 @@ export const NotificationsPage: React.FC = () => {
             </TabsList>
 
             <TabsContent value="instances" className="focus-visible:outline-none">
-              <WhatsAppInstanceManager />
+              {isAdmin ? <WhatsAppInstanceManager /> : <p className="text-sm text-muted-foreground">A conexão do WhatsApp é gerenciada pelo administrador. Modelos e disparos estão disponíveis nas outras abas.</p>}
             </TabsContent>
 
             <TabsContent value="templates" className="focus-visible:outline-none">

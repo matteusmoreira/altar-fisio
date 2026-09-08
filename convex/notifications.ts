@@ -1,3 +1,5 @@
+import { internalAction } from './_generated/server'
+import { requireStaff, requireStaffAction } from './lib/security'
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
@@ -47,12 +49,15 @@ export function formatBrazilianPhone(phone: string): string {
 // ============================================================================
 
 export const listLogs = query({
-  args: {
+  args: { sessionToken: v.string(),
     channel: v.optional(v.union(v.literal("whatsapp_uazapi"), v.literal("email_resend"))),
     status: v.optional(v.union(v.literal("sent"), v.literal("failed"), v.literal("queued"))),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const limit = Math.min(args.limit || 50, 100)
     let logs
 
@@ -84,7 +89,11 @@ export const listLogs = query({
 })
 
 export const getNotificationStats = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     // Amostra recente indexada (até 300 logs) para evitar carregar todo o histórico
     const logs = await ctx.db
       .query("notificationLogs")
@@ -326,8 +335,7 @@ async function sendWhatsAppDirectHelper(
 
       if (!response.ok) {
         status = "failed"
-        const errText = await response.text().catch(() => "")
-        errorMessage = `UAZAPI HTTP ${response.status}: ${errText || response.statusText}`
+        errorMessage = `UAZAPI HTTP ${response.status}`
       }
     } catch (err: any) {
       status = "failed"
@@ -398,8 +406,7 @@ async function sendEmailDirectHelper(
 
       if (!response.ok) {
         status = "failed"
-        const errText = await response.text().catch(() => "")
-        errorMessage = `Resend HTTP ${response.status}: ${errText || response.statusText}`
+        errorMessage = `Resend HTTP ${response.status}`
       }
     } catch (err: any) {
       status = "failed"
@@ -407,7 +414,8 @@ async function sendEmailDirectHelper(
         err?.name === "AbortError" ? "Timeout de 9s na conexão com Resend" : err?.message || "Erro desconhecido"
     }
   } else {
-    errorMessage = "[Modo Sandbox] E-mail simulado com sucesso. Resend API Key não configurada."
+    status = "failed"
+    errorMessage = "Envio indisponível: configure a chave Resend nas configurações."
   }
 
   await ctx.runMutation(internal.notifications.logNotificationInternal, {
@@ -433,32 +441,38 @@ async function sendEmailDirectHelper(
 // ============================================================================
 
 export const sendWhatsAppNotificationAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     recipientName: v.string(),
     phone: v.string(),
     message: v.string(),
     triggerType: v.string(),
     scheduleId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     return await sendWhatsAppDirectHelper(ctx, args)
   },
 })
 
 export const sendEmailNotificationAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     recipientName: v.string(),
     email: v.string(),
     subject: v.string(),
     html: v.string(),
     triggerType: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     return await sendEmailDirectHelper(ctx, args)
   },
 })
 
-export const checkAndSendDailyReminders24hAction = action({
+export const checkAndSendDailyReminders24hAction = internalAction({
   args: { targetDate: v.optional(v.string()) },
   handler: async (
     ctx,
@@ -542,7 +556,7 @@ export const checkAndSendDailyReminders24hAction = action({
   },
 })
 
-export const checkAndSendUpcomingReminders2hAction = action({
+export const checkAndSendUpcomingReminders2hAction = internalAction({
   args: {},
   handler: async (ctx): Promise<{ scannedCount: number; sentCount: number; failedCount: number }> => {
     const { dateStr, hours, minutes } = getBrasiliaDateInfo(0)
@@ -632,7 +646,7 @@ export const checkAndSendUpcomingReminders2hAction = action({
   },
 })
 
-export const sendReplacementCreditNoticeAction = action({
+export const sendReplacementCreditNoticeAction = internalAction({
   args: {
     patientName: v.string(),
     phone: v.string(),
@@ -657,7 +671,7 @@ export const sendReplacementCreditNoticeAction = action({
 })
 
 export const sendReceiptNotificationAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     patientName: v.string(),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -666,7 +680,10 @@ export const sendReceiptNotificationAction = action({
     paymentDate: v.string(),
     paymentMethod: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
     const clinicName = settings?.clinicName || "Altar Fisio"
     const clinicAddress = settings?.address || "São Paulo - SP"
@@ -744,8 +761,11 @@ export const sendReceiptNotificationAction = action({
 })
 
 export const triggerManualScanAction = action({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     // 1. Executa 24h
     const { dateStr: tomorrowDefault } = getBrasiliaDateInfo(1)
     const candidates24: any[] = await ctx.runQuery(
@@ -806,11 +826,14 @@ export const triggerManualScanAction = action({
 })
 
 export const testUazapiConnectionAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     testNumber: v.string(),
     testName: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     const message = `🔔 *Teste de Conexão Altar Fisio (UAZAPI)*\n\nOlá, ${args.testName}! Este é um teste automático de validação do gateway WhatsApp UAZAPI.\nData e Hora: ${new Date().toLocaleString("pt-BR")}\nStatus: Operacional ✅`
 
     return await sendWhatsAppDirectHelper(ctx, {
@@ -823,11 +846,14 @@ export const testUazapiConnectionAction = action({
 })
 
 export const testResendConnectionAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     testEmail: v.string(),
     testName: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     const html = `
       <div style="font-family: Arial, sans-serif; padding: 24px; max-width: 500px; border: 1px solid #10b981; border-radius: 12px;">
         <h2 style="color: #10b981; margin-top: 0;">✅ Teste de Conexão Resend — Altar Fisio</h2>
@@ -847,7 +873,7 @@ export const testResendConnectionAction = action({
   },
 })
 
-export const sendScheduleConfirmationAction = action({
+export const sendScheduleConfirmationAction = internalAction({
   args: {
     patientName: v.string(),
     phone: v.string(),
@@ -926,7 +952,7 @@ export const sendScheduleConfirmationAction = action({
 // ============================================================================
 
 export const sendWhatsAppReminder = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     recipientName: v.string(),
     phone: v.string(),
     scheduleDate: v.string(),
@@ -935,7 +961,10 @@ export const sendWhatsAppReminder = mutation({
     roomName: v.string(),
     triggerType: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const settings = await ctx.db.query("clinicSettings").first()
     const clinicName = settings?.clinicName || "Altar Fisio"
     const noticeHours = settings?.cancellationNoticeHours || 2
@@ -958,7 +987,7 @@ export const sendWhatsAppReminder = mutation({
 })
 
 export const sendEmailReceipt = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     recipientName: v.string(),
     email: v.string(),
     description: v.string(),
@@ -966,7 +995,10 @@ export const sendEmailReceipt = mutation({
     paymentDate: v.string(),
     paymentMethod: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const settings = await ctx.db.query("clinicSettings").first()
 
     const logId = await ctx.db.insert("notificationLogs", {

@@ -1,213 +1,58 @@
-import { query, mutation } from "./_generated/server"
-import { v } from "convex/values"
+import { query, mutation, internalMutation } from './_generated/server'
+import { v } from 'convex/values'
+import { sessionUser } from './lib/security'
 
-// Utilitário de hash criptográfico compatível com o runtime isolado do Convex (Web Crypto API)
-async function hashPassword(password: string, salt: string): Promise<string> {
-  const enc = new TextEncoder()
-  const data = enc.encode(`${salt}__altar_fisio__${password}`)
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
-}
-
-function generateRandomToken(bytesLength = 24): string {
-  const array = new Uint8Array(bytesLength)
-  crypto.getRandomValues(array)
-  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("")
-}
-
-// 1. Obter usuário autenticado atual a partir do token de sessão
 export const getCurrentUser = query({
   args: { token: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    if (!args.token) return null
-
-    const session = await ctx.db
-      .query("userSessions")
-      .withIndex("by_token", (q) => q.eq("token", args.token!))
-      .first()
-
-    if (!session || session.expiresAt < Date.now()) {
-      return null
-    }
-
-    const user = await ctx.db.get(session.userId)
-    if (!user || !user.active) return null
-
-    let professionalInfo = null
-    if (user.professionalId) {
-      const prof = await ctx.db.get(user.professionalId)
-      if (prof) {
-        professionalInfo = {
-          crefito: prof.crefito,
-          specialties: prof.specialties,
-          phone: prof.phone,
-        }
-      }
-    }
-
-    return {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatarUrl: user.avatarUrl,
-      professionalId: user.professionalId,
-      crefito: professionalInfo?.crefito,
-      specialties: professionalInfo?.specialties,
-    }
+    const user = await sessionUser(ctx, args.token)
+    if (!user) return null
+    const prof = user.professionalId ? await ctx.db.get(user.professionalId) : null
+    return { id: user._id, name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl, professionalId: user.professionalId, crefito: prof?.crefito, specialties: prof?.specialties }
   },
 })
-
-// 2. Login com E-mail e Senha
-export const login = mutation({
-  args: {
-    email: v.string(),
-    password: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const cleanEmail = args.email.trim().toLowerCase()
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", cleanEmail))
-      .first()
-
-    if (!user || !user.active) {
-      throw new Error("Credenciais inválidas ou conta inativa.")
-    }
-
-    const expectedHash = await hashPassword(args.password, user.salt)
-    if (expectedHash !== user.passwordHash) {
-      throw new Error("Credenciais inválidas. Verifique seu e-mail e senha.")
-    }
-
-    // Gerar token de sessão com validade de 30 dias
-    const token = generateRandomToken()
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000
-
-    await ctx.db.insert("userSessions", {
-      userId: user._id,
-      token,
-      expiresAt,
-      createdAt: Date.now(),
-    })
-
-    let professionalInfo = null
-    if (user.professionalId) {
-      const prof = await ctx.db.get(user.professionalId)
-      if (prof) {
-        professionalInfo = {
-          crefito: prof.crefito,
-          specialties: prof.specialties,
-        }
-      }
-    }
-
-    return {
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
-        professionalId: user.professionalId,
-        crefito: professionalInfo?.crefito,
-        specialties: professionalInfo?.specialties,
-      },
-    }
-  },
-})
-
-// 3. Fast Login (Alternância Rápida de Perfil para Demonstração e Tablets de Clínica)
-export const fastLogin = mutation({
-  args: {
-    role: v.union(v.literal("admin"), v.literal("professional"), v.literal("reception")),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", args.role))
-      .first()
-
-    if (!user || !user.active) {
-      throw new Error(`Nenhum usuário ativo com perfil '${args.role}' foi encontrado.`)
-    }
-
-    const token = generateRandomToken()
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000
-
-    await ctx.db.insert("userSessions", {
-      userId: user._id,
-      token,
-      expiresAt,
-      createdAt: Date.now(),
-    })
-
-    let professionalInfo = null
-    if (user.professionalId) {
-      const prof = await ctx.db.get(user.professionalId)
-      if (prof) {
-        professionalInfo = {
-          crefito: prof.crefito,
-          specialties: prof.specialties,
-        }
-      }
-    }
-
-    return {
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
-        professionalId: user.professionalId,
-        crefito: professionalInfo?.crefito,
-        specialties: professionalInfo?.specialties,
-      },
-    }
-  },
-})
-
-// 4. Logout (Invalidação da Sessão)
 export const logout = mutation({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query("userSessions")
-      .withIndex("by_token", (q) => q.eq("token", args.token))
-      .first()
-
-    if (session) {
-      await ctx.db.delete(session._id)
-    }
-
+    const session = await ctx.db.query('userSessions').withIndex('by_token', q => q.eq('token', args.token)).first()
+    if (session) await ctx.db.delete(session._id)
     return { success: true }
   },
 })
-
-// 5. Listar perfis de usuários para seleção rápida de demonstração
-export const listPublicProfiles = query({
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect()
-    return await Promise.all(
-      users.map(async (u) => {
-        let crefito = undefined
-        if (u.professionalId) {
-          const prof = await ctx.db.get(u.professionalId)
-          crefito = prof?.crefito
-        }
-        return {
-          id: u._id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          avatarUrl: u.avatarUrl,
-          crefito,
-        }
-      })
-    )
+export const reserveLoginAttempt = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const now = Date.now()
+    const global = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', 'login:global')).first()
+    const account = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', `login:${email}`)).first()
+    if ((global && global.resetAt > now && global.count >= 100) || (account && account.resetAt > now && account.count >= 5)) throw new Error('Muitas tentativas. Aguarde 15 minutos.')
+    for (const [key, row] of [['login:global', global], [`login:${email}`, account]] as const) {
+      const data = { key, count: row && row.resetAt > now ? row.count + 1 : 1, resetAt: row && row.resetAt > now ? row.resetAt : now + 15 * 60_000 }
+      if (row) await ctx.db.patch(row._id, data)
+      else await ctx.db.insert('authAttempts', data)
+    }
+    return await ctx.db.query('users').withIndex('by_email', q => q.eq('email', email)).first()
+  },
+})
+export const createSession = internalMutation({
+  args: { userId: v.id('users'), expectedHash: v.string(), token: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user?.active || user.passwordHash !== args.expectedHash) throw new Error('Credenciais inválidas.')
+    await ctx.db.insert('userSessions', { userId: user._id, token: args.token, expiresAt: Date.now() + 8 * 60 * 60_000, createdAt: Date.now(), authVersion: 2 })
+    const attempts = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', `login:${user.email}`)).first()
+    if (attempts) await ctx.db.delete(attempts._id)
+  },
+})
+export const persistUser = internalMutation({
+  args: { email: v.string(), name: v.string(), role: v.union(v.literal('admin'), v.literal('professional'), v.literal('reception')), professionalId: v.optional(v.id('professionals')), salt: v.string(), passwordHash: v.string() },
+  handler: async (ctx, args) => {
+    if (args.professionalId && !await ctx.db.get(args.professionalId)) throw new Error('Profissional inválido.')
+    const user = await ctx.db.query('users').withIndex('by_email', q => q.eq('email', args.email)).first()
+    if (!user) return await ctx.db.insert('users', { ...args, active: true, createdAt: Date.now() })
+    await ctx.db.patch(user._id, { ...args, active: true })
+    const sessions = await ctx.db.query('userSessions').withIndex('by_user', q => q.eq('userId', user._id)).collect()
+    for (const session of sessions) await ctx.db.delete(session._id)
+    return user._id
   },
 })

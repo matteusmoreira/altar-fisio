@@ -66,6 +66,9 @@ export const LgpdConsentModal: React.FC<LgpdConsentModalProps> = ({
       })
       setSuccessMsg("Status de consentimento atualizado com sucesso!")
       setTimeout(() => setSuccessMsg(null), 3000)
+    } catch (error) {
+      setSuccessMsg(null)
+      alert(error instanceof Error ? error.message : 'Não foi possível salvar o consentimento. Tente novamente.')
     } finally {
       setIsSaving(false)
     }
@@ -99,6 +102,9 @@ export const LgpdConsentModal: React.FC<LgpdConsentModalProps> = ({
       })
       setSuccessMsg("Todos os termos foram assinados com sucesso!")
       setTimeout(() => setSuccessMsg(null), 3000)
+    } catch (error) {
+      setSuccessMsg(null)
+      alert(error instanceof Error ? error.message : 'Não foi possível salvar todos os termos. Confira os registros e tente novamente.')
     } finally {
       setIsSaving(false)
     }

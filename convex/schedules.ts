@@ -1,5 +1,7 @@
+import { validDate, validateSchedule } from './lib/validation'
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
 
 // Função utilitária para checar sobreposição de horários
@@ -91,8 +93,11 @@ export async function enrichSchedule(ctx: any, schedule: any) {
 }
 
 export const listSchedulesByDate = query({
-  args: { date: v.string() }, // YYYY-MM-DD
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  date: v.string() }, // YYYY-MM-DD
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const schedules = await ctx.db
       .query("schedules")
       .withIndex("by_date", (q) => q.eq("date", args.date))
@@ -107,13 +112,16 @@ export const listSchedulesByDate = query({
 
 // Query Otimizada por Faixa de Datas (Semana / Mês) com Suporte a Filtros
 export const listSchedulesByDateRange = query({
-  args: {
+  args: { sessionToken: v.string(),
     startDate: v.string(), // YYYY-MM-DD
     endDate: v.string(),   // YYYY-MM-DD
     roomId: v.optional(v.string()),
     professionalId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const schedules = await ctx.db
       .query("schedules")
       .withIndex("by_date", (q) =>
@@ -142,7 +150,7 @@ export const listSchedulesByDateRange = query({
 
 // Validador de Conflitos em Tempo Real
 export const checkScheduleConflict = query({
-  args: {
+  args: { sessionToken: v.string(),
     date: v.string(),
     startTime: v.string(),
     endTime: v.string(),
@@ -150,7 +158,10 @@ export const checkScheduleConflict = query({
     professionalId: v.id("professionals"),
     ignoreScheduleId: v.optional(v.id("schedules")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     if (args.startTime >= args.endTime) {
       return { hasConflict: true, message: "O horário de início deve ser anterior ao término." }
     }
@@ -196,7 +207,7 @@ export const checkScheduleConflict = query({
 
 // Criação de Agendamento Individual ou de Turma com Validação Rígida
 export const createSchedule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
@@ -210,43 +221,11 @@ export const createSchedule = mutation({
     recurringGroupId: v.optional(v.string()),
     isRecurring: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    if (args.startTime >= args.endTime) {
-      throw new Error("O horário de início deve ser anterior ao de término!")
-    }
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
-    const room = await ctx.db.get(args.roomId)
-    if (!room) throw new Error("Sala não encontrada")
-
-    // Validação de capacidade da sala
-    if (args.maxCapacity > room.capacity) {
-      throw new Error(`A sala ${room.name} suporta no máximo ${room.capacity} aluno(s).`)
-    }
-
-    // Validação de conflitos no mesmo dia
-    const daySchedules = await ctx.db
-      .query("schedules")
-      .withIndex("by_date", (q) => q.eq("date", args.date))
-      .collect()
-
-    const activeSchedules = daySchedules.filter((s) => s.status !== "cancelled")
-
-    // Conflito de Sala
-    const roomConflict = activeSchedules.find(
-      (s) => s.roomId === args.roomId && checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)
-    )
-    if (roomConflict) {
-      throw new Error(`Conflito: A sala ${room.name} já está ocupada das ${roomConflict.startTime} às ${roomConflict.endTime} ("${roomConflict.title}")!`)
-    }
-
-    // Conflito de Profissional
-    const profConflict = activeSchedules.find(
-      (s) => s.professionalId === args.professionalId && checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)
-    )
-    if (profConflict) {
-      const prof = await ctx.db.get(args.professionalId)
-      throw new Error(`Conflito: ${prof?.name || "O profissional"} já está alocado em outra sala das ${profConflict.startTime} às ${profConflict.endTime} ("${profConflict.title}")!`)
-    }
+    await validateSchedule(ctx, args)
 
     return await ctx.db.insert("schedules", {
       ...args,
@@ -257,7 +236,7 @@ export const createSchedule = mutation({
 
 // Motor de Criação de Séries Recorrentes de Turmas (ex: Pilates Seg/Qua)
 export const createRecurringScheduleSeries = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
@@ -272,7 +251,10 @@ export const createRecurringScheduleSeries = mutation({
     notes: v.optional(v.string()),
     enrolledPatientIds: v.optional(v.array(v.id("patients"))),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     if (args.startTime >= args.endTime) {
       throw new Error("Horário de início deve ser anterior ao término.")
     }
@@ -292,6 +274,8 @@ export const createRecurringScheduleSeries = mutation({
 
     const start = new Date(`${args.startDate}T12:00:00Z`)
     const totalDays = args.weeksCount * 7
+    validDate(args.startDate)
+    if (!Number.isInteger(args.weeksCount) || args.weeksCount < 1 || args.weeksCount > 52 || args.daysOfWeek.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error('Recorrência inválida.')
 
     for (let d = 0; d < totalDays; d++) {
       const current = new Date(start)
@@ -327,6 +311,7 @@ export const createRecurringScheduleSeries = mutation({
       }
 
       // Criar agendamento
+      await validateSchedule(ctx, { ...args, date: dateStr })
       const scheduleId = await ctx.db.insert("schedules", {
         title: args.title,
         type: args.type,
@@ -368,14 +353,17 @@ export const createRecurringScheduleSeries = mutation({
 
 // Matrícula ou Encaixe de Reposição em Agendamento Existente
 export const addParticipantToSchedule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     scheduleId: v.id("schedules"),
     patientId: v.id("patients"),
     isReplacement: v.boolean(),
     replacementCreditId: v.optional(v.id("replacementCredits")),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const schedule = await ctx.db.get(args.scheduleId)
     if (!schedule) throw new Error("Agendamento não encontrado")
 
@@ -421,13 +409,16 @@ export const addParticipantToSchedule = mutation({
 
 // Check-in e Presença com Débito Automático de Sessão do Pacote Ativo e Controle de Faltas
 export const checkInParticipant = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     participantId: v.id("scheduleParticipants"),
     status: v.union(v.literal("present"), v.literal("absence"), v.literal("scheduled")),
     notes: v.optional(v.string()),
     debitPackageOnAbsence: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const participant = await ctx.db.get(args.participantId)
     if (!participant) throw new Error("Participante não encontrado")
 
@@ -577,10 +568,13 @@ export const checkInParticipant = mutation({
 
 // Chamada em Lote: Marcar Todos os Alunos Matriculados como Presentes
 export const batchCheckInClass = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     scheduleId: v.id("schedules"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const schedule = await ctx.db.get(args.scheduleId)
     if (!schedule) throw new Error("Turma não encontrada")
 
@@ -656,12 +650,15 @@ export const batchCheckInClass = mutation({
 
 // Desmarcação com Motor Inteligente de Reposição & Política de Antecedência
 export const cancelWithReplacementCredit = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     participantId: v.id("scheduleParticipants"),
     reason: v.optional(v.string()),
     forceExemption: v.optional(v.boolean()), // Autorização especial do gestor para gerar reposição fora do prazo
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const participant = await ctx.db.get(args.participantId)
     if (!participant) throw new Error("Participante não encontrado")
 
@@ -708,7 +705,7 @@ export const cancelWithReplacementCredit = mutation({
       // 3. Notificação Imediata WhatsApp: Notificar o paciente do crédito gerado
       const patient = await ctx.db.get(participant.patientId)
       if (patient?.phone) {
-        await ctx.scheduler.runAfter(0, api.notifications.sendReplacementCreditNoticeAction, {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendReplacementCreditNoticeAction, {
           patientName: patient.name,
           phone: patient.phone,
           scheduleDate: schedule.date,
@@ -748,8 +745,11 @@ export const cancelWithReplacementCredit = mutation({
 
 // Listagem de Todos os Créditos de Reposição Disponíveis na Clínica
 export const listAvailableReplacementCredits = query({
-  args: { patientId: v.optional(v.id("patients")) },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  patientId: v.optional(v.id("patients")) },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     let creditsQuery = ctx.db
       .query("replacementCredits")
       .withIndex("by_status", (q) => q.eq("status", "available"))
@@ -796,12 +796,15 @@ export const listAvailableReplacementCredits = query({
 
 // Busca de Vagas Ociosas para Alocação de Reposições
 export const listAvailableTurmasForReplacement = query({
-  args: {
+  args: { sessionToken: v.string(),
     startDate: v.string(), // YYYY-MM-DD
     endDate: v.string(), // YYYY-MM-DD
     specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     // Buscar agendamentos indexados por intervalo de datas (elimina table scan completo)
     const schedules = await ctx.db
       .query("schedules")
@@ -854,7 +857,7 @@ export const listAvailableTurmasForReplacement = query({
 
 // Edição de Agendamento ou Turma
 export const updateSchedule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("schedules"),
     title: v.optional(v.string()),
     specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
@@ -874,11 +877,16 @@ export const updateSchedule = mutation({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const { id, ...data } = args
     const existing = await ctx.db.get(id)
     if (!existing) throw new Error("Agendamento não encontrado")
 
+    for (const key of Object.keys(data)) if (data[key as keyof typeof data] === undefined) delete data[key as keyof typeof data]
+    await validateSchedule(ctx, { ...existing, ...data }, id)
     await ctx.db.patch(id, data)
     return id
   },
@@ -886,11 +894,14 @@ export const updateSchedule = mutation({
 
 // Exclusão de Agendamento ou Turma (com suporte a exclusão em série)
 export const deleteSchedule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("schedules"),
     deleteSeries: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const schedule = await ctx.db.get(args.id)
     if (!schedule) throw new Error("Agendamento não encontrado")
 
@@ -929,11 +940,14 @@ export const deleteSchedule = mutation({
 
 // Remoção / Desmatrícula de participante da turma
 export const removeParticipantFromSchedule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     scheduleId: v.id("schedules"),
     participantRecordId: v.id("scheduleParticipants"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const part = await ctx.db.get(args.participantRecordId)
     if (!part) throw new Error("Participante não encontrado")
 
@@ -944,7 +958,7 @@ export const removeParticipantFromSchedule = mutation({
 
 // Relatório Analítico de Frequência, Presenças, Faltas e Reposições
 export const getAttendanceReport = query({
-  args: {
+  args: { sessionToken: v.string(),
     startDate: v.string(), // YYYY-MM-DD
     endDate: v.string(), // YYYY-MM-DD
     professionalId: v.optional(v.id("professionals")),
@@ -952,7 +966,10 @@ export const getAttendanceReport = query({
     patientId: v.optional(v.id("patients")),
     status: v.optional(v.string()), // "all" | "present" | "absence" | "scheduled" | "replacement"
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     // 1. Buscar agendamentos no período via índice by_date
     const schedules = await ctx.db
       .query("schedules")

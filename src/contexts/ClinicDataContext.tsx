@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react"
-import { useQuery, useMutation, useAction } from "convex/react"
+import { useQuery, useMutation, useAction } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useAuth } from "@/contexts/AuthContext"
 import type {
@@ -55,8 +55,8 @@ interface ClinicDataContextType {
 
   // Patients
   patients: Patient[]
-  addPatient: (patient: Omit<Patient, "id" | "createdAt" | "active">) => string
-  updatePatient: (id: string, data: Partial<Patient>) => void
+  addPatient: (patient: Omit<Patient, "id" | "createdAt" | "active">) => Promise<string>
+  updatePatient: (id: string, data: Partial<Patient>) => Promise<void>
   deletePatient: (id: string) => Promise<void>
 
   // Schedules & Classes
@@ -120,10 +120,10 @@ interface ClinicDataContextType {
   // Clinical
   clinicalOverview: ClinicalOverviewItem[]
   getClinicalRecord: (patientId: string) => ClinicalRecord | undefined
-  saveClinicalRecord: (record: ClinicalRecord) => void
+  saveClinicalRecord: (record: ClinicalRecord) => Promise<void>
   deleteClinicalRecord: (patientId: string) => Promise<void>
   getEvolutions: (patientId: string) => ClinicalEvolution[]
-  addSoapEvolution: (evolution: Omit<ClinicalEvolution, "id" | "timestamp">) => void
+  addSoapEvolution: (evolution: Omit<ClinicalEvolution, "id" | "timestamp">) => Promise<void>
   updateSoapEvolution: (id: string, data: Partial<ClinicalEvolution>) => Promise<void>
   deleteSoapEvolution: (id: string, patientId: string) => Promise<void>
   uploadPosturalPhoto: (patientId: string, viewType: PosturalViewType, file: File) => Promise<string>
@@ -139,7 +139,12 @@ interface ClinicDataContextType {
   // Services & Commercial Packages
   services: ClinicService[]
   addService: (service: Omit<ClinicService, "id" | "packageCount">) => Promise<string>
-  updateService: (id: string, data: Partial<ClinicService>) => Promise<void>
+  updateService: (
+    id: string,
+    data: Omit<Partial<ClinicService>, "packagePricePerSession"> & {
+      packagePricePerSession?: number | null
+    }
+  ) => Promise<void>
   deleteService: (id: string) => Promise<{ success: boolean; id: string }>
   packages: ClinicPackage[]
   patientPackages: PatientPackage[]
@@ -231,786 +236,35 @@ interface ClinicDataContextType {
 }
 
 
-const initialRooms: Room[] = [
-  {
-    id: "r1",
-    name: "Studio Pilates Aparelhos (Reformer/Cadillac)",
-    type: "pilates_aparelhos",
-    capacity: 4,
-    color: "#10b981",
-    description: "Equipado com 4 reformers com torre, chair e ladder barrel.",
-    isActive: true,
-  },
-  {
-    id: "r2",
-    name: "Sala de Postura & RPG",
-    type: "rpg",
-    capacity: 2,
-    color: "#6366f1",
-    description: "Maca de RPG hidráulica com tração e espelho quadriculado.",
-    isActive: true,
-  },
-  {
-    id: "r3",
-    name: "Consultório 1 - Fisioterapia Avançada",
-    type: "fisioterapia",
-    capacity: 1,
-    color: "#0284c7",
-    description: "Eletroterapia, laser terapêutico e maca ortopédica.",
-    isActive: true,
-  },
-]
 
-const initialProfessionals: Professional[] = [
-  {
-    id: "prof1",
-    name: "Dr. Marcelo Henrique",
-    email: "marcelo@altarfisio.com.br",
-    phone: "(11) 99123-4567",
-    crefito: "CREFITO-3 / 184520-F",
-    specialties: ["Fisioterapia", "RPG", "Pilates"],
-    commissionType: "percentage",
-    commissionValue: 50,
-    active: true,
-  },
-  {
-    id: "prof2",
-    name: "Dra. Camila Duarte",
-    email: "camila@altarfisio.com.br",
-    phone: "(11) 98234-5678",
-    crefito: "CREFITO-3 / 215430-F",
-    specialties: ["Pilates", "Fisioterapia"],
-    commissionType: "fixed",
-    commissionValue: 45, // R$ 45 fixo por aluno atendido
-    active: true,
-  },
-]
 
-const initialPatients: Patient[] = [
-  {
-    id: "pat1",
-    name: "Juliana Mendes da Silva",
-    documentCpf: "234.567.890-12",
-    phone: "(11) 98877-6655",
-    email: "juliana.mendes@email.com",
-    birthDate: "1988-04-12",
-    gender: "Feminino",
-    emergencyContact: "Carlos (Esposo)",
-    emergencyPhone: "(11) 97766-5544",
-    healthInsurance: "Particular",
-    notes: "Lombalgia crônica por postura sentada contínua.",
-    active: true,
-    createdAt: Date.now() - 86400000 * 30,
-  },
-  {
-    id: "pat2",
-    name: "Roberto Fernandes Costa",
-    documentCpf: "345.678.901-23",
-    phone: "(11) 97788-9900",
-    email: "roberto.costa@email.com",
-    birthDate: "1975-09-24",
-    gender: "Masculino",
-    emergencyContact: "Marina (Filha)",
-    emergencyPhone: "(11) 96655-4433",
-    healthInsurance: "Bradesco Saúde",
-    notes: "Reabilitação pós-reconstrução de LCA Joelho D (6ª semana).",
-    active: true,
-    createdAt: Date.now() - 86400000 * 15,
-  },
-  {
-    id: "pat3",
-    name: "Beatriz Nogueira Lopes",
-    documentCpf: "456.789.012-34",
-    phone: "(11) 99881-2233",
-    email: "beatriz.nl@email.com",
-    birthDate: "1992-11-03",
-    gender: "Feminino",
-    emergencyContact: "Helena (Mãe)",
-    emergencyPhone: "(11) 98811-2244",
-    healthInsurance: "Particular",
-    notes: "Pilates para fortalecimento lombar e postura.",
-    active: true,
-    createdAt: Date.now() - 86400000 * 10,
-  },
-  {
-    id: "pat4",
-    name: "Lucas Alencar Moreira",
-    documentCpf: "567.890.123-45",
-    phone: "(11) 98112-3344",
-    email: "lucas.moreira@email.com",
-    birthDate: "1985-06-18",
-    gender: "Masculino",
-    emergencyContact: "Fernanda (Irmã)",
-    emergencyPhone: "(11) 98112-9988",
-    healthInsurance: "SulAmérica",
-    notes: "Cervicalgia tensional e retificação cervical.",
-    active: true,
-    createdAt: Date.now() - 86400000 * 5,
-  },
-]
+
+
+
 
 const todayStr = getTodayDateString()
 
-const initialSchedules: Schedule[] = [
-  // Segunda-feira
-  {
-    id: "sch_seg1",
-    title: "Turma Pilates Aparelhos Manhã",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: addDaysSafe(todayStr, -3),
-    startTime: "08:00",
-    endTime: "08:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_seg1",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "present",
-      },
-      {
-        id: "part_seg2",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "present",
-      },
-    ],
-  },
-  {
-    id: "sch_seg2",
-    title: "Atendimento RPG Postural",
-    type: "individual",
-    specialty: "rpg",
-    roomId: "r2",
-    roomName: "Sala de Postura & RPG",
-    roomColor: "#6366f1",
-    roomCapacity: 2,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: addDaysSafe(todayStr, -3),
-    startTime: "14:00",
-    endTime: "15:00",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_seg3",
-        patientId: "pat4",
-        patientName: "Lucas Alencar Moreira",
-        patientPhone: "(11) 98112-3344",
-        status: "present",
-      },
-    ],
-  },
 
-  // Terça-feira
-  {
-    id: "sch_ter1",
-    title: "Fisioterapia Ortopédica - Ombro",
-    type: "individual",
-    specialty: "fisioterapia",
-    roomId: "r3",
-    roomName: "Consultório 1 - Fisio",
-    roomColor: "#0284c7",
-    roomCapacity: 1,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: addDaysSafe(todayStr, -2),
-    startTime: "09:30",
-    endTime: "10:20",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_ter1",
-        patientId: "pat2",
-        patientName: "Roberto Fernandes Costa",
-        patientPhone: "(11) 97788-9900",
-        status: "present",
-      },
-    ],
-  },
-  {
-    id: "sch_ter2",
-    title: "Turma Pilates Aparelhos Tarde",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: addDaysSafe(todayStr, -2),
-    startTime: "16:00",
-    endTime: "16:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_ter2",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "present",
-      },
-    ],
-  },
 
-  // Quarta-feira
-  {
-    id: "sch_qua1",
-    title: "Turma Pilates Aparelhos Manhã",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: addDaysSafe(todayStr, -1),
-    startTime: "08:00",
-    endTime: "08:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_qua1",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "present",
-      },
-      {
-        id: "part_qua2",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "present",
-      },
-    ],
-  },
-  {
-    id: "sch_qua2",
-    title: "Atendimento RPG Postural",
-    type: "individual",
-    specialty: "rpg",
-    roomId: "r2",
-    roomName: "Sala de Postura & RPG",
-    roomColor: "#6366f1",
-    roomCapacity: 2,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: addDaysSafe(todayStr, -1),
-    startTime: "11:00",
-    endTime: "12:00",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_qua3",
-        patientId: "pat4",
-        patientName: "Lucas Alencar Moreira",
-        patientPhone: "(11) 98112-3344",
-        status: "present",
-      },
-    ],
-  },
 
-  // Quinta-feira (Hoje)
-  {
-    id: "sch1",
-    title: "Turma Pilates Aparelhos Manhã",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: todayStr,
-    startTime: "08:00",
-    endTime: "08:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part1",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "present",
-        checkedInAt: Date.now() - 3600000,
-      },
-      {
-        id: "part2",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "scheduled",
-      },
-    ],
-  },
-  {
-    id: "sch2",
-    title: "Atendimento RPG Postural",
-    type: "individual",
-    specialty: "rpg",
-    roomId: "r2",
-    roomName: "Sala de Postura & RPG",
-    roomColor: "#6366f1",
-    roomCapacity: 2,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: todayStr,
-    startTime: "09:00",
-    endTime: "10:00",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part3",
-        patientId: "pat4",
-        patientName: "Lucas Alencar Moreira",
-        patientPhone: "(11) 98112-3344",
-        status: "scheduled",
-      },
-    ],
-  },
-  {
-    id: "sch3",
-    title: "Fisioterapia Ortopédica - Joelho",
-    type: "individual",
-    specialty: "fisioterapia",
-    roomId: "r3",
-    roomName: "Consultório 1 - Fisio",
-    roomColor: "#0284c7",
-    roomCapacity: 1,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: todayStr,
-    startTime: "10:30",
-    endTime: "11:20",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part4",
-        patientId: "pat2",
-        patientName: "Roberto Fernandes Costa",
-        patientPhone: "(11) 97788-9900",
-        status: "scheduled",
-      },
-    ],
-  },
-  {
-    id: "sch4",
-    title: "Turma Pilates Aparelhos Tarde",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: todayStr,
-    startTime: "17:00",
-    endTime: "17:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part5",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "scheduled",
-      },
-      {
-        id: "part6",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "scheduled",
-      },
-    ],
-  },
 
-  // Sexta-feira
-  {
-    id: "sch_sex1",
-    title: "Turma Pilates Aparelhos Manhã",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: addDaysSafe(todayStr, 1),
-    startTime: "08:00",
-    endTime: "08:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_sex1",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "scheduled",
-      },
-      {
-        id: "part_sex2",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "scheduled",
-      },
-      {
-        id: "part_sex3",
-        patientId: "pat4",
-        patientName: "Lucas Alencar Moreira",
-        patientPhone: "(11) 98112-3344",
-        status: "scheduled",
-      },
-    ],
-  },
-  {
-    id: "sch_sex2",
-    title: "Fisioterapia Avançada",
-    type: "individual",
-    specialty: "fisioterapia",
-    roomId: "r3",
-    roomName: "Consultório 1 - Fisio",
-    roomColor: "#0284c7",
-    roomCapacity: 1,
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    date: addDaysSafe(todayStr, 1),
-    startTime: "14:00",
-    endTime: "14:50",
-    maxCapacity: 1,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_sex4",
-        patientId: "pat2",
-        patientName: "Roberto Fernandes Costa",
-        patientPhone: "(11) 97788-9900",
-        status: "scheduled",
-      },
-    ],
-  },
 
-  // Sábado
-  {
-    id: "sch_sab1",
-    title: "Turma Especial Pilates Sábado",
-    type: "turma",
-    specialty: "pilates",
-    roomId: "r1",
-    roomName: "Studio Pilates Aparelhos",
-    roomColor: "#10b981",
-    roomCapacity: 4,
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    date: addDaysSafe(todayStr, 2),
-    startTime: "09:00",
-    endTime: "09:55",
-    maxCapacity: 4,
-    status: "scheduled",
-    participants: [
-      {
-        id: "part_sab1",
-        patientId: "pat1",
-        patientName: "Juliana Mendes da Silva",
-        patientPhone: "(11) 98877-6655",
-        status: "scheduled",
-      },
-      {
-        id: "part_sab2",
-        patientId: "pat3",
-        patientName: "Beatriz Nogueira Lopes",
-        patientPhone: "(11) 99881-2233",
-        status: "scheduled",
-      },
-    ],
-  },
-]
 
-const initialTransactions: FinancialTransaction[] = [
-  {
-    id: "tx1",
-    type: "income",
-    category: "Mensalidade Pilates",
-    description: "Mensalidade 2x/Semana - Juliana Mendes",
-    amount: 380,
-    dueDate: todayStr,
-    paymentDate: todayStr,
-    paymentMethod: "pix",
-    status: "paid",
-    patientId: "pat1",
-    patientName: "Juliana Mendes da Silva",
-  },
-  {
-    id: "tx2",
-    type: "income",
-    category: "Pacote Fisioterapia",
-    description: "Pacote 10 Sessões Reabilitação - Roberto Costa",
-    amount: 1600,
-    dueDate: todayStr,
-    paymentDate: todayStr,
-    paymentMethod: "cartao_credito",
-    status: "paid",
-    patientId: "pat2",
-    patientName: "Roberto Fernandes Costa",
-  },
-  {
-    id: "tx3",
-    type: "expense",
-    category: "Materiais & Higiene",
-    description: "Álcool 70%, lençóis descartáveis e faixas elásticas Theraband",
-    amount: 245,
-    dueDate: todayStr,
-    paymentDate: todayStr,
-    paymentMethod: "pix",
-    status: "paid",
-  },
-  {
-    id: "tx4",
-    type: "expense",
-    category: "Manutenção Aparelhos",
-    description: "Troca de molas e lubrificação dos Reformers Pilates",
-    amount: 450,
-    dueDate: "2026-09-10",
-    paymentMethod: "transferencia",
-    status: "pending",
-  },
-  {
-    id: "tx5",
-    type: "income",
-    category: "Sessão RPG Avulsa",
-    description: "Sessão RPG - Lucas Alencar",
-    amount: 220,
-    dueDate: todayStr,
-    paymentMethod: "pix",
-    status: "pending",
-    patientId: "pat4",
-    patientName: "Lucas Alencar Moreira",
-  },
-]
 
-const initialEvolutions: ClinicalEvolution[] = [
-  {
-    id: "evo1",
-    patientId: "pat1",
-    patientName: "Juliana Mendes da Silva",
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    crefito: "CREFITO-3 / 184520-F",
-    date: "2026-08-12",
-    timestamp: Date.now() - 86400000 * 21,
-    techniqueCategory: "RPG Souchard",
-    subjective: "Paciente relata dor lombar aguda intensa (EVA 8/10), irradiando para nádega direita, após muitas horas sentada.",
-    objective: "Postura rã no chão com braços abertos. Tração cervical e descompressão lombo-sacra L4-L5. Respiração diafragmática profunda.",
-    assessment: "Encurtamento severo da cadeia posterior e espasmo paravertebral lombar. Ganho discreto de relaxamento ao final.",
-    plan: "Repetir postura duas vezes por semana e prescrever exercícios respiratórios domiciliares.",
-    painScaleAfter: 6,
-    isLocked: true,
-    signatureHash: "COFFITO-CREFITO3184520F-K9X2A",
-  },
-  {
-    id: "evo2",
-    patientId: "pat1",
-    patientName: "Juliana Mendes da Silva",
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    crefito: "CREFITO-3 / 215430-F",
-    date: "2026-08-19",
-    timestamp: Date.now() - 86400000 * 14,
-    techniqueCategory: "Pilates Aparelhos",
-    subjective: "Relata alívio substancial da queixa ciática, permanecendo apenas sensação de cansaço muscular lombar (EVA 4/10).",
-    objective: "No Reformer: Footwork 4 molas 3x10, Bridging com bola 3x10. No Cadillac: Tower para alongamento axial da coluna.",
-    assessment: "Boa ativação do transverso abdominal (powerhouse) sem episódios de dor aguda durante a execução.",
-    plan: "Progredir estabilização de pelve e acrescentar exercícios de mobilidade de quadril.",
-    painScaleAfter: 4,
-    isLocked: true,
-    signatureHash: "COFFITO-CREFITO3215430F-L8M3B",
-  },
-  {
-    id: "evo3",
-    patientId: "pat1",
-    patientName: "Juliana Mendes da Silva",
-    professionalId: "prof2",
-    professionalName: "Dra. Camila Duarte",
-    crefito: "CREFITO-3 / 215430-F",
-    date: "2026-08-26",
-    timestamp: Date.now() - 86400000 * 7,
-    techniqueCategory: "Pilates Aparelhos",
-    subjective: "Conseguiu passar a semana de trabalho no escritório sem precisar recorrer a anti-inflamatórios orais (EVA 2/10).",
-    objective: "Reformer: Footwork, Running 2 molas, Eve's Lunge unipodal. Chair: Pike prep e flexão de tronco assistida.",
-    assessment: "Excelente estabilidade e controle postural dinâmico. Pelve neutra mantida com facilidade.",
-    plan: "Manter frequência 2x/semana no Studio Pilates e focar em fortalecimento avançado.",
-    painScaleAfter: 2,
-    isLocked: true,
-    signatureHash: "COFFITO-CREFITO3215430F-N4J7C",
-  },
-  {
-    id: "evo4",
-    patientId: "pat1",
-    patientName: "Juliana Mendes da Silva",
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    crefito: "CREFITO-3 / 184520-F",
-    date: todayStr,
-    timestamp: Date.now() - 3600000 * 3,
-    techniqueCategory: "RPG Souchard",
-    subjective: "Sensação de bem-estar completo, sem dor em repouso (EVA 1/10). Disposição plena para atividades do cotidiano.",
-    objective: "Postura sentada no meio com apoio escapular. Reeducação das curvaturas fisiológicas e tração manual occipital.",
-    assessment: "Alinhamento das cristas ilíacas normalizado. Nivelamento acromial simétrico comparado à avaliação inicial.",
-    plan: "Reavaliação postural em 30 dias e manutenção das aulas de Pilates.",
-    painScaleAfter: 1,
-    isLocked: true,
-    signatureHash: "COFFITO-CREFITO3184520F-P1Q9D",
-  },
-  {
-    id: "evo5",
-    patientId: "pat2",
-    patientName: "Roberto Fernandes Costa",
-    professionalId: "prof1",
-    professionalName: "Dr. Marcelo Henrique",
-    crefito: "CREFITO-3 / 184520-F",
-    date: todayStr,
-    timestamp: Date.now() - 3600000 * 2,
-    techniqueCategory: "Fisioterapia Ortopédica",
-    subjective: "Paciente relata redução significativa da dor (EVA 2/10). Sem queixa de instabilidade no joelho operado.",
-    objective: "Realizado ganho de ADM passiva de flexão (alcançado 115°). Fortalecimento isométrico de quadríceps em CCF com bola suíça.",
-    assessment: "Boa evolução articular sem derrame ou sinais inflamatórios exuberantes.",
-    plan: "Progredir para agachamento bipodal assistido e propriocepção na próxima sessão.",
-    painScaleAfter: 1,
-    isLocked: true,
-    signatureHash: "COFFITO-CREFITO3184520F-R7T2E",
-  },
-]
 
-const initialClinicalRecords: Record<string, ClinicalRecord> = {
-  pat1: {
-    patientId: "pat1",
-    chiefComplaint: "Lombalgia mecânica crônica com irradiação para membro inferior direito e rigidez matinal.",
-    hpi: "Quadro iniciado há cerca de 6 meses, agravado por permanecer mais de 8 horas consecutivas na posição sentada.",
-    medicalHistory: "Sedentarismo prévio, sem histórico cirúrgico. Ressonância evidenciando protrusão discal L4-L5 sem compressão foraminal severa.",
-    medications: "Paracetamol sob demanda (suspenso nas últimas 2 semanas).",
-    painScaleEva: 8,
-    painLocation: "Região lombar baixa L4-L5, sacroilíaca direita e face posterior da coxa.",
-    posturalNotes: "Hiperlordose lombar com anteversão pélvica de 15°; assimetria acromial com ombro direito 1,2cm elevado; cabeça anteriorizada.",
-    posturalDate: "2026-08-12",
-    posturalAlignmentMetrics: "Ombros: +1.2cm D; Pelve: Anteversão bilateral; Joelhos: Discreto valgo dinâmico.",
-    testsAndMeasures: "Lasègue negativo bilateral. Schober positivo (10cm -> 13cm, mobilidade reduzida). ADM de flexão de quadril limitada a 65°.",
-    clinicalGoals: "Remissão da dor lombar, restauração da curvatura lombar fisiológica, fortalecimento do core e retorno a caminhadas.",
-    updatedAt: Date.now() - 86400000 * 21,
-  },
-  pat2: {
-    patientId: "pat2",
-    chiefComplaint: "Dificuldade para estender e dobrar o joelho direito após cirurgia de LCA.",
-    hpi: "Paciente sofreu entorse jogando futebol há 8 semanas. Realizou reconstrução ligamentar há 6 semanas.",
-    medicalHistory: "Hipertensão controlada com medicação. Sem cirurgias prévias.",
-    medications: "Losartana 50mg, analgésico se dor.",
-    painScaleEva: 6,
-    painLocation: "Região patelar e linha articular medial do joelho direito.",
-    posturalNotes: "Leve flexo de joelho direito na postura em pé e descarga de peso assimétrica para o membro esquerdo.",
-    posturalDate: "2026-08-18",
-    testsAndMeasures: "Lachman negativo pós-cirúrgico, Gaveta anterior negativa. Edema peripatelar discreto (+1/4+).",
-    clinicalGoals: "Alcançar 125° de flexão, extensão completa de 0°, ganho de trofismo e retorno a corridas leves.",
-    updatedAt: Date.now(),
-  },
-}
 
-const initialClinicalReports: ClinicalReport[] = [
-  {
-    id: "rep-1",
-    patientId: "p1", // Juliana Mendes da Silva
-    professionalId: "prof1", // Dr. Marcelo Henrique
-    type: "report",
-    title: "Laudo de Evolução Clínica e Biomecânica",
-    date: "2026-08-25",
-    chiefComplaint: "Lombalgia e tensão postural com irradiação glútea à direita.",
-    painScaleEva: 4,
-    painLocation: "Lombar / Região Paravertebral",
-    hpi: "Quadro com início insidioso relacionado a posturas sentadas mantidas no trabalho de escritório.",
-    clinicalGoals: "Estabilização segmentar vertebral e melhora da flexibilidade global da cadeia posterior.",
-    diagnosticCid: "M54.5 (Dor lombar baixa)",
-    evolutionSummary: "Paciente compareceu a 12 sessões com boa assiduidade e aderência ao tratamento. Apresenta evolução postural satisfatória, redução do padrão álgico de EVA 7 para 4 e melhora de mobilidade lombo-pélvica.",
-    conclusion: "Paciente evolui com excelente resposta ao protocolo de Pilates Clínico e Estabilização Segmentar. Recomenda-se manutenção da frequência de 2x semanais por mais 8 semanas para consolidação do ganho biomecânico.",
-    customNotes: "Acompanhamento fisioterapêutico sem intercorrências.",
-    documentHash: "COFFITO-184520F-L98A1B",
-    signedProfessionalName: "Dr. Marcelo Henrique",
-    crefito: "CREFITO-3 / 184520-F",
-    createdAt: 1724580000000,
-    updatedAt: 1724580000000,
-  },
-  {
-    id: "rep-2",
-    patientId: "p2", // Roberto Silva
-    professionalId: "prof1",
-    type: "report",
-    title: "Laudo Fisioterapêutico de Reabilitação Pós-Operatória",
-    date: "2026-08-20",
-    chiefComplaint: "Pós-operatório de reconstrução de LCA no joelho direito (6ª semana).",
-    painScaleEva: 3,
-    painLocation: "Face anterior do joelho direito",
-    hpi: "Pós-operatório tardio com queixa de rigidez matinal e leve edema peripatelar após sobrecarga.",
-    clinicalGoals: "Extensão completa de joelho (0°), flexão acima de 125°, fortalecimento de quadríceps e estabilização proprioceptiva.",
-    diagnosticCid: "M23.2 (Transtorno interno do menisco/ligamento)",
-    evolutionSummary: "Completou 16 sessões com foco em cinesioterapia ativa-assistida, mobilização patelar e treino sensório-motor.",
-    conclusion: "Paciente apto a progredir para fase de fortalecimento excêntrico e trote leve em esteira. Liberado para atividades funcionais de baixo impacto.",
-    customNotes: "Boa tolerância a cargas.",
-    documentHash: "COFFITO-184520F-K87Z3C",
-    signedProfessionalName: "Dr. Marcelo Henrique",
-    crefito: "CREFITO-3 / 184520-F",
-    createdAt: 1724148000000,
-    updatedAt: 1724148000000,
-  },
-]
 
 const ClinicDataContext = createContext<ClinicDataContextType | undefined>(undefined)
 
 export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth()
-  const [rooms, setRooms] = useState<Room[]>(() => {
+  const [rooms, setRooms] = useState<Room[]>([])
 
-    const s = localStorage.getItem("altar_rooms")
-    return s ? JSON.parse(s) : initialRooms
-  })
+  const [professionals, setProfessionals] = useState<Professional[]>([])
 
-  const [professionals, setProfessionals] = useState<Professional[]>(() => {
-    const s = localStorage.getItem("altar_professionals")
-    return s ? JSON.parse(s) : initialProfessionals
-  })
+  const [patients, setPatients] = useState<Patient[]>([])
 
-  const [patients, setPatients] = useState<Patient[]>(() => {
-    const s = localStorage.getItem("altar_patients")
-    return s ? JSON.parse(s) : initialPatients
-  })
-
-  const [schedules, setSchedules] = useState<Schedule[]>(() => {
-    const s = localStorage.getItem("altar_schedules")
-    return s ? JSON.parse(s) : initialSchedules
-  })
+  const [schedules, setSchedules] = useState<Schedule[]>([])
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
 
@@ -1027,48 +281,17 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const weekRange = useMemo(() => getWeekRange(selectedDate), [selectedDate])
   const monthRange = useMemo(() => getMonthRange(selectedDate), [selectedDate])
 
-  const [replacementCredits, setReplacementCredits] = useState<ReplacementCredit[]>(() => {
-    const s = localStorage.getItem("altar_replacement_credits")
-    return s ? JSON.parse(s) : []
-  })
+  const [replacementCredits, setReplacementCredits] = useState<ReplacementCredit[]>([])
 
-  const [clinicalRecords, setClinicalRecords] = useState<Record<string, ClinicalRecord>>(() => {
-    const s = localStorage.getItem("altar_clinical_records")
-    return s ? JSON.parse(s) : initialClinicalRecords
-  })
+  const [clinicalRecords, setClinicalRecords] = useState<Record<string, ClinicalRecord>>({})
 
-  const [evolutions, setEvolutions] = useState<ClinicalEvolution[]>(() => {
-    const s = localStorage.getItem("altar_evolutions")
-    return s ? JSON.parse(s) : initialEvolutions
-  })
+  const [evolutions, setEvolutions] = useState<ClinicalEvolution[]>([])
 
-  const [clinicalReports, setClinicalReports] = useState<ClinicalReport[]>(() => {
-    const s = localStorage.getItem("altar_clinical_reports")
-    return s ? JSON.parse(s) : initialClinicalReports
-  })
+  const [clinicalReports, setClinicalReports] = useState<ClinicalReport[]>([])
 
-  const [transactions, setTransactions] = useState<FinancialTransaction[]>(() => {
-    const s = localStorage.getItem("altar_transactions")
-    return s ? JSON.parse(s) : initialTransactions
-  })
+  const [transactions, setTransactions] = useState<FinancialTransaction[]>([])
 
-  const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>(() => {
-    const s = localStorage.getItem("altar_notification_logs")
-    return s
-      ? JSON.parse(s)
-      : [
-          {
-            id: "notif1",
-            channel: "whatsapp_uazapi",
-            recipientName: "Juliana Mendes da Silva",
-            recipientContact: "(11) 98877-6655",
-            triggerType: "lembrete_24h",
-            content: "Lembrete: Aula de Pilates Aparelhos hoje às 08:00 na Altar Fisio.",
-            status: "sent",
-            timestamp: Date.now() - 3600000 * 3,
-          },
-        ]
-  })
+  const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([])
 
   const [selectedFinanceMonth, setSelectedFinanceMonth] = useState<string>(() =>
     getCurrentMonthString()
@@ -1143,6 +366,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const updateSoapEvolutionMutation = useMutation(api.clinical.updateSoapEvolution)
   const deleteSoapEvolutionMutation = useMutation(api.clinical.deleteSoapEvolution)
   const generateUploadUrlMutation = useMutation(api.clinical.generateUploadUrl)
+  const attachPosturalPhotoMutation = useMutation(api.clinical.attachPosturalPhoto)
   const createClinicalReportMutation = useMutation(api.clinical.createClinicalReport)
   const updateClinicalReportMutation = useMutation(api.clinical.updateClinicalReport)
   const deleteClinicalReportMutation = useMutation(api.clinical.deleteClinicalReport)
@@ -1172,33 +396,30 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const testUazapiAction = useAction(api.notifications.testUazapiConnectionAction)
   const testResendAction = useAction(api.notifications.testResendConnectionAction)
 
-  const [packages, setPackages] = useState<ClinicPackage[]>(() => {
-    const s = localStorage.getItem("altar_packages")
-    return s ? JSON.parse(s) : []
-  })
+  const [packages, setPackages] = useState<ClinicPackage[]>([])
 
   const [patientPackages, setPatientPackages] = useState<PatientPackage[]>([])
 
   // Dados Derivados Reativos em Tempo Real (Convex com Fallback Otimista)
-  const effectiveServices = (convexServices && convexServices.length > 0)
+  const effectiveServices = (convexServices !== undefined)
     ? convexServices.map((s: any) => ({ ...s, id: s._id }))
     : []
 
-  const effectivePackages = (convexPackages && convexPackages.length > 0)
+  const effectivePackages = (convexPackages !== undefined)
     ? convexPackages.map((p: any) => ({ ...p, id: p._id }))
     : packages
 
-  const effectivePatientPackages = (convexPatientPackages && convexPatientPackages.length > 0)
+  const effectivePatientPackages = (convexPatientPackages !== undefined)
     ? convexPatientPackages.map((pp: any) => ({ ...pp, id: pp._id }))
     : patientPackages
 
 
-  const effectiveRenewalAlerts = (convexRenewalAlerts && convexRenewalAlerts.length > 0)
+  const effectiveRenewalAlerts = (convexRenewalAlerts !== undefined)
     ? convexRenewalAlerts.map((ra: any) => ({ ...ra, id: ra._id }))
     : []
 
 
-  const effectiveAuditLogs: AuditLog[] = (convexAuditLogs && convexAuditLogs.length > 0)
+  const effectiveAuditLogs: AuditLog[] = (convexAuditLogs !== undefined)
     ? convexAuditLogs.map((l: any) => ({
         id: l._id,
         userId: l.userId,
@@ -1213,15 +434,15 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }))
     : []
 
-  const effectiveRooms = (convexRooms && convexRooms.length > 0)
+  const effectiveRooms = (convexRooms !== undefined)
     ? convexRooms.map((r: any) => ({ ...r, id: r._id }))
     : rooms
 
-  const effectiveProfessionals = (convexProfessionals && convexProfessionals.length > 0)
+  const effectiveProfessionals = (convexProfessionals !== undefined)
     ? convexProfessionals.map((p: any) => ({ ...p, id: p._id }))
     : professionals
 
-  const effectivePatients = (convexPatients && convexPatients.length > 0)
+  const effectivePatients = (convexPatients !== undefined)
     ? convexPatients.map((p: any) => ({ ...p, id: p._id }))
     : patients
 
@@ -1251,18 +472,18 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         : [])
     : localFilteredSchedules
 
-  const effectiveReplacementCredits = (convexReplacementCredits && convexReplacementCredits.length > 0)
+  const effectiveReplacementCredits = (convexReplacementCredits !== undefined)
     ? convexReplacementCredits.map((c: any) => ({
         ...c,
         id: c._id,
       }))
     : replacementCredits
 
-  const effectiveTransactions = (convexTransactions && convexTransactions.length > 0)
+  const effectiveTransactions = (convexTransactions !== undefined)
     ? convexTransactions.map((t: any) => ({ ...t, id: t._id }))
     : transactions
 
-  const effectiveLogs = (convexLogs && convexLogs.length > 0)
+  const effectiveLogs = (convexLogs !== undefined)
     ? convexLogs.map((l: any) => ({ ...l, id: l._id }))
     : notificationLogs
 
@@ -1311,7 +532,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   })()
 
-  const effectiveCommissionReports: ProfessionalCommissionReport[] = (convexCommissions && convexCommissions.length > 0)
+  const effectiveCommissionReports: ProfessionalCommissionReport[] = (convexCommissions !== undefined)
     ? convexCommissions
     : effectiveProfessionals.map((prof: any) => {
         const profSchedules = effectiveSchedules.filter((s: any) => s.professionalId === prof.id)
@@ -1364,11 +585,11 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       })
 
-  const effectiveClosedCommissions: ClosedCommission[] = (convexClosedCommissions && convexClosedCommissions.length > 0)
+  const effectiveClosedCommissions: ClosedCommission[] = (convexClosedCommissions !== undefined)
     ? convexClosedCommissions.map((c: any) => ({ ...c, id: c._id }))
     : []
 
-  const effectiveClinicalOverview: ClinicalOverviewItem[] = (convexClinicalOverview && convexClinicalOverview.length > 0)
+  const effectiveClinicalOverview: ClinicalOverviewItem[] = (convexClinicalOverview !== undefined)
     ? convexClinicalOverview.map((item: any) => ({
         ...item,
         patientId: item.patientId,
@@ -1398,7 +619,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
 
   const effectiveClinicalReports: ClinicalReport[] =
-    convexClinicalReports && convexClinicalReports.length > 0
+    convexClinicalReports !== undefined
       ? convexClinicalReports.map((r: any) => ({
           ...r,
           id: r._id,
@@ -1406,39 +627,17 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       : clinicalReports
 
   // Sync state to LocalStorage (Persistência Resiliente / Offline Fallback)
-  useEffect(() => {
-    localStorage.setItem("altar_rooms", JSON.stringify(rooms))
-  }, [rooms])
-  useEffect(() => {
-    localStorage.setItem("altar_professionals", JSON.stringify(professionals))
-  }, [professionals])
-  useEffect(() => {
-    localStorage.setItem("altar_patients", JSON.stringify(patients))
-  }, [patients])
-  useEffect(() => {
-    localStorage.setItem("altar_packages", JSON.stringify(packages))
-  }, [packages])
-  useEffect(() => {
-    localStorage.setItem("altar_schedules", JSON.stringify(schedules))
-  }, [schedules])
-  useEffect(() => {
-    localStorage.setItem("altar_replacement_credits", JSON.stringify(replacementCredits))
-  }, [replacementCredits])
-  useEffect(() => {
-    localStorage.setItem("altar_clinical_records", JSON.stringify(clinicalRecords))
-  }, [clinicalRecords])
-  useEffect(() => {
-    localStorage.setItem("altar_evolutions", JSON.stringify(evolutions))
-  }, [evolutions])
-  useEffect(() => {
-    localStorage.setItem("altar_clinical_reports", JSON.stringify(clinicalReports))
-  }, [clinicalReports])
-  useEffect(() => {
-    localStorage.setItem("altar_transactions", JSON.stringify(transactions))
-  }, [transactions])
-  useEffect(() => {
-    localStorage.setItem("altar_notification_logs", JSON.stringify(notificationLogs))
-  }, [notificationLogs])
+
+
+
+
+
+
+
+
+
+
+
 
 
   const addRoom = async (roomData: Omit<Room, "id">) => {
@@ -1454,7 +653,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       if (cid) createdId = cid
     } catch (err) {
-      console.warn("Convex sync warning (addRoom):", err)
+      throw err
     }
     const newRoom: Room = { ...roomData, id: createdId }
     setRooms((prev) => [...prev, newRoom])
@@ -1474,7 +673,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         description: data.description,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updateRoom):", err)
+      throw err
     }
   }
 
@@ -1483,7 +682,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deleteRoomMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deleteRoom):", err)
+      throw err
     }
   }
 
@@ -1502,7 +701,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       if (cid) createdId = cid
     } catch (err) {
-      console.warn("Convex sync warning (addProfessional):", err)
+      throw err
     }
     const newProf: Professional = { ...profData, id: createdId }
     setProfessionals((prev) => [...prev, newProf])
@@ -1524,7 +723,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         active: data.active ?? true,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updateProfessional):", err)
+      throw err
     }
   }
 
@@ -1533,22 +732,12 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deleteProfessionalMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deleteProfessional):", err)
+      throw err
     }
   }
 
-  const addPatient = (patientData: Omit<Patient, "id" | "createdAt" | "active">) => {
-    const id = `pat_${Date.now()}`
-    const newPatient: Patient = {
-      ...patientData,
-      id,
-      active: true,
-      createdAt: Date.now(),
-    }
-    setPatients((prev) => [newPatient, ...prev])
-
-    // Sincroniza de forma assíncrona com o Convex
-    createPatientMutation({
+  const addPatient = async (patientData: Omit<Patient, "id" | "createdAt" | "active">) => {
+    return await createPatientMutation({
       name: patientData.name,
       documentCpf: patientData.documentCpf,
       phone: patientData.phone,
@@ -1560,33 +749,12 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       emergencyPhone: patientData.emergencyPhone,
       healthInsurance: patientData.healthInsurance,
       notes: patientData.notes,
-    }).catch((err) => console.warn("Convex sync warning (addPatient):", err))
-
-    return id
+    })
   }
 
-  const updatePatient = (id: string, data: Partial<Patient>) => {
-    setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
-
-    try {
-      updatePatientMutation({
-        id: id as any,
-        name: data.name || "",
-        documentCpf: data.documentCpf || "",
-        phone: data.phone || "",
-        email: data.email,
-        birthDate: data.birthDate || "",
-        gender: data.gender,
-        address: data.address,
-        emergencyContact: data.emergencyContact,
-        emergencyPhone: data.emergencyPhone,
-        healthInsurance: data.healthInsurance,
-        notes: data.notes,
-        active: data.active ?? true,
-      }).catch((err) => console.warn("Convex sync warning (updatePatient):", err))
-    } catch {
-      // Ignora erro se for ID local mock
-    }
+  const updatePatient = async (id: string, data: Partial<Patient>) => {
+    const { name, documentCpf, phone, birthDate, active, email, gender, address, emergencyContact, emergencyPhone, healthInsurance, notes } = data
+    await updatePatientMutation({ id: id as any, name, documentCpf, phone, birthDate, active, email, gender, address, emergencyContact, emergencyPhone, healthInsurance, notes })
   }
 
   const deletePatient = async (id: string) => {
@@ -1594,7 +762,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deletePatientMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deletePatient):", err)
+      throw err
     }
   }
 
@@ -1679,7 +847,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         status: data.status,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updateSchedule):", err)
+      throw err
     }
   }
 
@@ -1697,7 +865,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteSeries: !!deleteSeries,
       })
     } catch (err) {
-      console.warn("Convex sync warning (deleteSchedule):", err)
+      throw err
     }
   }
 
@@ -1717,7 +885,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         participantRecordId: participantRecordId as any,
       })
     } catch (err) {
-      console.warn("Convex sync warning (removeParticipantFromSchedule):", err)
+      throw err
     }
   }
 
@@ -1758,7 +926,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       return res
     } catch (err) {
-      console.warn("Convex sync warning (checkIn):", err)
+      throw err
       return {
         success: true,
         hasPackage: false,
@@ -1801,7 +969,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: res?.message ?? "Presenças em lote confirmadas",
       }
     } catch (err) {
-      console.warn("Convex sync warning (batchCheckIn):", err)
+      throw err
       return {
         success: true,
         updatedCount: 0,
@@ -1815,22 +983,31 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       name: serviceData.name,
       modality: serviceData.modality,
       specialty: serviceData.specialty,
+      maxCapacity: serviceData.maxCapacity,
       durationMinutes: serviceData.durationMinutes,
       defaultPrice: serviceData.defaultPrice,
+      packagePricePerSession: serviceData.packagePricePerSession,
       description: serviceData.description,
       active: serviceData.active,
     })
     return id
   }
 
-  const updateService = async (id: string, data: Partial<ClinicService>): Promise<void> => {
+  const updateService = async (
+    id: string,
+    data: Omit<Partial<ClinicService>, "packagePricePerSession"> & {
+      packagePricePerSession?: number | null
+    }
+  ): Promise<void> => {
     await updateServiceMutation({
       id: id as any,
       name: data.name,
       modality: data.modality,
       specialty: data.specialty,
+      maxCapacity: data.maxCapacity,
       durationMinutes: data.durationMinutes,
       defaultPrice: data.defaultPrice,
+      packagePricePerSession: data.packagePricePerSession,
       description: data.description,
       active: data.active,
     })
@@ -1861,7 +1038,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       if (id) createdId = id
     } catch (err: any) {
-      console.warn("Convex sync warning (createPackage):", err)
+      throw err
     }
 
     const newPkg: ClinicPackage = {
@@ -1905,7 +1082,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         active: data.active,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updatePackage):", err)
+      throw err
     }
   }
 
@@ -1914,7 +1091,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deletePackageMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deletePackage):", err)
+      throw err
     }
   }
 
@@ -1923,7 +1100,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deletePatientPackageMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deletePatientPackage):", err)
+      throw err
     }
   }
 
@@ -2099,14 +1276,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const getClinicalRecord = (patientId: string) => clinicalRecords[patientId]
 
-  const saveClinicalRecord = (record: ClinicalRecord) => {
-    setClinicalRecords((prev) => ({
-      ...prev,
-      [record.patientId]: record,
-    }))
-
-    try {
-      saveClinicalRecordMutation({
+  const saveClinicalRecord = async (record: ClinicalRecord) => {
+    await saveClinicalRecordMutation({
         patientId: record.patientId as any,
         chiefComplaint: record.chiefComplaint,
         hpi: record.hpi,
@@ -2128,39 +1299,29 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         lateralLeftStorageId: record.lateralLeftStorageId,
         testsAndMeasures: record.testsAndMeasures,
         clinicalGoals: record.clinicalGoals,
-      }).catch((err) => console.warn("Convex sync warning (saveClinicalRecord):", err))
-    } catch {}
+      })
+    setClinicalRecords(prev => ({ ...prev, [record.patientId]: record }))
   }
 
   const deleteClinicalRecord = async (patientId: string) => {
+    const result = await deleteClinicalRecordMutation({ patientId: patientId as any })
+    if (!result.success) {
+      throw new Error(result.message || "Prontuário não encontrado")
+    }
+
     setClinicalRecords((prev) => {
       const copy = { ...prev }
       delete copy[patientId]
       return copy
     })
-    try {
-      await deleteClinicalRecordMutation({ patientId: patientId as any })
-    } catch (err) {
-      console.warn("Convex sync warning (deleteClinicalRecord):", err)
-    }
   }
 
   const getEvolutions = (patientId: string) => {
     return evolutions.filter((e) => e.patientId === patientId)
   }
 
-  const addSoapEvolution = (evoData: Omit<ClinicalEvolution, "id" | "timestamp">) => {
-    const newEvo: ClinicalEvolution = {
-      ...evoData,
-      id: `evo_${Date.now()}`,
-      timestamp: Date.now(),
-      isLocked: true,
-      signatureHash: `COFFITO-SIG-${Date.now().toString(36).toUpperCase()}`,
-    }
-    setEvolutions((prev) => [newEvo, ...prev])
-
-    try {
-      addSoapEvolutionMutation({
+  const addSoapEvolution = async (evoData: Omit<ClinicalEvolution, "id" | "timestamp">) => {
+    await addSoapEvolutionMutation({
         patientId: evoData.patientId as any,
         professionalId: evoData.professionalId as any,
         date: evoData.date,
@@ -2170,8 +1331,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         plan: evoData.plan,
         painScaleAfter: evoData.painScaleAfter,
         techniqueCategory: evoData.techniqueCategory,
-      }).catch((err) => console.warn("Convex sync warning (addSoapEvolution):", err))
-    } catch {}
+      })
   }
 
   const updateSoapEvolution = async (id: string, data: Partial<ClinicalEvolution>) => {
@@ -2188,7 +1348,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         date: data.date,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updateSoapEvolution):", err)
+      throw err
     }
   }
 
@@ -2197,100 +1357,22 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deleteSoapEvolutionMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deleteSoapEvolution):", err)
+      throw err
     }
   }
 
 
-  const uploadPosturalPhoto = async (
-    patientId: string,
-    viewType: PosturalViewType,
-    file: File
-  ): Promise<string> => {
-    let storageId: string | undefined
-    const localUrl = URL.createObjectURL(file)
-
-    try {
-      const uploadUrl = await generateUploadUrlMutation()
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      })
-      const data = await res.json()
-      if (data && data.storageId) {
-        storageId = data.storageId
-      }
-    } catch (err) {
-      console.warn("Upload direto para Convex Storage falhou ou offline; usando URL local:", err)
-    }
-
-    setClinicalRecords((prev) => {
-      const current = prev[patientId] || {
-        patientId,
-        chiefComplaint: "Em avaliação",
-        hpi: "",
-        medicalHistory: "",
-        medications: "",
-        painScaleEva: 5,
-        painLocation: "",
-        clinicalGoals: "",
-        updatedAt: Date.now(),
-      }
-
-      const updated: ClinicalRecord = {
-        ...current,
-        updatedAt: Date.now(),
-      }
-
-      if (viewType === "anterior") {
-        updated.anteriorPhotoUrl = localUrl
-        updated.anteriorStorageId = storageId
-      } else if (viewType === "posterior") {
-        updated.posteriorPhotoUrl = localUrl
-        updated.posteriorStorageId = storageId
-      } else if (viewType === "lateral_right") {
-        updated.lateralRightPhotoUrl = localUrl
-        updated.lateralRightStorageId = storageId
-        updated.lateralPhotoUrl = localUrl
-      } else if (viewType === "lateral_left") {
-        updated.lateralLeftPhotoUrl = localUrl
-        updated.lateralLeftStorageId = storageId
-      }
-
-      try {
-        saveClinicalRecordMutation({
-          patientId: patientId as any,
-          chiefComplaint: updated.chiefComplaint,
-          hpi: updated.hpi,
-          medicalHistory: updated.medicalHistory,
-          medications: updated.medications,
-          painScaleEva: updated.painScaleEva,
-          painLocation: updated.painLocation,
-          posturalNotes: updated.posturalNotes,
-          posturalDate: updated.posturalDate,
-          posturalAlignmentMetrics: updated.posturalAlignmentMetrics,
-          anteriorPhotoUrl: updated.anteriorPhotoUrl,
-          anteriorStorageId: updated.anteriorStorageId,
-          posteriorPhotoUrl: updated.posteriorPhotoUrl,
-          posteriorStorageId: updated.posteriorStorageId,
-          lateralPhotoUrl: updated.lateralPhotoUrl,
-          lateralRightPhotoUrl: updated.lateralRightPhotoUrl,
-          lateralRightStorageId: updated.lateralRightStorageId,
-          lateralLeftPhotoUrl: updated.lateralLeftPhotoUrl,
-          lateralLeftStorageId: updated.lateralLeftStorageId,
-          testsAndMeasures: updated.testsAndMeasures,
-          clinicalGoals: updated.clinicalGoals,
-        }).catch((e) => console.warn("Convex sync warning:", e))
-      } catch {}
-
-      return {
-        ...prev,
-        [patientId]: updated,
-      }
-    })
-
-    return localUrl
+  const uploadPosturalPhoto = async (patientId: string, viewType: PosturalViewType, file: File): Promise<string> => {
+    if (file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use imagem JPG, PNG ou WebP de até 5 MB.')
+    const uploadUrl = await generateUploadUrlMutation()
+    const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': file.type }, body: file })
+    if (!response.ok) throw new Error('Falha no envio da imagem. Tente novamente.')
+    const { storageId } = await response.json()
+    if (!storageId) throw new Error('Upload sem confirmação. Tente novamente.')
+    const view = viewType === 'lateral_right' ? 'lateralRight' : viewType === 'lateral_left' ? 'lateralLeft' : viewType
+    const url = await attachPosturalPhotoMutation({ patientId: patientId as any, view: view as any, storageId })
+    if (!url) throw new Error('Não foi possível consultar a imagem salva.')
+    return url
   }
 
   const getPainEvolutionHistory = (patientId: string): PainDataPoint[] => {
@@ -2376,7 +1458,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         })
       }
     } catch (err) {
-      console.warn("Convex sync warning (createClinicalReport):", err)
+      throw err
     }
 
     return newReport
@@ -2424,7 +1506,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         })
       }
     } catch (err) {
-      console.warn("Convex sync warning (updateClinicalReport):", err)
+      throw err
     }
   }
 
@@ -2435,7 +1517,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         await deleteClinicalReportMutation({ id: id as any })
       }
     } catch (err) {
-      console.warn("Convex sync warning (deleteClinicalReport):", err)
+      throw err
     }
   }
 
@@ -2458,7 +1540,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       if (cid) createdId = cid
     } catch (err) {
-      console.warn("Convex sync warning (addTransaction):", err)
+      throw err
     }
 
     const newTx: FinancialTransaction = {
@@ -2490,7 +1572,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         receiptIssued: data.receiptIssued,
       })
     } catch (err) {
-      console.warn("Convex sync warning (updateTransaction):", err)
+      throw err
     }
   }
 
@@ -2509,7 +1591,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         ...(paymentMethod ? { paymentMethod } : {}),
       })
     } catch (err) {
-      console.warn("Convex sync warning (markTransactionPaid):", err)
+      throw err
     }
   }
 
@@ -2520,7 +1602,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await cancelTransactionMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (cancelTransaction):", err)
+      throw err
     }
   }
 
@@ -2529,7 +1611,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await deleteTransactionMutation({ id: id as any })
     } catch (err) {
-      console.warn("Convex sync warning (deleteTransaction):", err)
+      throw err
     }
   }
 
@@ -2589,7 +1671,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       return { success: res.success, message: res.errorMessage }
     } catch (err: any) {
-      console.warn("Convex sync warning (sendWhatsAppReminder):", err)
+      throw err
       return { success: false, message: err?.message || "Erro ao comunicar com o gateway WhatsApp" }
     }
   }
@@ -2624,7 +1706,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       return { success: !!res.emailSent }
     } catch (err) {
-      console.warn("Convex sync warning (sendEmailReceipt):", err)
+      throw err
       return { success: true }
     }
   }
@@ -2659,7 +1741,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       })
       return { success: !!res.whatsappSent }
     } catch (err) {
-      console.warn("Convex sync warning (sendWhatsAppReceipt):", err)
+      throw err
       return { success: true }
     }
   }
@@ -2734,7 +1816,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         userRole: user?.role || "admin",
       })
     } catch (err) {
-      console.warn("Convex consent save warning:", err)
+      throw err
     }
   }
 

@@ -88,8 +88,10 @@ export default defineSchema({
     name: v.string(), // Ex: "Pilates em Grupo", "Fisioterapia Ortopédica", "Sessão de RPG"
     modality: v.union(v.literal("individual"), v.literal("turma")),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    maxCapacity: v.optional(v.number()), // Limite de pacientes por horário quando for turma
     durationMinutes: v.number(),
     defaultPrice: v.number(),
+    packagePricePerSession: v.optional(v.number()), // Referência unitária quando vendido em pacote
     description: v.optional(v.string()),
     active: v.boolean(),
   }),
@@ -303,6 +305,7 @@ export default defineSchema({
 
   // Sessões de Usuários
   userSessions: defineTable({
+    authVersion: v.optional(v.number()),
     userId: v.id("users"),
     token: v.string(),
     expiresAt: v.number(),
@@ -311,6 +314,9 @@ export default defineSchema({
     .index("by_token", ["token"])
     .index("by_user", ["userId"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  authAttempts: defineTable({ key: v.string(), count: v.number(), resetAt: v.number() }).index('by_key', ['key']).index('by_resetAt', ['resetAt']),
+  patientSessions: defineTable({ patientId: v.id('patients'), tokenHash: v.string(), expiresAt: v.number(), createdAt: v.number() }).index('by_tokenHash', ['tokenHash']).index('by_patient', ['patientId']).index('by_expiresAt', ['expiresAt']),
 
   // Trilha de Auditoria LGPD e COFFITO
   auditLogs: defineTable({
@@ -609,5 +615,3 @@ export default defineSchema({
     .index("by_date", ["date"])
     .index("by_professional_date", ["professionalId", "date"]),
 })
-
-

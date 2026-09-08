@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,81 @@ interface CarouselCardItem {
   buttonPayload: string
 }
 
+type MessageCategory = "reminder_24h" | "reminder_2h" | "booking_confirmation" | "broadcast" | "custom"
+type MessageType = "text" | "button" | "list" | "carousel"
+
+interface MessageTemplatePreset {
+  title: string
+  type: MessageType
+  content: string
+  footerText: string
+  buttons: ButtonItem[]
+  listButtonText: string
+  carouselCards: CarouselCardItem[]
+}
+
+const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
+  booking_confirmation: {
+    title: "Confirmação Imediata de Agendamento",
+    type: "button",
+    content:
+      "Olá, *{{paciente}}*! 🎉\n\nSeu agendamento na *{{clinica}}* foi realizado com sucesso!\n\n📌 *Atividade:* {{servico}}\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}\n\nEsperamos por você!",
+    footerText: "Altar Fisio • Cuidado e Movimento",
+    buttons: [
+      { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
+      { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
+    ],
+    listButtonText: "Ver Opções de Atendimento",
+    carouselCards: [],
+  },
+  reminder_24h: {
+    title: "Lembrete 24h com Confirmação",
+    type: "button",
+    content:
+      "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}",
+    footerText: "Altar Fisio • Cuidado e Movimento",
+    buttons: [
+      { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
+      { text: "Solicitar Remarcação", actionType: "reply", payload: "remarcar" },
+      { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
+    ],
+    listButtonText: "Ver Opções de Atendimento",
+    carouselCards: [],
+  },
+  reminder_2h: {
+    title: "Lembrete 2h com Orientações",
+    type: "button",
+    content:
+      "Olá, *{{paciente}}*! ⏰\n\nFalta pouco para seu atendimento na *{{clinica}}*!\n\n📅 *Hoje às {{horario}}*\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}{{dica}}\n\nEstamos prontos para te receber!",
+    footerText: "Altar Fisio",
+    buttons: [
+      { text: "Estou a Caminho", actionType: "reply", payload: "a_caminho" },
+      { text: "Falar na Recepção", actionType: "url", payload: "https://wa.me/5511987654321" },
+    ],
+    listButtonText: "Ver Opções de Atendimento",
+    carouselCards: [],
+  },
+  broadcast: {
+    title: "Aviso para Disparo em Massa",
+    type: "text",
+    content:
+      "Olá, *{{paciente}}*!\n\nConfira uma novidade da *{{clinica}}*:\n\nDigite aqui a mensagem que deseja compartilhar.",
+    footerText: "Altar Fisio",
+    buttons: [],
+    listButtonText: "Ver Opções de Atendimento",
+    carouselCards: [],
+  },
+  custom: {
+    title: "",
+    type: "button",
+    content: "Olá, *{{paciente}}*! Digite sua mensagem aqui...",
+    footerText: "Altar Fisio",
+    buttons: [{ text: "Confirmar", actionType: "reply", payload: "confirmar" }],
+    listButtonText: "Ver Opções de Atendimento",
+    carouselCards: [],
+  },
+}
+
 const cleanLineBreaks = (text: string): string => {
   if (!text) return ""
   return text
@@ -61,7 +136,7 @@ const cleanLineBreaks = (text: string): string => {
 
 export const MessageTemplateBuilder: React.FC = () => {
   const templates = useQuery(api.whatsapp.listTemplates, {}) || []
-  const clinicSettings = useQuery(api.clinic.getSettings)
+  const clinicSettings = useQuery(api.clinic.getNotificationSettings)
   const saveTemplateMutation = useMutation(api.whatsapp.saveTemplate)
   const deleteTemplateMutation = useMutation(api.whatsapp.deleteTemplate)
   const assignReminderMutation = useMutation(api.whatsapp.assignReminderTemplate)
@@ -69,8 +144,8 @@ export const MessageTemplateBuilder: React.FC = () => {
   // Estado do Editor
   const [editingTemplateId, setEditingTemplateId] = useState<any | null>(null)
   const [title, setTitle] = useState("")
-  const [category, setCategory] = useState<"reminder_24h" | "reminder_2h" | "booking_confirmation" | "broadcast" | "custom">("reminder_24h")
-  const [type, setType] = useState<"text" | "button" | "list" | "carousel">("button")
+  const [category, setCategory] = useState<MessageCategory>("reminder_24h")
+  const [type, setType] = useState<MessageType>("button")
   const [content, setContent] = useState(
     "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}"
   )
@@ -182,15 +257,35 @@ export const MessageTemplateBuilder: React.FC = () => {
     if (t.listButtonText) setListButtonText(t.listButtonText)
   }
 
+  const applyCategoryPreset = (nextCategory: MessageCategory) => {
+    const preset = CATEGORY_PRESETS[nextCategory]
+
+    setTitle(preset.title)
+    setType(preset.type)
+    setContent(preset.content)
+    setFooterText(preset.footerText)
+    setButtons(preset.buttons.map((button) => ({ ...button })))
+    setListButtonText(preset.listButtonText)
+    setCarouselCards(preset.carouselCards.map((card) => ({ ...card })))
+    setPreviewCardIndex(0)
+  }
+
+  const handleCategoryChange = (nextCategory: MessageCategory) => {
+    setCategory(nextCategory)
+
+    // Ao criar um modelo, a categoria funciona como um ponto de partida para
+    // o editor. Ao editar um modelo existente, preserve as alterações manuais.
+    if (!editingTemplateId) {
+      applyCategoryPreset(nextCategory)
+    }
+  }
+
   // Novo Template em Branco
   const handleResetForm = () => {
     setEditingTemplateId(null)
     setTitle("")
     setCategory("custom")
-    setType("button")
-    setContent("Olá, *{{paciente}}*! Digite sua mensagem aqui...")
-    setFooterText("Altar Fisio")
-    setButtons([{ text: "Confirmar", actionType: "reply", payload: "confirmar" }])
+    applyCategoryPreset("custom")
   }
 
   // Salvar Template
@@ -500,20 +595,7 @@ export const MessageTemplateBuilder: React.FC = () => {
                     <label className="font-semibold text-foreground">Categoria</label>
                     <select
                       value={category}
-                      onChange={(e: any) => {
-                        const newCat = e.target.value
-                        setCategory(newCat)
-                        if (newCat === "booking_confirmation" && !editingTemplateId) {
-                          if (!title) setTitle("Confirmação Imediata de Agendamento")
-                          setContent(
-                            "Olá, *{{paciente}}*! 🎉\n\nSeu agendamento na *{{clinica}}* foi realizado com sucesso!\n\n📌 *Atividade:* {{servico}}\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}\n\nEsperamos por você!"
-                          )
-                          setButtons([
-                            { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
-                            { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
-                          ])
-                        }
-                      }}
+                      onChange={(e) => handleCategoryChange(e.target.value as MessageCategory)}
                       className="w-full h-8 px-2.5 rounded-md border bg-background text-xs outline-none"
                     >
                       <option value="booking_confirmation">Confirmação ao Agendar (Imediata)</option>

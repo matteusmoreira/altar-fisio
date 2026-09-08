@@ -10,6 +10,7 @@
 
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as authActions from "../authActions.js";
 import type * as availability from "../availability.js";
 import type * as bookingBuilder from "../bookingBuilder.js";
 import type * as clinic from "../clinic.js";
@@ -17,14 +18,18 @@ import type * as clinical from "../clinical.js";
 import type * as consents from "../consents.js";
 import type * as crons from "../crons.js";
 import type * as finance from "../finance.js";
+import type * as lib_security from "../lib/security.js";
+import type * as lib_validation from "../lib/validation.js";
 import type * as maintenance from "../maintenance.js";
 import type * as notifications from "../notifications.js";
 import type * as packages from "../packages.js";
 import type * as patientPortal from "../patientPortal.js";
 import type * as patients from "../patients.js";
+import type * as portalAccess from "../portalAccess.js";
 import type * as professionals from "../professionals.js";
 import type * as rooms from "../rooms.js";
 import type * as schedules from "../schedules.js";
+import type * as security from "../security.js";
 import type * as seed from "../seed.js";
 import type * as services from "../services.js";
 import type * as whatsapp from "../whatsapp.js";
@@ -38,6 +43,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auth: typeof auth;
+  authActions: typeof authActions;
   availability: typeof availability;
   bookingBuilder: typeof bookingBuilder;
   clinic: typeof clinic;
@@ -45,14 +51,18 @@ declare const fullApi: ApiFromModules<{
   consents: typeof consents;
   crons: typeof crons;
   finance: typeof finance;
+  "lib/security": typeof lib_security;
+  "lib/validation": typeof lib_validation;
   maintenance: typeof maintenance;
   notifications: typeof notifications;
   packages: typeof packages;
   patientPortal: typeof patientPortal;
   patients: typeof patients;
+  portalAccess: typeof portalAccess;
   professionals: typeof professionals;
   rooms: typeof rooms;
   schedules: typeof schedules;
+  security: typeof security;
   seed: typeof seed;
   services: typeof services;
   whatsapp: typeof whatsapp;

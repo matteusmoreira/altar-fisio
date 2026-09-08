@@ -1,5 +1,6 @@
+import { requirePatient } from './lib/security'
 import { query, mutation } from "./_generated/server"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
 import { parseDateTimeToMs, checkTimeOverlap } from "./schedules"
 
@@ -9,123 +10,18 @@ function cleanNumbers(val: string): string {
 }
 
 // 1. Identificacao Rapida do Paciente (Opcao A - Sem Friccao de Senhas)
-export const identifyPatient = query({
-  args: { identifier: v.string() },
-  handler: async (ctx, args) => {
-    const raw = args.identifier.trim()
-    if (!raw) return null
 
-    const cleanInput = cleanNumbers(raw)
-
-    // 1. Tentar correspondência exata via índice by_cpf
-    if (cleanInput.length >= 11) {
-      const byCpf = await ctx.db
-        .query("patients")
-        .withIndex("by_cpf", (q) => q.eq("documentCpf", raw))
-        .first()
-      if (byCpf) {
-        return {
-          _id: byCpf._id,
-          name: byCpf.name,
-          documentCpf: byCpf.documentCpf,
-          phone: byCpf.phone,
-          email: byCpf.email,
-        }
-      }
-    }
-
-    // 2. Tentar correspondência exata via índice by_phone
-    if (cleanInput.length >= 8) {
-      const byPhone = await ctx.db
-        .query("patients")
-        .withIndex("by_phone", (q) => q.eq("phone", raw))
-        .first()
-      if (byPhone) {
-        return {
-          _id: byPhone._id,
-          name: byPhone.name,
-          documentCpf: byPhone.documentCpf,
-          phone: byPhone.phone,
-          email: byPhone.email,
-        }
-      }
-    }
-
-    // 3. Fallback limitado para compatibilidade com formatação alternativa
-    const samplePatients = await ctx.db.query("patients").take(50)
-    const matched = samplePatients.find((p) => {
-      const pCpfClean = cleanNumbers(p.documentCpf)
-      const pPhoneClean = cleanNumbers(p.phone)
-
-      if (cleanInput.length >= 8) {
-        if (pCpfClean === cleanInput || pPhoneClean === cleanInput) return true
-        if (pCpfClean.includes(cleanInput) || pPhoneClean.includes(cleanInput)) return true
-      }
-
-      if (p.email && p.email.toLowerCase() === raw.toLowerCase()) return true
-      if (p.name.toLowerCase() === raw.toLowerCase()) return true
-
-      return false
-    })
-
-    if (!matched) return null
-
-    return {
-      _id: matched._id,
-      name: matched.name,
-      documentCpf: matched.documentCpf,
-      phone: matched.phone,
-      email: matched.email,
-    }
-  },
-})
 
 // 1.1. Pacientes de Demonstracao Dinamicos (para testes rapidos sem IDs fixos entre ambientes)
-export const getDemoPatients = query({
-  args: {},
-  handler: async (ctx) => {
-    const samplePatients = await ctx.db
-      .query("patients")
-      .withIndex("by_active", (q) => q.eq("active", true))
-      .take(4)
 
-    return Promise.all(
-      samplePatients.map(async (p) => {
-        const activePkg = await ctx.db
-          .query("patientPackages")
-          .withIndex("by_patient", (q) => q.eq("patientId", p._id))
-          .filter((q) => q.eq(q.field("status"), "active"))
-          .first()
-
-        let planDesc = "Aluno Cadastrado"
-        if (activePkg) {
-          const pkgDef = await ctx.db.get(activePkg.packageId)
-          planDesc = `${pkgDef?.name || "Plano Ativo"} (${activePkg.remainingSessions} sessões)`
-        }
-
-        const nameParts = p.name.trim().split(/\s+/)
-        const initials =
-          nameParts.length >= 2
-            ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
-            : (p.name.slice(0, 2) || "AL").toUpperCase()
-
-        return {
-          _id: p._id,
-          name: p.name,
-          documentCpf: p.documentCpf,
-          phone: p.phone,
-          planDesc,
-          initials,
-        }
-      })
-    )
-  },
-})
 
 // 2. Consulta Completa de Dados do Portal do Paciente
 export const getPatientPortalData = query({
-  args: { patientId: v.string() },
-  handler: async (ctx, args) => {
+  args: { portalToken: v.string(),  patientId: v.string() },
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
     if (!normPatientId) return null
 
@@ -309,12 +205,15 @@ export const getPatientPortalData = query({
 
 // 3. Cancelamento pelo Paciente (com aplicacao automatica da regra de 2 horas)
 export const cancelAppointmentByPatient = mutation({
-  args: {
+  args: { portalToken: v.string(),
     participantId: v.string(),
     patientId: v.string(),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
     const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
     if (!normParticipantId) throw new Error("Agendamento nao encontrado.")
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
@@ -326,8 +225,9 @@ export const cancelAppointmentByPatient = mutation({
       throw new Error("Acesso nao autorizado para este agendamento.")
     }
 
+    if (participant.status !== 'scheduled') throw new Error('Este agendamento já foi processado.')
     const schedule = await ctx.db.get(participant.scheduleId)
-    if (!schedule) throw new Error("Sessao nao encontrada.")
+    if (!schedule || schedule.status === 'cancelled') throw new Error("Sessao nao encontrada.")
 
     const settings = await ctx.db.query("clinicSettings").first()
     const noticeHoursRequired = settings?.cancellationNoticeHours ?? 2
@@ -365,7 +265,7 @@ export const cancelAppointmentByPatient = mutation({
       // Dispara confirmacao via WhatsApp
       const patient = await ctx.db.get(normPatientId)
       if (patient?.phone) {
-        await ctx.scheduler.runAfter(0, api.notifications.sendReplacementCreditNoticeAction, {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendReplacementCreditNoticeAction, {
           patientName: patient.name,
           phone: patient.phone,
           scheduleDate: schedule.date,
@@ -404,13 +304,16 @@ export const cancelAppointmentByPatient = mutation({
 
 // 4. Remarcacao de Sessao pelo Paciente (Troca de Horario Atomica)
 export const rescheduleAppointmentByPatient = mutation({
-  args: {
+  args: { portalToken: v.string(),
     participantId: v.string(),
     targetScheduleId: v.string(),
     patientId: v.string(),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
     const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
     if (!normParticipantId) throw new Error("Agendamento atual nao encontrado.")
     const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
@@ -420,6 +323,7 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const currentPart = await ctx.db.get(normParticipantId)
     if (!currentPart) throw new Error("Agendamento atual nao encontrado.")
+    if (currentPart.status !== 'scheduled') throw new Error('Este agendamento já foi processado.')
     if (currentPart.patientId !== normPatientId) {
       throw new Error("Nao autorizado.")
     }
@@ -429,6 +333,19 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Novo horario selecionado nao encontrado.")
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (currentSchedule.status === 'cancelled' || parseDateTimeToMs(currentSchedule.date, currentSchedule.startTime) - Date.now() < (settings?.cancellationNoticeHours ?? 2) * 3600000) throw new Error('Prazo para remarcação encerrado. Fale com a recepção.')
+    if (targetSchedule.status !== 'scheduled' || targetSchedule.specialty !== currentSchedule.specialty || parseDateTimeToMs(targetSchedule.date, targetSchedule.startTime) <= Date.now()) throw new Error('Horário de destino inválido.')
+    if (currentPart.patientPackageId) {
+      const pkg = await ctx.db.get(currentPart.patientPackageId)
+      if (!pkg || pkg.patientId !== normPatientId || pkg.status !== 'active' || pkg.remainingSessions < 1 || pkg.expiryDate < targetSchedule.date) throw new Error('Plano indisponível para a data selecionada.')
+    }
+    const ownParts = await ctx.db.query('scheduleParticipants').withIndex('by_patient', q => q.eq('patientId', normPatientId)).collect()
+    for (const part of ownParts) {
+      if (part._id === currentPart._id || ['absence', 'justified_absence'].includes(part.status)) continue
+      const existing = await ctx.db.get(part.scheduleId)
+      if (existing && existing.status !== 'cancelled' && existing.date === targetSchedule.date && checkTimeOverlap(existing.startTime, existing.endTime, targetSchedule.startTime, targetSchedule.endTime)) throw new Error('Você já possui agendamento neste horário.')
+    }
 
     // Checar capacidade no novo horario
     const existingParts = await ctx.db
@@ -468,12 +385,15 @@ export const rescheduleAppointmentByPatient = mutation({
 
 // 5. Agendar Horario Usando Credito de Reposicao Disponivel
 export const useReplacementCreditToBook = mutation({
-  args: {
+  args: { portalToken: v.string(),
     creditId: v.string(),
     targetScheduleId: v.string(),
     patientId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
     const normCreditId = ctx.db.normalizeId("replacementCredits", args.creditId)
     if (!normCreditId) throw new Error("Credito de reposicao invalido.")
     const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
@@ -535,18 +455,22 @@ export const useReplacementCreditToBook = mutation({
 
 // 6. Listagem de Vagas Livres para Agendamento, Remarcacao e Reposicao
 export const listAvailableSlotsForBooking = query({
-  args: {
+  args: { portalToken: v.string(),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
     startDate: v.string(), // YYYY-MM-DD
     daysCount: v.optional(v.number()), // Padrao: 14 dias
     patientId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const days = args.daysCount || 14
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
+    const days = args.daysCount ?? 14
+    if (!Number.isInteger(days) || days < 1 || days > 31) throw new Error('Período inválido.')
     const result: any[] = []
 
     const startObj = new Date(`${args.startDate}T12:00:00Z`)
-    const normPatientId = args.patientId ? ctx.db.normalizeId("patients", args.patientId) : null
+    const normPatientId = portalPatient._id
 
     for (let i = 0; i < days; i++) {
       const d = new Date(startObj)
@@ -611,173 +535,20 @@ export const listAvailableSlotsForBooking = query({
 })
 
 // 7. Seed Auxiliar de Demonstracao (Garante agendamentos e vagas para teste imediato)
-export const ensurePatientDemoSchedules = mutation({
-  args: { patientId: v.string() },
-  handler: async (ctx, args) => {
-    const normPatientId = ctx.db.normalizeId("patients", args.patientId)
-    if (!normPatientId) return { success: false, message: "Paciente nao encontrado" }
 
-    const patient = await ctx.db.get(normPatientId)
-    if (!patient) return { success: false, message: "Paciente nao encontrado" }
-
-    // Checar se o paciente ja tem agendamentos futuros
-    const todayStr = new Date().toISOString().split("T")[0]
-    const participations = await ctx.db
-      .query("scheduleParticipants")
-      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
-      .collect()
-
-    let hasFuture = false
-    for (const part of participations) {
-      const sch = await ctx.db.get(part.scheduleId)
-      if (sch && sch.date >= todayStr && part.status === "scheduled") {
-        hasFuture = true
-        break
-      }
-    }
-
-    if (hasFuture) {
-      return { success: true, message: "Paciente ja possui agendamentos futuros." }
-    }
-
-    // Criar salas / profissionais se necessario
-    const rooms = await ctx.db.query("rooms").collect()
-    const profs = await ctx.db.query("professionals").collect()
-    const studioRoom = rooms.find((r) => r.type.includes("pilates")) || rooms[0]
-    const profCamila = profs.find((p) => p.name.includes("Camila")) || profs[0]
-
-    if (!studioRoom || !profCamila) {
-      return { success: false, message: "Salas ou profissionais nao configurados." }
-    }
-
-    // Gerar datas para amanha e daqui a 3 dias
-    const d1 = new Date()
-    d1.setDate(d1.getDate() + 1)
-    if (d1.getDay() === 0) d1.setDate(d1.getDate() + 1)
-    const date1Str = d1.toISOString().split("T")[0]
-
-    const d2 = new Date()
-    d2.setDate(d2.getDate() + 3)
-    if (d2.getDay() === 0) d2.setDate(d2.getDate() + 1)
-    const date2Str = d2.toISOString().split("T")[0]
-
-    // Se o paciente tiver pacote ativo, vincula nas sessoes de demonstracao
-    const activePkg = await ctx.db
-      .query("patientPackages")
-      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .first()
-
-    // Criar Sessao 1 (Amanha 09:00 - Pilates)
-    const sch1 = await ctx.db.insert("schedules", {
-      title: "Pilates Aparelhos - Manha",
-      type: "turma",
-      specialty: "pilates",
-      roomId: studioRoom._id,
-      professionalId: profCamila._id,
-      date: date1Str,
-      startTime: "09:00",
-      endTime: "10:00",
-      maxCapacity: 4,
-      status: "scheduled",
-    })
-
-    await ctx.db.insert("scheduleParticipants", {
-      scheduleId: sch1,
-      patientId: normPatientId,
-      status: "scheduled",
-      patientPackageId: activePkg?._id,
-    })
-
-    // Criar Sessao 2 (Daqui a 3 dias 16:00 - Pilates)
-    const sch2 = await ctx.db.insert("schedules", {
-      title: "Pilates Aparelhos - Tarde",
-      type: "turma",
-      specialty: "pilates",
-      roomId: studioRoom._id,
-      professionalId: profCamila._id,
-      date: date2Str,
-      startTime: "16:00",
-      endTime: "17:00",
-      maxCapacity: 4,
-      status: "scheduled",
-    })
-
-    await ctx.db.insert("scheduleParticipants", {
-      scheduleId: sch2,
-      patientId: normPatientId,
-      status: "scheduled",
-      patientPackageId: activePkg?._id,
-    })
-
-    // Criar Horarios Alternativos com Vagas Livres para Agendamento e Remarcacao
-    const dAlt = new Date()
-    dAlt.setDate(dAlt.getDate() + 2)
-    if (dAlt.getDay() === 0) dAlt.setDate(dAlt.getDate() + 1)
-    const altDateStr = dAlt.toISOString().split("T")[0]
-
-    await ctx.db.insert("schedules", {
-      title: "Pilates Aparelhos - Turma Vagas Livres",
-      type: "turma",
-      specialty: "pilates",
-      roomId: studioRoom._id,
-      professionalId: profCamila._id,
-      date: altDateStr,
-      startTime: "10:00",
-      endTime: "11:00",
-      maxCapacity: 4,
-      status: "scheduled",
-    })
-
-    await ctx.db.insert("schedules", {
-      title: "Pilates Aparelhos - Final de Tarde",
-      type: "turma",
-      specialty: "pilates",
-      roomId: studioRoom._id,
-      professionalId: profCamila._id,
-      date: altDateStr,
-      startTime: "17:00",
-      endTime: "18:00",
-      maxCapacity: 4,
-      status: "scheduled",
-    })
-
-    // Se o paciente nao tiver credito de reposicao, criar 1 de exemplo
-    const existingCredits = await ctx.db
-      .query("replacementCredits")
-      .withIndex("by_patient_status", (q) =>
-        q.eq("patientId", normPatientId).eq("status", "available")
-      )
-      .collect()
-
-    if (existingCredits.length === 0) {
-      const expDate = new Date()
-      expDate.setDate(expDate.getDate() + 30)
-      await ctx.db.insert("replacementCredits", {
-        patientId: normPatientId,
-        originScheduleId: sch1,
-        generatedAt: Date.now() - 86400000,
-        expiryDate: expDate.toISOString().split("T")[0],
-        status: "available",
-      })
-    }
-
-    return {
-      success: true,
-      message: "Horarios de demonstracao e creditos gerados com sucesso para o paciente!",
-    }
-  },
-})
 
 // 8. Novo Agendamento pelo Aluno (Consumindo Saldo do Pacote Ativo com Smart Allocation)
 export const bookAppointmentFromPortal = mutation({
-  args: {
+  args: { portalToken: v.string(),
     patientId: v.string(),
     patientPackageId: v.string(),
     scheduleId: v.string(),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { portalToken, ...args } = input
+    const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
+
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
     if (!normPatientId) throw new Error("Paciente não encontrado.")
 
@@ -899,7 +670,7 @@ export const bookAppointmentFromPortal = mutation({
 
     // Disparo de confirmação WhatsApp para o aluno
     if (patient.phone) {
-      await ctx.scheduler.runAfter(0, api.notifications.sendScheduleConfirmationAction, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendScheduleConfirmationAction, {
         patientName: patient.name,
         phone: patient.phone,
         serviceName: schedule.title,

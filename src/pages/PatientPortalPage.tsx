@@ -31,7 +31,7 @@ import {
 } from "lucide-react"
 import { formatDateBR, getTodayDateString, addDaysSafe } from "@/lib/dateUtils"
 
-const STORAGE_PATIENT_KEY = "altar_patient_portal_id"
+const STORAGE_PATIENT_KEY = "altar_patient_portal_token"
 
 type PortalTab = "schedule" | "replacements" | "packages" | "history"
 
@@ -52,7 +52,7 @@ class PortalErrorBoundary extends React.Component<
   componentDidCatch(error: Error) {
     console.warn("Portal Error Boundary intercepted:", error)
     try {
-      localStorage.removeItem(STORAGE_PATIENT_KEY)
+      sessionStorage.removeItem(STORAGE_PATIENT_KEY)
     } catch {}
   }
 
@@ -71,7 +71,7 @@ class PortalErrorBoundary extends React.Component<
             <Button
               onClick={() => {
                 try {
-                  localStorage.removeItem(STORAGE_PATIENT_KEY)
+                  sessionStorage.removeItem(STORAGE_PATIENT_KEY)
                 } catch {}
                 window.location.reload()
               }}
@@ -91,18 +91,18 @@ class PortalErrorBoundary extends React.Component<
 const PatientPortalContent: React.FC = () => {
   const clinicSettings = useQuery(api.clinic.getSettings)
 
-  // Estado de Autenticação / Identificação do Aluno
-  const [patientId, setPatientId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(STORAGE_PATIENT_KEY) || null
+  const [portalToken, setPortalToken] = useState<string | null>(() => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get('access')
+    if (token && /^[a-f0-9]{64}$/.test(token)) {
+      sessionStorage.setItem(STORAGE_PATIENT_KEY, token)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      return token
     }
-    return null
+    return sessionStorage.getItem(STORAGE_PATIENT_KEY)
   })
-
-  const [identifierInput, setIdentifierInput] = useState("")
-  const [rememberDevice, setRememberDevice] = useState(true)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [loginError, setLoginError] = useState<string | null>(null)
+  const currentPatient = useQuery(api.portalAccess.current, portalToken ? { portalToken } : 'skip')
+  const patientId = currentPatient?._id ?? null
+  const logoutPortal = useMutation(api.portalAccess.logout)
 
   // Aba Ativa (Navegação em Abas estilo App Nativo)
   const [activeTab, setActiveTab] = useState<PortalTab>("schedule")
@@ -138,16 +138,9 @@ const PatientPortalContent: React.FC = () => {
   }
 
   // Queries e Mutations Convex
-  const identifiedPatient = useQuery(
-    api.patientPortal.identifyPatient,
-    identifierInput.trim().length >= 8 ? { identifier: identifierInput } : "skip"
-  )
-
-  const demoPatients = useQuery(api.patientPortal.getDemoPatients)
-
   const portalData = useQuery(
     api.patientPortal.getPatientPortalData,
-    patientId ? { patientId: patientId as any } : "skip"
+    patientId ? { patientId: patientId as any, portalToken: portalToken! } : "skip"
   )
 
   // Pacote selecionado para novo agendamento
@@ -161,26 +154,17 @@ const PatientPortalContent: React.FC = () => {
     return portalData.packages.find((p: any) => p.canBook) || portalData.packages[0] || null
   }, [portalData?.packages, selectedPackageId])
 
-  // Auto-recuperação: se o ID armazenado no localStorage não existir no banco atual, limpa a sessão
-  useEffect(() => {
-    if (patientId && portalData === null) {
-      localStorage.removeItem(STORAGE_PATIENT_KEY)
-      setPatientId(null)
-      showToast("Sessão anterior não localizada neste ambiente. Por favor, acesse com seus dados.", "error")
-    }
-  }, [patientId, portalData])
-
   const cancelAppointmentMutation = useMutation(api.patientPortal.cancelAppointmentByPatient)
   const rescheduleAppointmentMutation = useMutation(api.patientPortal.rescheduleAppointmentByPatient)
   const bookReplacementCreditMutation = useMutation(api.patientPortal.useReplacementCreditToBook)
   const bookAppointmentMutation = useMutation(api.patientPortal.bookAppointmentFromPortal)
-  const ensureDemoMutation = useMutation(api.patientPortal.ensurePatientDemoSchedules)
 
   // Vagas Livres para o Modal de Remarcação
   const availableSlotsReschedule = useQuery(
     api.patientPortal.listAvailableSlotsForBooking,
     rescheduleItem
       ? {
+          portalToken: portalToken!,
           specialty: rescheduleItem.specialty || "pilates",
           startDate: rescheduleDate,
           daysCount: 1,
@@ -193,6 +177,7 @@ const PatientPortalContent: React.FC = () => {
     api.patientPortal.listAvailableSlotsForBooking,
     replacementBookingCredit
       ? {
+          portalToken: portalToken!,
           specialty: replacementBookingCredit.originSpecialty || "pilates",
           startDate: replacementDate,
           daysCount: 1,
@@ -205,6 +190,7 @@ const PatientPortalContent: React.FC = () => {
     api.patientPortal.listAvailableSlotsForBooking,
     isBookingModalOpen && currentBookingPackage
       ? {
+          portalToken: portalToken!,
           specialty: currentBookingPackage.specialty || "pilates",
           startDate: bookingDate,
           daysCount: 1,
@@ -213,63 +199,11 @@ const PatientPortalContent: React.FC = () => {
       : "skip"
   )
 
-  // Máscara de CPF ou Celular
-  const formatIdentifier = (val: string) => {
-    const clean = val.replace(/\D/g, "")
-    if (clean.length <= 11) {
-      if (clean.length <= 10) {
-        return clean.replace(/^(\d{3})(\d{3})?(\d{0,3})?(\d{0,2})?/, (_, a, b, c, d) => {
-          let res = a
-          if (b) res += "." + b
-          if (c) res += "." + c
-          if (d) res += "-" + d
-          return res
-        })
-      }
-      return clean.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
-    }
-    return val.slice(0, 15)
-  }
-
-  // Login / Identificação
-  const handleLogin = async (idToSet?: string) => {
-    setLoginError(null)
-    if (idToSet) {
-      if (rememberDevice) localStorage.setItem(STORAGE_PATIENT_KEY, idToSet)
-      setPatientId(idToSet)
-      try {
-        await ensureDemoMutation({ patientId: idToSet as any })
-      } catch (e) {}
-      return
-    }
-
-    if (!identifierInput.trim()) {
-      setLoginError("Por favor, digite seu CPF ou Celular cadastrado.")
-      return
-    }
-
-    setIsLoggingIn(true)
-    try {
-      if (identifiedPatient) {
-        if (rememberDevice) localStorage.setItem(STORAGE_PATIENT_KEY, identifiedPatient._id)
-        setPatientId(identifiedPatient._id)
-        try {
-          await ensureDemoMutation({ patientId: identifiedPatient._id as any })
-        } catch (e) {}
-        showToast(`Bem-vindo(a), ${identifiedPatient.name.split(" ")[0]}!`)
-      } else {
-        setLoginError("Não encontramos nenhum cadastro com este documento ou celular. Verifique os dígitos ou fale com a nossa recepção.")
-      }
-    } finally {
-      setIsLoggingIn(false)
-    }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem(STORAGE_PATIENT_KEY)
-    setPatientId(null)
-    setIdentifierInput("")
-    setActiveTab("schedule")
+  const handleLogout = async () => {
+    if (portalToken) { try { await logoutPortal({ portalToken }) } catch { showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error'); return } }
+    sessionStorage.removeItem(STORAGE_PATIENT_KEY)
+    setPortalToken(null)
+    setActiveTab('schedule')
   }
 
   // Executar Cancelamento de Aula
@@ -277,7 +211,7 @@ const PatientPortalContent: React.FC = () => {
     if (!cancelModalItem || !patientId) return
     setIsCancelling(true)
     try {
-      const res = await cancelAppointmentMutation({
+      const res = await cancelAppointmentMutation({ portalToken: portalToken!,
         participantId: cancelModalItem.participantId,
         patientId: patientId as any,
         reason: cancelReason.trim() || undefined,
@@ -297,7 +231,7 @@ const PatientPortalContent: React.FC = () => {
     if (!rescheduleItem || !rescheduleTargetSlot || !patientId) return
     setIsRescheduling(true)
     try {
-      const res = await rescheduleAppointmentMutation({
+      const res = await rescheduleAppointmentMutation({ portalToken: portalToken!,
         participantId: rescheduleItem.participantId,
         targetScheduleId: rescheduleTargetSlot.scheduleId,
         patientId: patientId as any,
@@ -317,7 +251,7 @@ const PatientPortalContent: React.FC = () => {
     if (!replacementBookingCredit || !replacementTargetSlot || !patientId) return
     setIsBookingReplacement(true)
     try {
-      const res = await bookReplacementCreditMutation({
+      const res = await bookReplacementCreditMutation({ portalToken: portalToken!,
         creditId: replacementBookingCredit._id,
         targetScheduleId: replacementTargetSlot.scheduleId,
         patientId: patientId as any,
@@ -351,7 +285,7 @@ const PatientPortalContent: React.FC = () => {
     if (!currentBookingPackage || !bookingTargetSlot || !patientId) return
     setIsBookingSubmitting(true)
     try {
-      const res = await bookAppointmentMutation({
+      const res = await bookAppointmentMutation({ portalToken: portalToken!,
         patientId: patientId as any,
         patientPackageId: currentBookingPackage._id as any,
         scheduleId: bookingTargetSlot.scheduleId as any,
@@ -393,176 +327,12 @@ const PatientPortalContent: React.FC = () => {
   // TELA 1: IDENTIFICAÇÃO / LOGIN RÁPIDO (ESTILO APP NATIVO)
   // =========================================================================
   if (!patientId || !portalData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 text-foreground flex flex-col justify-between p-4 sm:p-6 select-none font-sans">
-        {/* Toast */}
-        {toastMessage && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-foreground text-background text-xs font-bold shadow-2xl flex items-center gap-2 animate-scale-in">
-            {toastMessage.type === "success" ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-amber-400" />
-            )}
-            <span>{toastMessage.text}</span>
-          </div>
-        )}
-
-        <div className="max-w-md w-full mx-auto my-auto space-y-6 animate-fade-in pt-4 pb-8">
-          {/* Header Marca */}
-          <div className="text-center space-y-3">
-            <div className="inline-flex h-16 w-16 rounded-3xl bg-primary/10 text-primary items-center justify-center shadow-lg shadow-primary/15 border border-primary/20 overflow-hidden">
-              {clinicSettings?.logoUrl ? (
-                <img
-                  src={clinicSettings.logoUrl}
-                  alt={clinicSettings.clinicName || "Logo"}
-                  className="h-full w-full object-contain p-1.5"
-                />
-              ) : (
-                <HeartPulse className="h-8 w-8 text-primary" />
-              )}
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-foreground">
-                {clinicSettings?.clinicName || "Altar Fisio"}
-              </h1>
-              <p className="text-xs font-semibold text-primary uppercase tracking-wider mt-0.5">
-                {clinicSettings?.clinicSubtitle || "Área Exclusiva do Aluno & Paciente"}
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
-              Consulte seus horários, remarcações de aulas, créditos de reposição e saldo de sessões em tempo real.
-            </p>
-          </div>
-
-          {/* Formulário de Entrada */}
-          <Card className="border-border/70 shadow-xl rounded-3xl overflow-hidden bg-card/90 backdrop-blur-xl">
-            <CardContent className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground block">
-                  Informe seu CPF ou Celular (WhatsApp)
-                </label>
-                <div className="relative">
-                  <Input
-                    value={identifierInput}
-                    onChange={(e) => {
-                      setIdentifierInput(formatIdentifier(e.target.value))
-                      setLoginError(null)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLogin()
-                    }}
-                    placeholder="Ex: 234.567.890-12 ou (11) 98877-6655"
-                    className="h-12 rounded-2xl text-sm font-medium pr-10 pl-4 bg-muted/20 border-border/70 focus:border-primary focus:ring-primary/20"
-                    autoFocus
-                  />
-                  {identifierInput && (
-                    <button
-                      onClick={() => setIdentifierInput("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {loginError && (
-                <div className="p-3 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2 animate-shake">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span className="leading-snug">{loginError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={rememberDevice}
-                    onChange={(e) => setRememberDevice(e.target.checked)}
-                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                  />
-                  <span>Lembrar neste aparelho</span>
-                </label>
-              </div>
-
-              <Button
-                onClick={() => handleLogin()}
-                disabled={isLoggingIn}
-                className="w-full h-12 rounded-2xl text-sm font-bold shadow-lg shadow-primary/25 gap-2 transition-all active:scale-[0.98]"
-              >
-                {isLoggingIn ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>Acessando...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Acessar Meu Painel</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Atalhos de Demonstração para Testes Imediatos */}
-          <div className="p-4 rounded-3xl bg-muted/20 border border-border/60 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3 text-primary" />
-                <span>Testar com Aluno Cadastrado</span>
-              </span>
-              <Badge variant="secondary" className="text-[9px]">1 Toque</Badge>
-            </div>
-
-            <div className="grid grid-cols-1 gap-1.5">
-              {demoPatients && demoPatients.length > 0 ? (
-                demoPatients.map((dp, idx) => {
-                  const colorClasses = [
-                    "bg-emerald-500/10 text-emerald-600",
-                    "bg-blue-500/10 text-blue-600",
-                    "bg-purple-500/10 text-purple-600",
-                    "bg-amber-500/10 text-amber-600",
-                  ]
-                  const color = colorClasses[idx % colorClasses.length]
-                  return (
-                    <button
-                      key={dp._id}
-                      onClick={() => handleLogin(dp._id)}
-                      className="w-full p-2.5 rounded-2xl bg-card border border-border/70 hover:border-primary/50 text-left flex items-center justify-between group transition-all"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className={`h-8 w-8 rounded-xl ${color} flex items-center justify-center font-bold text-xs`}>
-                          {dp.initials}
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                            {dp.name}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {dp.planDesc}
-                          </div>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                    </button>
-                  )
-                })
-              ) : (
-                <div className="py-2.5 text-center text-xs text-muted-foreground">
-                  Carregando alunos disponíveis...
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center text-[11px] text-muted-foreground">
-          Altar Fisio • Dr. Marcelo Henrique CREFITO-3 • São Paulo
-        </div>
-      </div>
-    )
+    return <div className="min-h-screen flex items-center justify-center p-6 bg-background"><Card className="max-w-md w-full"><CardContent className="p-6 space-y-4 text-center">
+      <HeartPulse className="h-12 w-12 mx-auto text-primary" />
+      <h1 className="text-xl font-bold">{clinicSettings?.clinicName || 'Portal do paciente'}</h1>
+      <p className="text-sm text-muted-foreground">{portalToken && currentPatient === undefined ? 'Verificando acesso…' : portalToken && currentPatient ? 'Carregando seus agendamentos…' : 'Solicite à recepção seu link individual de acesso. O link expira em 24 horas e permite consultar e gerenciar seus agendamentos.'}</p>
+      {currentPatient === null && <p role="alert" className="text-sm text-destructive">Link inválido ou expirado. Solicite um novo à recepção.</p>}
+    </CardContent></Card></div>
   }
 
   // =========================================================================

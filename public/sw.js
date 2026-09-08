@@ -67,8 +67,12 @@ self.addEventListener("fetch", (event) => {
           return response
         })
         .catch(() => {
-          return caches.match(event.request).then((cached) => {
-            return cached || caches.match("/") || caches.match("/index.html")
+          return caches.match(event.request).then(async (cached) => {
+            return cached || await caches.match("/") || await caches.match("/index.html") ||
+              new Response("Sem conexão. Reconecte para carregar o sistema.", {
+                status: 503,
+                headers: { "Content-Type": "text/plain; charset=utf-8" },
+              })
           })
         })
     )

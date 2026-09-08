@@ -1,5 +1,12 @@
 # AGENTS.md — Regras e Diretrizes do Projeto Altar Fisio
 
+## CREDENCIAIS PARA TESTES
+
+Utilizar estas credenciais nos testes:
+
+- E-mail: `matteusmoreira@gmail.com`
+- Senha: `@moreira2026`
+
 ## AUTO-APRENDIZADO
 
 Ao final de toda sessão, capture todos os desafios e pontos de fricção que você encontrou que podem ocorrer novamente no futuro.

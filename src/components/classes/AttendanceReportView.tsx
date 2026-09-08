@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react"
-import { useQuery } from "convex/react"
+import { useQuery } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { formatDateBR, formatTimeBR, getTodayDateString } from "@/lib/dateUtils"

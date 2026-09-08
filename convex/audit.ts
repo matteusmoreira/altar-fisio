@@ -1,8 +1,9 @@
+import { requireStaff } from './lib/security'
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 
 export const logAction = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     userId: v.optional(v.id("users")),
     userName: v.string(),
     userRole: v.string(),
@@ -12,20 +13,26 @@ export const logAction = mutation({
     details: v.optional(v.string()),
     ipAddress: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    const actor = await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.insert("auditLogs", {
-      ...args,
+      ...args, userId: actor._id, userName: actor.name, userRole: actor.role, ipAddress: undefined,
       timestamp: Date.now(),
     })
   },
 })
 
 export const listAuditLogs = query({
-  args: {
+  args: { sessionToken: v.string(),
     limit: v.optional(v.number()),
     patientId: v.optional(v.id("patients")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const limit = args.limit ?? 100
     if (args.patientId) {
       return await ctx.db

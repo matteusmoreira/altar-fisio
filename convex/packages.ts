@@ -1,16 +1,25 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
 // Listagem de todos os serviços clínicos cadastrados
 export const listServices = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.query("services").collect()
   },
 })
 
 // Listagem de pacotes e planos de tabela enriquecidos com dados do serviço
 export const listPackages = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const packages = await ctx.db.query("packages").collect()
 
     return await Promise.all(
@@ -31,7 +40,7 @@ export const listPackages = query({
 
 // Criação de novo pacote comercial
 export const createPackage = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     name: v.string(),
     serviceId: v.id("services"),
     sessionCount: v.number(),
@@ -47,7 +56,10 @@ export const createPackage = mutation({
     description: v.optional(v.string()),
     active: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.insert("packages", {
       name: args.name,
       serviceId: args.serviceId,
@@ -69,7 +81,7 @@ export const createPackage = mutation({
 
 // Atualização de pacote comercial
 export const updatePackage = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("packages"),
     name: v.optional(v.string()),
     serviceId: v.optional(v.id("services")),
@@ -86,7 +98,10 @@ export const updatePackage = mutation({
     description: v.optional(v.string()),
     active: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const { id, ...data } = args
     await ctx.db.patch(id, data)
     return id
@@ -95,10 +110,13 @@ export const updatePackage = mutation({
 
 // Exclusão de pacote comercial
 export const deletePackage = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("packages"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const pkg = await ctx.db.get(args.id)
     if (!pkg) throw new Error("Pacote não encontrado")
 
@@ -109,10 +127,13 @@ export const deletePackage = mutation({
 
 // Cancelamento / Exclusão de pacote atribuído a paciente
 export const deletePatientPackage = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("patientPackages"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const pp = await ctx.db.get(args.id)
     if (!pp) throw new Error("Assinatura de pacote não encontrada")
 
@@ -124,11 +145,14 @@ export const deletePatientPackage = mutation({
 
 // Listagem dos pacotes adquiridos pelos pacientes (com cálculo de expiração e progresso)
 export const listPatientPackages = query({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.optional(v.id("patients")),
     status: v.optional(v.union(v.literal("active"), v.literal("completed"), v.literal("expired"))),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     let patientPackages
     if (args.patientId) {
       patientPackages = await ctx.db
@@ -201,7 +225,11 @@ export const listPatientPackages = query({
 
 // Busca de alertas de renovação (saldo <= 2 ou vence em até 7 dias)
 export const listRenewalAlerts = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const active = await ctx.db
       .query("patientPackages")
       .withIndex("by_status", (q) => q.eq("status", "active"))
@@ -249,7 +277,7 @@ export const listRenewalAlerts = query({
 
 // Aquisição / Venda de Pacote para Paciente com Integração Financeira
 export const assignPackageToPatient = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
     packageId: v.id("packages"),
     startDate: v.string(), // YYYY-MM-DD
@@ -262,7 +290,10 @@ export const assignPackageToPatient = mutation({
     ),
     isPaid: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     const pkg = await ctx.db.get(args.packageId)
     if (!pkg) throw new Error("Pacote não encontrado")
 

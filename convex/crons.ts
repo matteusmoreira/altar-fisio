@@ -7,7 +7,7 @@ const crons = cronJobs()
 crons.daily(
   "disparo-lembretes-24h",
   { hourUTC: 11, minuteUTC: 0 },
-  api.notifications.checkAndSendDailyReminders24hAction,
+  internal.notifications.checkAndSendDailyReminders24hAction,
   {}
 )
 
@@ -15,7 +15,7 @@ crons.daily(
 crons.interval(
   "disparo-lembretes-2h",
   { minutes: 30 },
-  api.notifications.checkAndSendUpcomingReminders2hAction,
+  internal.notifications.checkAndSendUpcomingReminders2hAction,
   {}
 )
 
@@ -23,7 +23,7 @@ crons.interval(
 crons.interval(
   "processamento-campanhas-recorrentes",
   { minutes: 30 },
-  api.whatsapp.processRecurringCampaignsAction,
+  internal.whatsapp.processRecurringCampaignsAction,
   {}
 )
 

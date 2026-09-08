@@ -1,3 +1,5 @@
+import { internalAction } from './_generated/server'
+import { requireStaff, requireStaffAction } from './lib/security'
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
@@ -7,33 +9,16 @@ import { v } from "convex/values"
 // ============================================================================
 
 const DEFAULT_SERVER_URL = "https://whatpress.uazapi.com"
-const DEFAULT_ADMIN_TOKEN = "jJRMdT508DTwShzdWcuxSHvIEiSDdyuIQXwj3j6XRqr5uktfV7"
 
 export function sanitizeUazapiEndpoint(rawUrl?: string): string {
-  if (!rawUrl || typeof rawUrl !== "string") return DEFAULT_SERVER_URL
-  let clean = rawUrl.trim()
-  if (!clean) return DEFAULT_SERVER_URL
-
-  // Se o endpoint legado ou placeholder api.uazapi.com foi informado, substitui pelo servidor oficial
-  if (clean.includes("api.uazapi.com")) {
-    return DEFAULT_SERVER_URL
-  }
-
-  // Remove barras e sufixos de rota como /v1, /api, /instance etc.
-  clean = clean.replace(/\/+$/, "")
-  clean = clean.replace(/\/(v1|api|instance(\/.*)?)$/i, "")
-  clean = clean.replace(/\/+$/, "")
-
-  if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-    clean = `https://${clean}`
-  }
-
-  return clean
+  const url = new URL(rawUrl?.trim() || DEFAULT_SERVER_URL)
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.uazapi.com') || url.username || url.password || url.port || url.search || url.hash) throw new Error('Endpoint UAZAPI inválido.')
+  return url.origin
 }
 
 export function sanitizeAdminToken(rawToken?: string): string {
   if (!rawToken || typeof rawToken !== "string" || !rawToken.trim()) {
-    return DEFAULT_ADMIN_TOKEN
+    throw new Error("Configure a credencial administrativa da UAZAPI nas configurações.")
   }
   return rawToken.trim()
 }
@@ -111,6 +96,7 @@ async function fetchUazapi(
     clearTimeout(timeoutId)
 
     const text = await res.text()
+    if (!res.ok) return { ok: false, status: res.status, data: null, error: `UAZAPI retornou HTTP ${res.status}` }
     let data: any = null
     try {
       data = JSON.parse(text)
@@ -304,14 +290,22 @@ export const removeInstanceInternal = internalMutation({
 // ============================================================================
 
 export const listInstances = query({
-  handler: async (ctx) => {
-    return await ctx.db.query("whatsappInstances").order("desc").collect()
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
+    const rows = await ctx.db.query("whatsappInstances").order("desc").collect()
+    return rows.map(({ token, ...safe }) => safe)
   },
 })
 
 export const setDefaultInstance = mutation({
-  args: { instanceId: v.id("whatsappInstances") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const target = await ctx.db.get(args.instanceId)
     if (!target) throw new Error("Instância não encontrada")
 
@@ -337,8 +331,11 @@ export const setDefaultInstance = mutation({
 // ============================================================================
 
 export const createInstanceAction = action({
-  args: { name: v.string() },
-  handler: async (ctx, args): Promise<{ success: boolean; instance?: any; error?: string }> => {
+  args: { sessionToken: v.string(),  name: v.string() },
+  handler: async (ctx, input): Promise<{ success: boolean; instance?: any; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
     const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
@@ -383,7 +380,7 @@ export const createInstanceAction = action({
     }
 
     // 3. Salva no banco Convex
-    await ctx.runMutation(internal.whatsapp.upsertInstanceInternal, {
+    const localId = await ctx.runMutation(internal.whatsapp.upsertInstanceInternal, {
       name: args.name.trim(),
       instanceId: id,
       token,
@@ -396,7 +393,7 @@ export const createInstanceAction = action({
       instance: {
         id,
         name: args.name,
-        token,
+        _id: localId,
         status,
         qrcode,
       },
@@ -405,8 +402,11 @@ export const createInstanceAction = action({
 })
 
 export const listServerInstancesAction = action({
-  args: {},
-  handler: async (ctx): Promise<{ success: boolean; instances?: any[]; error?: string }> => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input): Promise<{ success: boolean; instances?: any[]; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
     const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
@@ -429,7 +429,7 @@ export const listServerInstancesAction = action({
     const mapped = res.data.map((inst: any) => ({
       id: inst.id,
       name: inst.name,
-      token: inst.token,
+
       status: inst.status === "connected" ? "connected" : inst.status === "connecting" ? "connecting" : "disconnected",
       owner: inst.owner,
       profileName: inst.profileName,
@@ -445,14 +445,16 @@ export const listServerInstancesAction = action({
 })
 
 export const connectExistingTokenAction = action({
-  args: {
+  args: { sessionToken: v.string(),
     name: v.optional(v.string()),
     token: v.string(),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; instance?: any; error?: string }> => {
+  handler: async (ctx, input): Promise<{ success: boolean; instance?: any; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
-    const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
     const rawInput = args.token.trim()
 
     let effectiveToken = rawInput
@@ -466,6 +468,7 @@ export const connectExistingTokenAction = action({
     // 2. Se falhar (ex: usuário digitou nome da instância "drmarcelo", ID "raf314..." ou token com divergência),
     // consulta a lista oficial de instâncias do servidor via admintoken para encontrar a instância correspondente
     if (!statusRes.ok) {
+      const adminToken = sanitizeAdminToken(settings?.uazapiAdminToken)
       const allRes = await fetchUazapi(`${baseUrl}/instance/all`, {
         headers: { admintoken: adminToken },
       })
@@ -475,9 +478,7 @@ export const connectExistingTokenAction = action({
           (inst: any) =>
             inst.token === rawInput ||
             inst.id === rawInput ||
-            inst.name?.toLowerCase() === rawInput.toLowerCase() ||
-            (inst.token && rawInput.length >= 8 && inst.token.includes(rawInput)) ||
-            (inst.name && rawInput.length >= 3 && inst.name.toLowerCase().includes(rawInput.toLowerCase()))
+            inst.name?.toLowerCase() === rawInput.toLowerCase()
         )
 
         if (found && found.token) {
@@ -520,7 +521,7 @@ export const connectExistingTokenAction = action({
     }
 
     // Salva ou atualiza no banco
-    await ctx.runMutation(internal.whatsapp.upsertInstanceInternal, {
+    const localId = await ctx.runMutation(internal.whatsapp.upsertInstanceInternal, {
       name: resolvedName,
       instanceId,
       token: effectiveToken,
@@ -535,7 +536,7 @@ export const connectExistingTokenAction = action({
       success: true,
       instance: {
         name: resolvedName,
-        token: effectiveToken,
+        _id: localId,
         status,
         profileName: info.profileName,
         profilePicUrl: info.profilePicUrl,
@@ -547,10 +548,10 @@ export const connectExistingTokenAction = action({
 })
 
 export const checkInstanceStatusAction = action({
-  args: { token: v.string() },
+  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
   handler: async (
     ctx,
-    args
+    input
   ): Promise<{
     success: boolean
     connected: boolean
@@ -559,11 +560,17 @@ export const checkInstanceStatusAction = action({
     profilePicUrl?: string
     owner?: string
   }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
+    const instance = await ctx.runQuery(internal.whatsapp.getInstanceByIdInternal, { instanceId: args.instanceId })
+    if (!instance) throw new Error('Instância não encontrada.')
+    const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     const res = await fetchUazapi(`${baseUrl}/instance/status`, {
-      headers: { token: args.token },
+      headers: { token: resolvedToken },
     })
 
     if (!res.ok || !res.data) {
@@ -576,7 +583,7 @@ export const checkInstanceStatusAction = action({
     const status = isConnected ? "connected" : "disconnected"
 
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
-      token: args.token,
+      token: resolvedToken,
       status,
       qrcode: isConnected ? "" : info.qrcode,
       profileName: info.profileName,
@@ -596,21 +603,27 @@ export const checkInstanceStatusAction = action({
 })
 
 export const getQrCodeAction = action({
-  args: { token: v.string() },
-  handler: async (ctx, args): Promise<{ success: boolean; qrcode?: string; status?: string; error?: string }> => {
+  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
+  handler: async (ctx, input): Promise<{ success: boolean; qrcode?: string; status?: string; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
+    const instance = await ctx.runQuery(internal.whatsapp.getInstanceByIdInternal, { instanceId: args.instanceId })
+    if (!instance) throw new Error('Instância não encontrada.')
+    const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     // 1. Primeiro verifica se já conectou
     const statusCheck = await fetchUazapi(`${baseUrl}/instance/status`, {
-      headers: { token: args.token },
+      headers: { token: resolvedToken },
     })
     if (statusCheck.ok && statusCheck.data) {
       const conn = statusCheck.data.status || {}
       const info = statusCheck.data.instance || {}
       if (conn.connected === true || conn.loggedIn === true || info.status === "connected") {
         await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
-          token: args.token,
+          token: resolvedToken,
           status: "connected",
           qrcode: "",
           profileName: info.profileName,
@@ -628,7 +641,7 @@ export const getQrCodeAction = action({
     // 2. Dispara conexão para gerar novo QR Code
     const connRes = await fetchUazapi(`${baseUrl}/instance/connect`, {
       method: "POST",
-      headers: { token: args.token },
+      headers: { token: resolvedToken },
       body: {},
     })
 
@@ -641,7 +654,7 @@ export const getQrCodeAction = action({
     const status = isConn ? "connected" : "connecting"
 
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
-      token: args.token,
+      token: resolvedToken,
       status: status as any,
       qrcode: qrcode || undefined,
     })
@@ -655,8 +668,11 @@ export const getQrCodeAction = action({
 })
 
 export const syncAllInstancesStatusAction = action({
-  args: {},
-  handler: async (ctx): Promise<{ count: number }> => {
+  args: { sessionToken: v.string(), },
+  handler: async (ctx, input): Promise<{ count: number }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
     const instances: any[] = await ctx.runQuery(internal.whatsapp.getInstancesInternal, {})
@@ -689,19 +705,26 @@ export const syncAllInstancesStatusAction = action({
 })
 
 export const disconnectInstanceAction = action({
-  args: { token: v.string() },
-  handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
+  handler: async (ctx, input): Promise<{ success: boolean; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
+    const instance = await ctx.runQuery(internal.whatsapp.getInstanceByIdInternal, { instanceId: args.instanceId })
+    if (!instance) throw new Error('Instância não encontrada.')
+    const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     const res = await fetchUazapi(`${baseUrl}/instance/disconnect`, {
       method: "POST",
-      headers: { token: args.token },
+      headers: { token: resolvedToken },
       body: {},
     })
 
+    if (!res.ok) return { success: false, error: res.error }
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
-      token: args.token,
+      token: resolvedToken,
       status: "disconnected",
       qrcode: "",
     })
@@ -711,19 +734,26 @@ export const disconnectInstanceAction = action({
 })
 
 export const deleteInstanceAction = action({
-  args: { token: v.string() },
-  handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
+  handler: async (ctx, input): Promise<{ success: boolean; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin"]);
+
+    const instance = await ctx.runQuery(internal.whatsapp.getInstanceByIdInternal, { instanceId: args.instanceId })
+    if (!instance) throw new Error('Instância não encontrada.')
+    const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
     // 1. Deleta na Uazapi
     const res = await fetchUazapi(`${baseUrl}/instance`, {
       method: "DELETE",
-      headers: { token: args.token },
+      headers: { token: resolvedToken },
     })
 
-    // 2. Remove do banco independente do resultado da API externa
-    await ctx.runMutation(internal.whatsapp.removeInstanceInternal, { token: args.token })
+    if (!res.ok) return { success: false, error: res.error }
+    // Remove localmente somente após confirmação do provedor.
+    await ctx.runMutation(internal.whatsapp.removeInstanceInternal, { token: resolvedToken })
 
     return { success: true }
   },
@@ -734,7 +764,7 @@ export const deleteInstanceAction = action({
 // ============================================================================
 
 export const listTemplates = query({
-  args: {
+  args: { sessionToken: v.string(),
     category: v.optional(
       v.union(
         v.literal("reminder_24h"),
@@ -745,7 +775,10 @@ export const listTemplates = query({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     let templates = await ctx.db.query("messageTemplates").order("desc").collect()
     if (args.category) {
       templates = templates.filter((t) => t.category === args.category)
@@ -762,7 +795,7 @@ export const getTemplateByIdInternal = internalQuery({
 })
 
 export const saveTemplate = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.optional(v.id("messageTemplates")),
     title: v.string(),
     type: v.union(v.literal("text"), v.literal("button"), v.literal("list"), v.literal("carousel")),
@@ -813,7 +846,10 @@ export const saveTemplate = mutation({
     ),
     isSystemDefault: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const { id, ...data } = args
     const cleanContent = normalizeWhatsAppText(data.content)
     const cleanFooter = data.footerText ? normalizeWhatsAppText(data.footerText) : undefined
@@ -839,18 +875,24 @@ export const saveTemplate = mutation({
 })
 
 export const deleteTemplate = mutation({
-  args: { id: v.id("messageTemplates") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  id: v.id("messageTemplates") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     await ctx.db.delete(args.id)
   },
 })
 
 export const assignReminderTemplate = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     target: v.union(v.literal("reminder_24h"), v.literal("reminder_2h"), v.literal("booking_confirmation")),
     templateId: v.optional(v.id("messageTemplates")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const settings = await ctx.db.query("clinicSettings").first()
     if (!settings) throw new Error("Configurações não encontradas")
 
@@ -1001,13 +1043,17 @@ export async function sendUazapiInteractiveMessage(
 // ============================================================================
 
 export const listBroadcastCampaigns = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     return await ctx.db.query("broadcastCampaigns").order("desc").take(50)
   },
 })
 
 export const createBroadcastCampaign = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     name: v.string(),
     templateId: v.optional(v.id("messageTemplates")),
     customText: v.string(),
@@ -1023,7 +1069,10 @@ export const createBroadcastCampaign = mutation({
     scheduledHour: v.string(),
     scheduledDaysOfWeek: v.optional(v.array(v.number())),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const isImmediate = args.recurrence === "none"
     const nextRunAt = isImmediate ? Date.now() : calculateNextRun(args.recurrence, args.scheduledHour, args.scheduledDaysOfWeek)
 
@@ -1049,18 +1098,24 @@ export const createBroadcastCampaign = mutation({
 })
 
 export const toggleCampaignStatus = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     campaignId: v.id("broadcastCampaigns"),
     newStatus: v.union(v.literal("active"), v.literal("paused"), v.literal("cancelled")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     await ctx.db.patch(args.campaignId, { status: args.newStatus })
   },
 })
 
 export const deleteCampaign = mutation({
-  args: { campaignId: v.id("broadcastCampaigns") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  campaignId: v.id("broadcastCampaigns") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     await ctx.db.delete(args.campaignId)
   },
 })
@@ -1145,11 +1200,14 @@ export const getCampaignByIdInternal = internalQuery({
 })
 
 export const dispatchBroadcastCampaignAction = action({
-  args: { campaignId: v.id("broadcastCampaigns") },
+  args: { sessionToken: v.string(),  campaignId: v.id("broadcastCampaigns") },
   handler: async (
     ctx,
-    args
+    input
   ): Promise<{ success: boolean; sent: number; failed: number; error?: string }> => {
+    const { sessionToken, ...args } = input
+    await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
+
     const campaign: any = await ctx.runQuery(internal.whatsapp.getCampaignByIdInternal, {
       campaignId: args.campaignId,
     })
@@ -1277,7 +1335,7 @@ export const getDueCampaignsInternal = internalQuery({
   },
 })
 
-export const processRecurringCampaignsAction = action({
+export const processRecurringCampaignsAction = internalAction({
   args: {},
   handler: async (ctx): Promise<{ processed: number }> => {
     const now = Date.now()
@@ -1370,138 +1428,11 @@ export const processRecurringCampaignsAction = action({
   },
 })
 
-export const seedWhatsAppDefaults = mutation({
-  args: {},
-  handler: async (ctx) => {
-    // 1. Atualiza Clinic Settings
-    const settings = await ctx.db.query("clinicSettings").first()
-    if (settings) {
-      await ctx.db.patch(settings._id, {
-        uazapiEndpoint: "https://whatpress.uazapi.com",
-        uazapiAdminToken: DEFAULT_ADMIN_TOKEN,
-      })
-    }
 
-    // 2. Se não houver templates, cria os modelos padrões interativos
-    const existingTemplates = await ctx.db.query("messageTemplates").collect()
-    let t24Id = existingTemplates.find((t) => t.category === "reminder_24h")?._id
-    let t2hId = existingTemplates.find((t) => t.category === "reminder_2h")?._id
 
-    if (existingTemplates.length === 0) {
-      t24Id = await ctx.db.insert("messageTemplates", {
-        title: "Lembrete 24h Interativo (Botões de Ação)",
-        type: "button",
-        category: "reminder_24h",
-        content:
-          "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}",
-        footerText: "Altar Fisio • Cuidado e Movimento",
-        buttons: [
-          { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
-          { text: "Solicitar Remarcação", actionType: "reply", payload: "remarcar" },
-          { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
-        ],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
 
-      t2hId = await ctx.db.insert("messageTemplates", {
-        title: "Lembrete 2h com Orientações (Botões Rápidos)",
-        type: "button",
-        category: "reminder_2h",
-        content:
-          "Olá, *{{paciente}}*! ⏰\n\nFalta pouco para seu atendimento na *{{clinica}}*!\n\n📅 *Hoje às {{horario}}*\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}{{dica}}\n\nEstamos prontos para te receber!",
-        footerText: "Altar Fisio",
-        buttons: [
-          { text: "Estou a Caminho", actionType: "reply", payload: "a_caminho" },
-          { text: "Falar na Recepção", actionType: "url", payload: "https://wa.me/5511987654321" },
-        ],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
 
-      await ctx.db.insert("messageTemplates", {
-        title: "Informativo de Saúde (Carrossel Interativo)",
-        type: "carousel",
-        category: "broadcast",
-        content:
-          "Olá, *{{paciente}}*! Confira as novidades e orientações exclusivas da equipe *{{clinica}}* para sua qualidade de vida:",
-        footerText: "Altar Fisio • Movimento é Vida",
-        carouselCards: [
-          {
-            title: "Dicas de Ergonomia no Trabalho",
-            description: "Alongamentos fáceis para fazer a cada 2 horas no computador.",
-            imageUrl: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600",
-            buttonText: "Ver Exercícios",
-            buttonType: "url",
-            buttonPayload: "https://altarfisio.com.br",
-          },
-          {
-            title: "Studio de Pilates Avançado",
-            description: "Aparelhos novos e turmas de até 4 alunos para atenção individualizada.",
-            imageUrl: "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600",
-            buttonText: "Conhecer Studio",
-            buttonType: "url",
-            buttonPayload: "https://altarfisio.com.br",
-          },
-        ],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-    }
-
-    // Vincula templates aos lembretes se não tiver
-    if (settings && t24Id && !settings.activeReminder24hTemplateId) {
-      await ctx.db.patch(settings._id, { activeReminder24hTemplateId: t24Id })
-    }
-    if (settings && t2hId && !settings.activeReminder2hTemplateId) {
-      await ctx.db.patch(settings._id, { activeReminder2hTemplateId: t2hId })
-    }
-
-    // 3. Se não houver instâncias, importa a instância padrão Altar Tech
-    const existingInstances = await ctx.db.query("whatsappInstances").collect()
-    if (existingInstances.length === 0) {
-      await ctx.db.insert("whatsappInstances", {
-        name: "Altar Tech",
-        instanceId: "r510d7d5dfe8909",
-        token: "6aab1350-93cb-4e92-93cb-a9c51a99a803",
-        status: "connected",
-        profileName: "Altar Tech",
-        ownerNumber: "554192227793",
-        isDefault: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      if (settings) {
-        await ctx.db.patch(settings._id, {
-          activeWhatsappInstanceToken: "6aab1350-93cb-4e92-93cb-a9c51a99a803",
-        })
-      }
-    }
-
-    return { success: true }
-  },
-})
-
-export const migrateTemplatesLineBreaks = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const templates = await ctx.db.query("messageTemplates").collect()
-    let updatedCount = 0
-
-    for (const t of templates) {
-      const needsContentFix = t.content.includes("\\n") || t.content.includes("\r")
-      const needsFooterFix = t.footerText ? t.footerText.includes("\\n") || t.footerText.includes("\r") : false
-
-      if (needsContentFix || needsFooterFix) {
-        await ctx.db.patch(t._id, {
-          content: normalizeWhatsAppText(t.content),
-          footerText: t.footerText ? normalizeWhatsAppText(t.footerText) : undefined,
-          updatedAt: Date.now(),
-        })
-        updatedCount++
-      }
-    }
-
-    return { total: templates.length, updatedCount }
-  },
+export const getInstanceByIdInternal = internalQuery({
+  args: { instanceId: v.id('whatsappInstances') },
+  handler: (ctx, args) => ctx.db.get(args.instanceId),
 })

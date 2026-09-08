@@ -1,5 +1,8 @@
+import { validDate, validateSchedule } from './lib/validation'
+import type { QueryCtx, MutationCtx } from './_generated/server'
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
-import { api } from "./_generated/api"
+import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
 import { sliceTimeWindowIntoSlots } from "./availability"
 
@@ -136,7 +139,7 @@ export const getBookingConfig = query({
 
 // 2. Atualizar Configuração do Construtor (Painel Admin)
 export const updateBookingConfig = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     requireApproval: v.boolean(),
     steps: v.array(
       v.object({
@@ -180,7 +183,10 @@ export const updateBookingConfig = mutation({
     welcomeMessage: v.optional(v.string()),
     successMessage: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    const actor = await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const existing = await ctx.db.query("bookingFormConfig").first()
     const now = Date.now()
 
@@ -210,7 +216,7 @@ export const updateBookingConfig = mutation({
     await ctx.db.insert("auditLogs", {
       action: "update_booking_builder",
       userName: "Administrador",
-      userRole: "admin",
+      userRole: actor.role,
       details: `Configuração do construtor de agendamento atualizada (${args.steps.length} etapas, ${args.fields.length} campos, aprovação manual: ${args.requireApproval ? "Sim" : "Não"})`,
       timestamp: now,
     })
@@ -221,7 +227,11 @@ export const updateBookingConfig = mutation({
 
 // 3. Restaurar Perguntas Padrão da Clínica
 export const resetBookingConfigToDefault = mutation({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
     const existing = await ctx.db.query("bookingFormConfig").first()
     const now = Date.now()
 
@@ -260,7 +270,423 @@ export const listPublicAvailableSlots = query({
     specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
     professionalId: v.optional(v.id("professionals")),
   },
+  handler: getPublicSlots,
+})
+
+// 4.1 Listar Pacotes e Planos Ativos para Agendamento Público
+export const listPublicPackages = query({
+  handler: async (ctx) => {
+    const packages = await ctx.db.query("packages").collect()
+    const activePublicPackages = packages.filter(
+      (pkg) => pkg.active && pkg.showInPublicBooking !== false
+    )
+
+    return await Promise.all(
+      activePublicPackages.map(async (pkg) => {
+        const service = await ctx.db.get(pkg.serviceId)
+        return {
+          ...pkg,
+          serviceName: service?.name || "Serviço",
+          modality: service?.modality || "turma",
+          specialty: service?.specialty || "pilates",
+          durationMinutes: service?.durationMinutes || 55,
+          pricePerSession: pkg.sessionCount > 0 ? Number((pkg.price / pkg.sessionCount).toFixed(2)) : 0,
+        }
+      })
+    )
+  },
+})
+
+// 5. Submeter Agendamento Público (Realizado pelo Paciente na Página /agendar)
+export const submitPublicBooking = mutation({
+  args: {
+    name: v.string(),
+    documentCpf: v.string(),
+    phone: v.string(),
+    email: v.optional(v.string()),
+    birthDate: v.string(),
+    serviceId: v.optional(v.id("services")),
+    packageId: v.optional(v.id("packages")),
+    packageName: v.optional(v.string()),
+    hasHealthInsurance: v.optional(v.boolean()),
+    healthInsuranceName: v.optional(v.string()),
+    selectedPrice: v.optional(v.number()),
+    selectedPaymentMethod: v.optional(v.string()), // "pix" | "cartao"
+    pricingDetails: v.optional(v.string()),
+    professionalId: v.optional(v.id("professionals")),
+    roomId: v.optional(v.id("rooms")),
+    date: v.string(), // YYYY-MM-DD
+    startTime: v.string(),
+    endTime: v.string(),
+    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
+    answers: v.array(
+      v.object({
+        questionId: v.string(),
+        questionLabel: v.string(),
+        answer: v.string(),
+      })
+    ),
+    notes: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const now = Date.now()
+    validDate(args.date); validDate(args.birthDate)
+    if (!args.name.trim() || args.name.length > 200 || args.answers.length > 50 || args.answers.some(a => a.answer.length > 5000) || (args.notes?.length || 0) > 5000) throw new Error('Dados de agendamento inválidos.')
+    if (!/^[0-9]{11}$/.test(args.documentCpf.replace(/\D/g, '')) || !/^[0-9]{10,13}$/.test(args.phone.replace(/\D/g, ''))) throw new Error('CPF ou telefone inválido.')
+    if (new Date(args.date + 'T' + args.startTime + ':00-03:00').getTime() <= now) throw new Error('Selecione um horário futuro.')
+    const slots = await getPublicSlots(ctx, { date: args.date, specialty: args.specialty, professionalId: args.professionalId })
+    const selected = slots.find(slot => slot.startTime === args.startTime && slot.endTime === args.endTime && slot.isAvailable)
+    const selectedRoom = selected?.rooms.find(room => !args.roomId || room.roomId === args.roomId)
+    const selectedProfessional = selected?.availableProfessionals.find(prof => !args.professionalId || prof.id === args.professionalId)
+    if (!selectedRoom || !selectedProfessional) throw new Error('Horário indisponível. Atualize a agenda e selecione novamente.')
+    args.roomId = selectedRoom.roomId
+    args.professionalId = selectedProfessional.id
+    if (args.packageId) {
+      const pkg = await ctx.db.get(args.packageId)
+      if (!pkg?.active || pkg.showInPublicBooking === false) throw new Error('Plano indisponível.')
+      const service = await ctx.db.get(pkg.serviceId)
+      if (!service?.active) throw new Error('Serviço indisponível.')
+      args.serviceId = pkg.serviceId; args.packageName = pkg.name; args.specialty = service.specialty
+      args.selectedPrice = args.hasHealthInsurance ? (args.selectedPaymentMethod === 'pix' ? pkg.insurancePricePix ?? pkg.insurancePrice ?? pkg.price : pkg.insurancePrice ?? pkg.price) : (args.selectedPaymentMethod === 'pix' ? pkg.pricePix ?? pkg.price : pkg.price)
+    } else if (args.serviceId) {
+      const service = await ctx.db.get(args.serviceId)
+      if (!service?.active) throw new Error('Serviço indisponível.')
+      args.selectedPrice = service.defaultPrice; args.specialty = service.specialty
+    } else { args.selectedPrice = undefined }
+    const rateKey = 'booking:' + args.phone.replace(/\D/g, '')
+    const rate = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', rateKey)).first()
+    if (rate && rate.resetAt > now && rate.count >= 5) throw new Error('Limite de solicitações atingido. Tente mais tarde.')
+    if (rate) await ctx.db.patch(rate._id, { count: rate.resetAt > now ? rate.count + 1 : 1, resetAt: now + 15 * 60000 })
+    else await ctx.db.insert('authAttempts', { key: rateKey, count: 1, resetAt: now + 15 * 60000 })
+
+    // 1. Busca ou cadastra o paciente pelo CPF ou Telefone
+    const cleanCpf = args.documentCpf.replace(/\D/g, "")
+    const cleanPhone = args.phone.replace(/\D/g, "")
+
+    let patient = await ctx.db
+      .query("patients")
+      .withIndex("by_cpf", (q) => q.eq("documentCpf", cleanCpf))
+      .first()
+
+    const insuranceToSave = args.hasHealthInsurance
+      ? args.healthInsuranceName || "Com Convênio"
+      : "Particular"
+
+    if (!patient) {
+      const patientId = await ctx.db.insert("patients", {
+        name: args.name.trim(),
+        documentCpf: cleanCpf,
+        phone: cleanPhone,
+        email: args.email?.trim() || undefined,
+        birthDate: args.birthDate,
+        healthInsurance: insuranceToSave,
+        active: true,
+        notes: `Cadastrado via Agendamento Online em ${new Date(now).toLocaleDateString("pt-BR")}. ${args.notes || ""}`,
+        createdAt: now,
+      })
+      patient = await ctx.db.get(patientId)
+    }
+
+    if (!patient) {
+      throw new Error("Erro ao registrar os dados do paciente.")
+    }
+
+    // 2. Consulta configuração do construtor para verificar aprovação necessária
+    const config = await ctx.db.query("bookingFormConfig").first()
+    const requireApproval = config?.requireApproval ?? false
+    const initialStatus = requireApproval ? "pending_approval" : "confirmed"
+
+    let assignedScheduleId: any = undefined
+
+    // 3. Se for auto-confirmação, aloca ou cria o agendamento no sistema
+    if (!requireApproval) {
+      // Localiza sala e profissional adequados
+      let roomId = args.roomId
+      let profId = args.professionalId
+
+      if (!roomId) {
+        const rooms = await ctx.db.query("rooms").collect()
+        const matchedRoom = rooms.find((r) =>
+          args.specialty === "pilates"
+            ? r.type.includes("pilates")
+            : args.specialty === "rpg"
+            ? r.type === "rpg"
+            : true
+        )
+        roomId = matchedRoom?._id || rooms[0]?._id
+      }
+
+      if (!profId) {
+        const profs = await ctx.db.query("professionals").collect()
+        profId = profs[0]?._id
+      }
+
+      if (roomId && profId) {
+        // Procura turma/sessão existente no mesmo horário e sala
+        const existingSchedule = await ctx.db
+          .query("schedules")
+          .withIndex("by_room_date", (q) => q.eq("roomId", roomId!).eq("date", args.date))
+          .filter((q) => q.eq(q.field("startTime"), args.startTime))
+          .first()
+
+        if (existingSchedule) {
+          if (existingSchedule.status === 'cancelled' || existingSchedule.endTime !== args.endTime || existingSchedule.professionalId !== profId) throw new Error('Horário indisponível.')
+          const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', existingSchedule._id)).collect()
+          const active = participants.filter(p => !['absence','justified_absence'].includes(p.status))
+          if (active.length >= existingSchedule.maxCapacity || active.some(p => p.patientId === patient!._id)) throw new Error('Horário lotado ou já reservado para este paciente.')
+          assignedScheduleId = existingSchedule._id
+          // Adiciona participante
+          await ctx.db.insert("scheduleParticipants", {
+            scheduleId: existingSchedule._id,
+            patientId: patient._id,
+            status: "scheduled",
+            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
+          })
+        } else {
+          // Cria novo agendamento
+          const specialty = args.specialty || "fisioterapia"
+          const room = await ctx.db.get(roomId)
+          await validateSchedule(ctx, { roomId, professionalId: profId, date: args.date, startTime: args.startTime, endTime: args.endTime, maxCapacity: room?.capacity || 1 })
+          const newScheduleId = await ctx.db.insert("schedules", {
+            title: args.packageName
+              ? `${args.packageName} (Online)`
+              : specialty === "pilates"
+              ? "Pilates Studio (Online)"
+              : "Atendimento Fisioterapia (Online)",
+            type: specialty === "pilates" ? "turma" : "individual",
+            specialty,
+            roomId,
+            professionalId: profId,
+            date: args.date,
+            startTime: args.startTime,
+            endTime: args.endTime,
+            maxCapacity: room?.capacity || 1,
+            status: "scheduled",
+            notes: `Agendado via Portal Público pelo paciente ${args.name}`,
+          })
+
+          await ctx.db.insert("scheduleParticipants", {
+            scheduleId: newScheduleId,
+            patientId: patient._id,
+            status: "scheduled",
+            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
+          })
+
+          assignedScheduleId = newScheduleId
+        }
+      }
+    }
+
+    // 4. Salva a submissão do agendamento público com as respostas da triagem
+    const publicBookingId = await ctx.db.insert("publicBookings", {
+      patientId: patient._id,
+      scheduleId: assignedScheduleId,
+      status: initialStatus,
+      serviceId: args.serviceId,
+      packageId: args.packageId,
+      packageName: args.packageName,
+      hasHealthInsurance: args.hasHealthInsurance,
+      healthInsuranceName: args.healthInsuranceName,
+      selectedPrice: args.selectedPrice,
+      selectedPaymentMethod: args.selectedPaymentMethod,
+      pricingDetails: args.pricingDetails,
+      professionalId: args.professionalId,
+      roomId: args.roomId,
+      date: args.date,
+      startTime: args.startTime,
+      endTime: args.endTime,
+      answers: args.answers,
+      notes: args.notes,
+      createdAt: now,
+    })
+
+    // 5. Cria log/alerta interno para a recepção da clínica
+    const planInfo = args.packageName
+      ? `Plano: ${args.packageName} | ${args.hasHealthInsurance ? "Convênio: " + (args.healthInsuranceName || "Sim") : "Particular"} | Valor: R$ ${args.selectedPrice ?? "0,00"}`
+      : `Especialidade: ${args.specialty || "Fisioterapia"}`
+
+    await ctx.db.insert("notificationLogs", {
+      channel: "whatsapp_uazapi",
+      recipientName: "Recepção Altar Fisio",
+      recipientContact: args.phone,
+      triggerType: "agendamento_online",
+      content: `O paciente ${args.name} (${args.phone}) agendou para ${args.date} às ${args.startTime}. ${planInfo}. Status: ${initialStatus}`,
+      status: "sent",
+      timestamp: now,
+    })
+
+    // 6. Envia confirmação WhatsApp para o paciente caso agendado
+    if (patient.phone && !requireApproval) {
+      const room = args.roomId ? await ctx.db.get(args.roomId) : null
+      const prof = args.professionalId ? await ctx.db.get(args.professionalId) : null
+      const serviceTitle =
+        args.specialty === "pilates"
+          ? "Pilates Studio"
+          : args.specialty === "rpg"
+          ? "RPG"
+          : "Fisioterapia"
+
+      await ctx.scheduler.runAfter(0, internal.notifications.sendScheduleConfirmationAction, {
+        patientName: patient.name,
+        phone: patient.phone,
+        serviceName: serviceTitle,
+        professionalName: prof?.name || "Dr(a). Fisioterapeuta",
+        date: args.date,
+        startTime: args.startTime,
+        endTime: args.endTime,
+        roomName: room?.name || "Unidade Principal",
+      })
+    }
+
+    // 7. Registra na trilha de auditoria
+    await ctx.db.insert("auditLogs", {
+      action: "public_booking_created",
+      userName: args.name,
+      userRole: "patient",
+      patientId: patient._id,
+      patientName: args.name,
+      details: `Agendamento público criado por ${args.name} para ${args.date} às ${args.startTime} (Status: ${initialStatus})`,
+      timestamp: now,
+    })
+
+    return {
+      success: true,
+      bookingId: publicBookingId,
+      patientId: patient._id,
+      status: initialStatus,
+      requireApproval,
+      scheduledDate: args.date,
+      scheduledTime: args.startTime,
+      patientName: args.name,
+    }
+  },
+})
+
+// 6. Listar Agendamentos Públicos (Para a Recepção e Administração)
+export const listPublicBookings = query({
+  args: { sessionToken: v.string(),
+    status: v.optional(
+      v.union(v.literal("pending_approval"), v.literal("confirmed"), v.literal("rejected"), v.literal("all"))
+    ),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
+    let bookings
+    if (args.status && args.status !== "all") {
+      bookings = await ctx.db
+        .query("publicBookings")
+        .withIndex("by_status_created", (q) => q.eq("status", args.status as any))
+        .order("desc")
+        .take(50)
+    } else {
+      bookings = await ctx.db
+        .query("publicBookings")
+        .order("desc")
+        .take(50)
+    }
+
+    const enriched = await Promise.all(
+      bookings.map(async (b) => {
+        const patient = await ctx.db.get(b.patientId)
+        const professional = b.professionalId ? await ctx.db.get(b.professionalId) : null
+        const room = b.roomId ? await ctx.db.get(b.roomId) : null
+        const service = b.serviceId ? await ctx.db.get(b.serviceId) : null
+
+        return {
+          ...b,
+          patientName: patient?.name || "Paciente",
+          patientPhone: patient?.phone || "",
+          patientCpf: patient?.documentCpf || "",
+          professionalName: professional?.name || "Qualquer Profissional",
+          roomName: room?.name || "Sala Principal",
+          serviceName: service?.name || "Atendimento",
+        }
+      })
+    )
+
+    return enriched
+  },
+})
+
+// 7. Atualizar Status do Agendamento Público (Aprovar / Rejeitar pela Recepção)
+export const updatePublicBookingStatus = mutation({
+  args: { sessionToken: v.string(),
+    bookingId: v.id("publicBookings"),
+    status: v.union(v.literal("confirmed"), v.literal("rejected")),
+    rejectionReason: v.optional(v.string()),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    const actor = await requireStaff(ctx, sessionToken, ["admin","reception"]);
+
+    const booking = await ctx.db.get(args.bookingId)
+    if (!booking) {
+      throw new Error("Agendamento público não encontrado.")
+    }
+
+    const now = Date.now()
+
+    if (args.status === "confirmed" && !booking.scheduleId) {
+      // Cria a sessão na agenda se ainda não estava vinculada
+      const patient = await ctx.db.get(booking.patientId)
+      const rooms = await ctx.db.query("rooms").collect()
+      const profs = await ctx.db.query("professionals").collect()
+
+      const roomId = booking.roomId || rooms[0]?._id
+      const profId = booking.professionalId || profs[0]?._id
+
+      if (roomId && profId) {
+        const room = await ctx.db.get(roomId)
+        await validateSchedule(ctx, { roomId, professionalId: profId, date: booking.date, startTime: booking.startTime, endTime: booking.endTime, maxCapacity: room?.capacity || 1 })
+        const newScheduleId = await ctx.db.insert("schedules", {
+          title: "Atendimento Clínico (Aprovado Online)",
+          type: "individual",
+          specialty: "fisioterapia",
+          roomId,
+          professionalId: profId,
+          date: booking.date,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          maxCapacity: room?.capacity || 1,
+          status: "scheduled",
+          notes: `Aprovado pela recepção. Paciente: ${patient?.name}`,
+        })
+
+        await ctx.db.insert("scheduleParticipants", {
+          scheduleId: newScheduleId,
+          patientId: booking.patientId,
+          status: "scheduled",
+          notes: "Agendamento online aprovado pela equipe",
+        })
+
+        await ctx.db.patch(args.bookingId, {
+          status: "confirmed",
+          scheduleId: newScheduleId,
+        })
+      }
+    } else {
+      await ctx.db.patch(args.bookingId, {
+        status: args.status,
+        rejectionReason: args.rejectionReason,
+      })
+    }
+
+    await ctx.db.insert("auditLogs", {
+      action: `public_booking_${args.status}`,
+      userName: actor.name,
+      userRole: "admin",
+      patientId: booking.patientId,
+      details: `Agendamento online para ${booking.date} às ${booking.startTime} marcado como ${args.status}`,
+      timestamp: now,
+    })
+
+    return { success: true }
+  },
+})
+
+export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: { date: string; specialty?: 'pilates' | 'fisioterapia' | 'rpg'; professionalId?: import('./_generated/dataModel').Id<'professionals'> }) {
     // Busca salas ativas
     const rooms = await ctx.db
       .query("rooms")
@@ -537,385 +963,4 @@ export const listPublicAvailableSlots = query({
     })
 
     return slotsResult
-  },
-})
-
-// 4.1 Listar Pacotes e Planos Ativos para Agendamento Público
-export const listPublicPackages = query({
-  handler: async (ctx) => {
-    const packages = await ctx.db.query("packages").collect()
-    const activePublicPackages = packages.filter(
-      (pkg) => pkg.active && pkg.showInPublicBooking !== false
-    )
-
-    return await Promise.all(
-      activePublicPackages.map(async (pkg) => {
-        const service = await ctx.db.get(pkg.serviceId)
-        return {
-          ...pkg,
-          serviceName: service?.name || "Serviço",
-          modality: service?.modality || "turma",
-          specialty: service?.specialty || "pilates",
-          durationMinutes: service?.durationMinutes || 55,
-          pricePerSession: pkg.sessionCount > 0 ? Number((pkg.price / pkg.sessionCount).toFixed(2)) : 0,
-        }
-      })
-    )
-  },
-})
-
-// 5. Submeter Agendamento Público (Realizado pelo Paciente na Página /agendar)
-export const submitPublicBooking = mutation({
-  args: {
-    name: v.string(),
-    documentCpf: v.string(),
-    phone: v.string(),
-    email: v.optional(v.string()),
-    birthDate: v.string(),
-    serviceId: v.optional(v.id("services")),
-    packageId: v.optional(v.id("packages")),
-    packageName: v.optional(v.string()),
-    hasHealthInsurance: v.optional(v.boolean()),
-    healthInsuranceName: v.optional(v.string()),
-    selectedPrice: v.optional(v.number()),
-    selectedPaymentMethod: v.optional(v.string()), // "pix" | "cartao"
-    pricingDetails: v.optional(v.string()),
-    professionalId: v.optional(v.id("professionals")),
-    roomId: v.optional(v.id("rooms")),
-    date: v.string(), // YYYY-MM-DD
-    startTime: v.string(),
-    endTime: v.string(),
-    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
-    answers: v.array(
-      v.object({
-        questionId: v.string(),
-        questionLabel: v.string(),
-        answer: v.string(),
-      })
-    ),
-    notes: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now()
-
-    // 1. Busca ou cadastra o paciente pelo CPF ou Telefone
-    const cleanCpf = args.documentCpf.replace(/\D/g, "")
-    const cleanPhone = args.phone.replace(/\D/g, "")
-
-    let patient = await ctx.db
-      .query("patients")
-      .withIndex("by_cpf", (q) => q.eq("documentCpf", cleanCpf))
-      .first()
-
-    const insuranceToSave = args.hasHealthInsurance
-      ? args.healthInsuranceName || "Com Convênio"
-      : "Particular"
-
-    if (!patient) {
-      const patientId = await ctx.db.insert("patients", {
-        name: args.name.trim(),
-        documentCpf: cleanCpf,
-        phone: cleanPhone,
-        email: args.email?.trim() || undefined,
-        birthDate: args.birthDate,
-        healthInsurance: insuranceToSave,
-        active: true,
-        notes: `Cadastrado via Agendamento Online em ${new Date(now).toLocaleDateString("pt-BR")}. ${args.notes || ""}`,
-        createdAt: now,
-      })
-      patient = await ctx.db.get(patientId)
-    } else {
-      // Atualiza o convênio do paciente se informado
-      if (args.hasHealthInsurance !== undefined) {
-        await ctx.db.patch(patient._id, {
-          healthInsurance: insuranceToSave,
-        })
-      }
-    }
-
-    if (!patient) {
-      throw new Error("Erro ao registrar os dados do paciente.")
-    }
-
-    // 2. Consulta configuração do construtor para verificar aprovação necessária
-    const config = await ctx.db.query("bookingFormConfig").first()
-    const requireApproval = config?.requireApproval ?? false
-    const initialStatus = requireApproval ? "pending_approval" : "confirmed"
-
-    let assignedScheduleId: any = undefined
-
-    // 3. Se for auto-confirmação, aloca ou cria o agendamento no sistema
-    if (!requireApproval) {
-      // Localiza sala e profissional adequados
-      let roomId = args.roomId
-      let profId = args.professionalId
-
-      if (!roomId) {
-        const rooms = await ctx.db.query("rooms").collect()
-        const matchedRoom = rooms.find((r) =>
-          args.specialty === "pilates"
-            ? r.type.includes("pilates")
-            : args.specialty === "rpg"
-            ? r.type === "rpg"
-            : true
-        )
-        roomId = matchedRoom?._id || rooms[0]?._id
-      }
-
-      if (!profId) {
-        const profs = await ctx.db.query("professionals").collect()
-        profId = profs[0]?._id
-      }
-
-      if (roomId && profId) {
-        // Procura turma/sessão existente no mesmo horário e sala
-        const existingSchedule = await ctx.db
-          .query("schedules")
-          .withIndex("by_room_date", (q) => q.eq("roomId", roomId!).eq("date", args.date))
-          .filter((q) => q.eq(q.field("startTime"), args.startTime))
-          .first()
-
-        if (existingSchedule) {
-          assignedScheduleId = existingSchedule._id
-          // Adiciona participante
-          await ctx.db.insert("scheduleParticipants", {
-            scheduleId: existingSchedule._id,
-            patientId: patient._id,
-            status: "scheduled",
-            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
-          })
-        } else {
-          // Cria novo agendamento
-          const specialty = args.specialty || "fisioterapia"
-          const room = await ctx.db.get(roomId)
-          const newScheduleId = await ctx.db.insert("schedules", {
-            title: args.packageName
-              ? `${args.packageName} (Online)`
-              : specialty === "pilates"
-              ? "Pilates Studio (Online)"
-              : "Atendimento Fisioterapia (Online)",
-            type: specialty === "pilates" ? "turma" : "individual",
-            specialty,
-            roomId,
-            professionalId: profId,
-            date: args.date,
-            startTime: args.startTime,
-            endTime: args.endTime,
-            maxCapacity: room?.capacity || 1,
-            status: "scheduled",
-            notes: `Agendado via Portal Público pelo paciente ${args.name}`,
-          })
-
-          await ctx.db.insert("scheduleParticipants", {
-            scheduleId: newScheduleId,
-            patientId: patient._id,
-            status: "scheduled",
-            notes: `Agendamento online: ${args.packageName || "Sessão"}`,
-          })
-
-          assignedScheduleId = newScheduleId
-        }
-      }
-    }
-
-    // 4. Salva a submissão do agendamento público com as respostas da triagem
-    const publicBookingId = await ctx.db.insert("publicBookings", {
-      patientId: patient._id,
-      scheduleId: assignedScheduleId,
-      status: initialStatus,
-      serviceId: args.serviceId,
-      packageId: args.packageId,
-      packageName: args.packageName,
-      hasHealthInsurance: args.hasHealthInsurance,
-      healthInsuranceName: args.healthInsuranceName,
-      selectedPrice: args.selectedPrice,
-      selectedPaymentMethod: args.selectedPaymentMethod,
-      pricingDetails: args.pricingDetails,
-      professionalId: args.professionalId,
-      roomId: args.roomId,
-      date: args.date,
-      startTime: args.startTime,
-      endTime: args.endTime,
-      answers: args.answers,
-      notes: args.notes,
-      createdAt: now,
-    })
-
-    // 5. Cria log/alerta interno para a recepção da clínica
-    const planInfo = args.packageName
-      ? `Plano: ${args.packageName} | ${args.hasHealthInsurance ? "Convênio: " + (args.healthInsuranceName || "Sim") : "Particular"} | Valor: R$ ${args.selectedPrice ?? "0,00"}`
-      : `Especialidade: ${args.specialty || "Fisioterapia"}`
-
-    await ctx.db.insert("notificationLogs", {
-      channel: "whatsapp_uazapi",
-      recipientName: "Recepção Altar Fisio",
-      recipientContact: args.phone,
-      triggerType: "agendamento_online",
-      content: `O paciente ${args.name} (${args.phone}) agendou para ${args.date} às ${args.startTime}. ${planInfo}. Status: ${initialStatus}`,
-      status: "sent",
-      timestamp: now,
-    })
-
-    // 6. Envia confirmação WhatsApp para o paciente caso agendado
-    if (patient.phone && !requireApproval) {
-      const room = args.roomId ? await ctx.db.get(args.roomId) : null
-      const prof = args.professionalId ? await ctx.db.get(args.professionalId) : null
-      const serviceTitle =
-        args.specialty === "pilates"
-          ? "Pilates Studio"
-          : args.specialty === "rpg"
-          ? "RPG"
-          : "Fisioterapia"
-
-      await ctx.scheduler.runAfter(0, api.notifications.sendScheduleConfirmationAction, {
-        patientName: patient.name,
-        phone: patient.phone,
-        serviceName: serviceTitle,
-        professionalName: prof?.name || "Dr(a). Fisioterapeuta",
-        date: args.date,
-        startTime: args.startTime,
-        endTime: args.endTime,
-        roomName: room?.name || "Unidade Principal",
-      })
-    }
-
-    // 7. Registra na trilha de auditoria
-    await ctx.db.insert("auditLogs", {
-      action: "public_booking_created",
-      userName: args.name,
-      userRole: "patient",
-      patientId: patient._id,
-      patientName: args.name,
-      details: `Agendamento público criado por ${args.name} para ${args.date} às ${args.startTime} (Status: ${initialStatus})`,
-      timestamp: now,
-    })
-
-    return {
-      success: true,
-      bookingId: publicBookingId,
-      patientId: patient._id,
-      status: initialStatus,
-      requireApproval,
-      scheduledDate: args.date,
-      scheduledTime: args.startTime,
-      patientName: args.name,
-    }
-  },
-})
-
-// 6. Listar Agendamentos Públicos (Para a Recepção e Administração)
-export const listPublicBookings = query({
-  args: {
-    status: v.optional(
-      v.union(v.literal("pending_approval"), v.literal("confirmed"), v.literal("rejected"), v.literal("all"))
-    ),
-  },
-  handler: async (ctx, args) => {
-    let bookings
-    if (args.status && args.status !== "all") {
-      bookings = await ctx.db
-        .query("publicBookings")
-        .withIndex("by_status_created", (q) => q.eq("status", args.status as any))
-        .order("desc")
-        .take(50)
-    } else {
-      bookings = await ctx.db
-        .query("publicBookings")
-        .order("desc")
-        .take(50)
-    }
-
-    const enriched = await Promise.all(
-      bookings.map(async (b) => {
-        const patient = await ctx.db.get(b.patientId)
-        const professional = b.professionalId ? await ctx.db.get(b.professionalId) : null
-        const room = b.roomId ? await ctx.db.get(b.roomId) : null
-        const service = b.serviceId ? await ctx.db.get(b.serviceId) : null
-
-        return {
-          ...b,
-          patientName: patient?.name || "Paciente",
-          patientPhone: patient?.phone || "",
-          patientCpf: patient?.documentCpf || "",
-          professionalName: professional?.name || "Qualquer Profissional",
-          roomName: room?.name || "Sala Principal",
-          serviceName: service?.name || "Atendimento",
-        }
-      })
-    )
-
-    return enriched
-  },
-})
-
-// 7. Atualizar Status do Agendamento Público (Aprovar / Rejeitar pela Recepção)
-export const updatePublicBookingStatus = mutation({
-  args: {
-    bookingId: v.id("publicBookings"),
-    status: v.union(v.literal("confirmed"), v.literal("rejected")),
-    rejectionReason: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId)
-    if (!booking) {
-      throw new Error("Agendamento público não encontrado.")
-    }
-
-    const now = Date.now()
-
-    if (args.status === "confirmed" && !booking.scheduleId) {
-      // Cria a sessão na agenda se ainda não estava vinculada
-      const patient = await ctx.db.get(booking.patientId)
-      const rooms = await ctx.db.query("rooms").collect()
-      const profs = await ctx.db.query("professionals").collect()
-
-      const roomId = booking.roomId || rooms[0]?._id
-      const profId = booking.professionalId || profs[0]?._id
-
-      if (roomId && profId) {
-        const room = await ctx.db.get(roomId)
-        const newScheduleId = await ctx.db.insert("schedules", {
-          title: "Atendimento Clínico (Aprovado Online)",
-          type: "individual",
-          specialty: "fisioterapia",
-          roomId,
-          professionalId: profId,
-          date: booking.date,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-          maxCapacity: room?.capacity || 1,
-          status: "scheduled",
-          notes: `Aprovado pela recepção. Paciente: ${patient?.name}`,
-        })
-
-        await ctx.db.insert("scheduleParticipants", {
-          scheduleId: newScheduleId,
-          patientId: booking.patientId,
-          status: "scheduled",
-          notes: "Agendamento online aprovado pela equipe",
-        })
-
-        await ctx.db.patch(args.bookingId, {
-          status: "confirmed",
-          scheduleId: newScheduleId,
-        })
-      }
-    } else {
-      await ctx.db.patch(args.bookingId, {
-        status: args.status,
-        rejectionReason: args.rejectionReason,
-      })
-    }
-
-    await ctx.db.insert("auditLogs", {
-      action: `public_booking_${args.status}`,
-      userName: "Recepção / Administrador",
-      userRole: "admin",
-      patientId: booking.patientId,
-      details: `Agendamento online para ${booking.date} às ${booking.startTime} marcado como ${args.status}`,
-      timestamp: now,
-    })
-
-    return { success: true }
-  },
-})
+  }

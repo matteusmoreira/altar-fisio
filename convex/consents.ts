@@ -1,9 +1,13 @@
+import { requireStaff } from './lib/security'
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 
 export const getPatientConsents = query({
-  args: { patientId: v.id("patients") },
-  handler: async (ctx, args) => {
+  args: { sessionToken: v.string(),  patientId: v.id("patients") },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     return await ctx.db
       .query("patientConsents")
       .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
@@ -12,7 +16,7 @@ export const getPatientConsents = query({
 })
 
 export const saveConsent = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     patientId: v.id("patients"),
     termType: v.union(
       v.literal("tcle_treatment"),
@@ -27,7 +31,10 @@ export const saveConsent = mutation({
     userName: v.string(),
     userRole: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    const actor = await requireStaff(ctx, sessionToken, ["admin","professional"]);
+
     const existing = await ctx.db
       .query("patientConsents")
       .withIndex("by_patient_term", (q) =>
@@ -66,8 +73,8 @@ export const saveConsent = mutation({
 
     // Registra na trilha de auditoria LGPD
     await ctx.db.insert("auditLogs", {
-      userName: args.userName,
-      userRole: args.userRole,
+      userName: actor.name,
+      userRole: actor.role,
       action: "consent_registered",
       patientId: args.patientId,
       patientName: patient?.name,

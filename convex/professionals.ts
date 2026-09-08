@@ -1,14 +1,19 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
 export const listProfessionals = query({
-  handler: async (ctx) => {
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     return await ctx.db.query("professionals").collect()
   },
 })
 
 export const createProfessional = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     name: v.string(),
     email: v.string(),
     phone: v.string(),
@@ -18,13 +23,16 @@ export const createProfessional = mutation({
     commissionValue: v.number(),
     active: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     return await ctx.db.insert("professionals", args)
   },
 })
 
 export const updateProfessional = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("professionals"),
     name: v.string(),
     email: v.string(),
@@ -35,7 +43,10 @@ export const updateProfessional = mutation({
     commissionValue: v.number(),
     active: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const { id, ...data } = args
     await ctx.db.patch(id, data)
     return id
@@ -43,10 +54,13 @@ export const updateProfessional = mutation({
 })
 
 export const deleteProfessional = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("professionals"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const prof = await ctx.db.get(args.id)
     if (!prof) throw new Error("Profissional não encontrado")
 

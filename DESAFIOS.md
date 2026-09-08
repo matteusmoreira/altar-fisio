@@ -108,7 +108,7 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 
 ### [2026-09-02] Encaixe de Folhas A4 em Contêineres Flexbox, Responsividade de Modais e Isolamento de Impressão
 - **Ponto de Fricção**: Em contêineres flexbox com `overflow-y-auto` e `display: flex; justify-content: center;`, o alinhamento transversal padrão (`align-items: stretch`) força a folha `#printable-document` a se limitar à altura inicial calculada do container/grid. Quando o documento contém muito conteúdo (laudos extensos ou termos TCLE/LGPD com múltiplos itens), o texto extravasa para fora da folha no fundo cinza, cortando visualmente a folha ao meio. Além disso, botões absolutos de fechar (`DialogClose` em `top-4 right-4`) sobrepõem badges alinhados no topo direito, e a ausência de `@media print` adequado imprime o layout inteiro da tela em vez de isolar o documento limpo.
-- **Mitigação / Regra**: 
+- **Mitigação / Regra**:
   1. Em contêineres de preview de documentos, aplicar sempre `items-start` no container flex e `h-fit` no elemento da folha (`#printable-document`), garantindo que o cartão branco acompanhe 100% da extensão do texto sem truncamento.
   2. Adicionar `pr-10` no cabeçalho do `DialogHeader` para garantir espaço livre de segurança contra sobreposição do botão "X".
   3. Adicionar `@media print` no CSS global com `body * { visibility: hidden; } #printable-document, #printable-document * { visibility: visible; }` e posicionamento absoluto no topo com margens A4 para exportação de PDFs vetoriais impecáveis.
@@ -193,7 +193,7 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ---
 
 ### [2026-09-03] Priorização de Instâncias Ativas UAZAPI, Máscara Dinâmica de Telefone e Resiliência no Simulador de Disparos
-- **Ponto de Fricção**: 
+- **Ponto de Fricção**:
   1. A query interna `getDefaultInstanceInternal` selecionava cegamente qualquer instância marcada com `isDefault: true`. Quando a instância padrão do banco ficava desconectada (`disconnected`) ou continha um token revogado/antigo enquanto outra instância conectada estava disponível (como a `Altar Tech`), todos os envios continuavam utilizando o token inválido, resultando em erros HTTP 401 ou 503 na UAZAPI.
   2. O disparador simulado dependia de dados fictícios de grade (`mockSchedule`), repassando IDs locais sintéticos (`s1`) que quebravam a validação de tipo do Convex (`v.id("schedules")`), provocando falha silenciosa capturada em catch com falso retorno positivo.
   3. O campo de telefone não possuía máscara de entrada para formatação instantânea de celulares brasileiros `(XX) XXXXX-XXXX`, permitindo envio de sequências numéricas cruas ou formatos truncados sem validação de DDD.
@@ -241,7 +241,7 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 
 ### [2026-09-03] Tipagem de União Universal no `ctx.db.get` do Convex e Fatiamento Dinâmico de Slots
 - **Ponto de Fricção**: Quando o argumento de ID passado para `ctx.db.get(id)` possui tipo `any` ou união genérica sem identificador de tabela específico, o compilador do TypeScript no Convex infere o retorno como a união discriminada de todas as tabelas do schema (Doc<"users"> | Doc<"auditLogs"> | ...). Ao acessar campos comuns de entidades de negócio como `.name` ou `.capacity`, o TypeScript acusa erro TS2339 porque tabelas de logs ou sessões não possuem esses campos. Além disso, a CLI do Convex no Windows pode disparar aviso de libuv (`!(handle->flags & UV_HANDLE_CLOSING)`) após a execução de comandos `run`, embora as mutações e queries persistam 100% no banco.
-- **Mitigação / Regra**: 
+- **Mitigação / Regra**:
   1. Tipar a variável capturada como `any` (`const room: any = await ctx.db.get(slot.roomId)`) ou usar asserção explícita de tipo (`Doc<"rooms"> | null`).
   2. Para fatiamento dinâmico de horários sem poluir o banco com dezenas de milhares de registros, manter as tabelas enxutas de `availabilityRules` e `availabilityOverrides` e fatiar os slots sob demanda na query com `sliceTimeWindowIntoSlots`.
 
@@ -265,3 +265,34 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
   1. Centralizar consultas por período na query indexada `listSchedulesByDateRange` com `.withIndex("by_date", q => q.gte("date", start).lte("date", end))`, mantendo complexidade $O(K)$ sem *table scans*.
   2. No React/Convex, utilizar o modificador `"skip"` em `useQuery` quando a modalidade ativa for diferente (ex: `schedulePeriodMode === "day" ? { date } : "skip"`), desativando subscrições WebSocket ociosas.
   3. No mobile para a Visão Semanal, adotar seletor em pílulas horizontais dos dias da semana (`[Seg 31] [Ter 01]...`) com indicação numérica e contadores de agendamentos, exibindo os cards do dia selecionado em largura total confortável. Para a Visão Mensal, utilizar Drawer lateral responsivo que resume as sessões do dia com um clique e atalho para a visão diária.
+---
+
+### [2026-09-08] Bloqueios da revisão de produção (histórico, corrigidos localmente)
+- **Pendências confirmadas**: proteção por perfil existe no React, mas falta nas funções públicas do Convex; login rápido emite sessão sem senha; branding público retorna campos secretos; portal identifica paciente sem comprovação de posse. Não considerar build aprovado como liberação para produção.
+- **Integridade**: atualização parcial de paciente envia strings vazias para campos omitidos; gravações clínicas retornam sucesso visual antes da persistência; listas vazias do servidor reativam fallback local. Corrigir e testar antes da publicação.
+- **Evidência reproduzível**: `REVISAO_PRODUCAO.md` registra escopo e bloqueios. `scripts/review-production.mjs` reproduz sete defeitos com dados fictícios, sem rede; sucesso desse diagnóstico confirma vulnerabilidades, não segurança. Converter em regressões negativas após remediação.
+- **Limite operacional**: navegador autenticado, runtime remoto, entrega de mensagens e restauração de backup continuam sem validação nesta revisão. Nenhum deploy realizado.
+
+### [2026-09-08] Homologação após as correções
+- **Estado atual**: ver CORRECOES_PRODUCAO.md. O diagnóstico antigo foi convertido em regressões negativas; `npm test` exige rejeição das operações inválidas.
+- **Migração operacional**: hashes/sessões legados foram desabilitados. Provisionar contas reais pela action interna no projeto escolhido antes de liberar o frontend; não recolocar login rápido para contornar o acesso.
+- **Configuração**: build rejeita Convex local em produção. `.artifacts/build-validation` usa URL fictícia, serve somente para validação e não deve ser publicado.
+- **Limites restantes**: 300 avisos de lint; nenhuma prova de fluxo autenticado remoto, entrega física de mensagem ou restauração de backup. Tokens removidos do código podem continuar no histórico Git e requerem rotação se utilizados.
+
+### [2026-09-08] Deploy de produção
+- **Convex**: deployment `exuberant-guanaco-180` recebeu schema/funções corrigidos; confirmar sempre o alvo pelo host da variável Vercel antes de publicar. `CONVEX_DEPLOYMENT` local pode apontar para backend anônimo e causar deploy no alvo errado.
+- **Runtime**: Node 25 do sistema gerou falhas/assertions no CLI Convex no Windows. Usar Node 24 do runtime empacotado para `convex deploy`/`convex run`.
+- **Vercel**: projeto já vinculado e variável `VITE_CONVEX_URL` de produção existente. Deploy direto do working tree publicou `READY`; sem commit/push.
+- **Evidência**: smoke HTTP e login Convex confirmados; isso não comprova todos os fluxos de negócio, entrega de mensagens, backup/restauração ou comportamento em dispositivo físico.
+
+### [2026-09-08] Runtime de provisionamento local
+- Node 25 do sistema impede deploy de actions Node no Convex local. Usar Node 24 disponível em C:/Users/matte/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin antes de iniciar convex dev.
+- Política atual, solicitada pelo responsável: senha mínima de 12 caracteres. Conta admin local provisionada e login real validado; produção remota permanece pendente.
+
+### [2026-09-08] Exclusão de prontuário clínico e falso sucesso no fallback local
+- **Ponto de fricção**: A mutation já retornava `{ success: false }` quando não havia prontuário, mas o contexto ignorava o retorno e a tela anunciava exclusão concluída. A atualização otimista também removia o fallback local antes da confirmação remota.
+- **Mitigação / Regra**: Operações destrutivas devem aguardar o resultado do backend, rejeitar respostas negativas e só então atualizar o estado local. Para prontuários, excluir apenas `clinicalRecords` e fotos do Storage; preservar evoluções SOAP/laudos e registrar o ator em `auditLogs`.
+
+### [2026-09-08] Presets incompletos no editor de modelos de mensagem
+- **Ponto de fricção**: O seletor de categoria do `MessageTemplateBuilder` atualizava o rótulo, mas só carregava conteúdo padrão para `booking_confirmation`. As demais categorias deixavam título, texto e controles da categoria anterior, criando um editor visualmente incoerente.
+- **Mitigação / Regra**: Manter presets centralizados para todas as categorias e aplicá-los apenas no modo de criação. Durante a edição de um modelo salvo, trocar a categoria não deve sobrescrever conteúdo manual. Cobrir os dois comportamentos com teste de componente.

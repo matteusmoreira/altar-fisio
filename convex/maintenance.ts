@@ -24,6 +24,11 @@ export const runDailyMaintenance = internalMutation({
       await ctx.db.delete(session._id)
     }
 
+    const expiredPatientSessions = await ctx.db.query('patientSessions').withIndex('by_expiresAt', q => q.lte('expiresAt', now)).take(100)
+    for (const session of expiredPatientSessions) await ctx.db.delete(session._id)
+    const oldAttempts = await ctx.db.query('authAttempts').withIndex('by_resetAt', q => q.lte('resetAt', now)).take(100)
+    for (const attempt of oldAttempts) await ctx.db.delete(attempt._id)
+
     // 2. Limpeza de logs de notificação com mais de 60 dias (lote de até 100 por execução)
     const oldLogs = await ctx.db
       .query("notificationLogs")

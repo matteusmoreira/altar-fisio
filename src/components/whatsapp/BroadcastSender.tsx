@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react"
-import { useQuery, useMutation, useAction } from "convex/react"
+import { useQuery, useMutation, useAction } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"

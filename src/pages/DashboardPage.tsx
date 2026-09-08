@@ -10,7 +10,7 @@ import {
   getCurrentTimeString,
   getCurrentMonthString,
 } from "@/lib/dateUtils"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import {
   Calendar,

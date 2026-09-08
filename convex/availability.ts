@@ -1,3 +1,4 @@
+import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 
@@ -42,11 +43,14 @@ export function sliceTimeWindowIntoSlots(
 
 // 1. Listar Regras de Disponibilidade
 export const listRules = query({
-  args: {
+  args: { sessionToken: v.string(),
     professionalId: v.optional(v.id("professionals")),
     roomId: v.optional(v.id("rooms")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     let rules = await ctx.db.query("availabilityRules").collect()
 
     if (args.professionalId) {
@@ -81,7 +85,7 @@ export const listRules = query({
 
 // 2. Salvar Regra de Disponibilidade (com validação anti-conflito)
 export const saveRule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.optional(v.id("availabilityRules")),
     professionalId: v.id("professionals"),
     roomId: v.id("rooms"),
@@ -93,7 +97,10 @@ export const saveRule = mutation({
     breakMinutes: v.optional(v.number()),
     isActive: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     if (args.startTime >= args.endTime) {
       throw new Error("O horário de início deve ser anterior ao término.")
     }
@@ -163,10 +170,13 @@ export const saveRule = mutation({
 
 // 3. Excluir Regra de Disponibilidade
 export const deleteRule = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("availabilityRules"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     const existing = await ctx.db.get(args.id)
     if (!existing) {
       throw new Error("Regra de disponibilidade não encontrada.")
@@ -179,12 +189,15 @@ export const deleteRule = mutation({
 
 // 4. Listar Exceções (Bloqueios e Plantões Extras)
 export const listOverrides = query({
-  args: {
+  args: { sessionToken: v.string(),
     professionalId: v.optional(v.id("professionals")),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     let overrides = await ctx.db.query("availabilityOverrides").collect()
 
     if (args.professionalId) {
@@ -215,7 +228,7 @@ export const listOverrides = query({
 
 // 5. Salvar Exceção (Bloqueio ou Plantão Extra)
 export const saveOverride = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.optional(v.id("availabilityOverrides")),
     professionalId: v.id("professionals"),
     roomId: v.optional(v.id("rooms")),
@@ -226,7 +239,10 @@ export const saveOverride = mutation({
     specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     if (args.startTime && args.endTime && args.startTime >= args.endTime) {
       throw new Error("O horário de início deve ser anterior ao término.")
     }
@@ -255,10 +271,13 @@ export const saveOverride = mutation({
 
 // 6. Excluir Exceção
 export const deleteOverride = mutation({
-  args: {
+  args: { sessionToken: v.string(),
     id: v.id("availabilityOverrides"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin"]);
+
     await ctx.db.delete(args.id)
     return { success: true }
   },
@@ -266,13 +285,16 @@ export const deleteOverride = mutation({
 
 // 7. Obter Horários Efetivos Disponíveis em uma Data
 export const getAvailableSlotsForDate = query({
-  args: {
+  args: { sessionToken: v.string(),
     date: v.string(), // YYYY-MM-DD
     specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
     professionalId: v.optional(v.id("professionals")),
     roomId: v.optional(v.id("rooms")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
+
     // Determina o dia da semana no fuso de Brasília (UTC-3)
     const dateObj = new Date(`${args.date}T12:00:00-03:00`)
     const dayOfWeek = dateObj.getDay()
