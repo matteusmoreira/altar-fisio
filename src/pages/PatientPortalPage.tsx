@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation, useAction } from "convex/react"
+import { PortalLoginForm } from '@/components/patients/PortalLoginForm'
 import { api } from "@convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,7 +32,7 @@ import {
 } from "lucide-react"
 import { formatDateBR, getTodayDateString, addDaysSafe } from "@/lib/dateUtils"
 
-const STORAGE_PATIENT_KEY = "altar_patient_portal_token"
+const STORAGE_PATIENT_KEY = "altar_patient_portal_token_v2"
 
 type PortalTab = "schedule" | "replacements" | "packages" | "history"
 
@@ -92,17 +93,16 @@ const PatientPortalContent: React.FC = () => {
   const clinicSettings = useQuery(api.clinic.getSettings)
 
   const [portalToken, setPortalToken] = useState<string | null>(() => {
-    const token = new URLSearchParams(window.location.hash.slice(1)).get('access')
-    if (token && /^[a-f0-9]{64}$/.test(token)) {
-      sessionStorage.setItem(STORAGE_PATIENT_KEY, token)
+    sessionStorage.removeItem('altar_patient_portal_token')
+    if (window.location.hash.includes('access=')) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
-      return token
     }
     return sessionStorage.getItem(STORAGE_PATIENT_KEY)
   })
   const currentPatient = useQuery(api.portalAccess.current, portalToken ? { portalToken } : 'skip')
   const patientId = currentPatient?._id ?? null
   const logoutPortal = useMutation(api.portalAccess.logout)
+  const loginPortal = useAction(api.portalAuth.login)
 
   // Aba Ativa (Navegação em Abas estilo App Nativo)
   const [activeTab, setActiveTab] = useState<PortalTab>("schedule")
@@ -330,8 +330,13 @@ const PatientPortalContent: React.FC = () => {
     return <div className="min-h-screen flex items-center justify-center p-6 bg-background"><Card className="max-w-md w-full"><CardContent className="p-6 space-y-4 text-center">
       <HeartPulse className="h-12 w-12 mx-auto text-primary" />
       <h1 className="text-xl font-bold">{clinicSettings?.clinicName || 'Portal do paciente'}</h1>
-      <p className="text-sm text-muted-foreground">{portalToken && currentPatient === undefined ? 'Verificando acesso…' : portalToken && currentPatient ? 'Carregando seus agendamentos…' : 'Solicite à recepção seu link individual de acesso. O link expira em 24 horas e permite consultar e gerenciar seus agendamentos.'}</p>
-      {currentPatient === null && <p role="alert" className="text-sm text-destructive">Link inválido ou expirado. Solicite um novo à recepção.</p>}
+      <p className="text-sm text-muted-foreground">{portalToken && currentPatient === undefined ? 'Verificando acesso…' : portalToken && currentPatient ? 'Carregando seus agendamentos…' : 'Acesse seus agendamentos com CPF ou telefone e senha.'}</p>
+      {currentPatient === null && <p role="status" className="text-sm text-muted-foreground">Sua sessão terminou. Entre novamente.</p>}
+      {(!portalToken || currentPatient === null) && <PortalLoginForm onLogin={async args => {
+        const { token } = await loginPortal(args)
+        sessionStorage.setItem(STORAGE_PATIENT_KEY, token)
+        setPortalToken(token)
+      }} />}
     </CardContent></Card></div>
   }
 

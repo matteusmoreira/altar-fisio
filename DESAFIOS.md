@@ -1,5 +1,10 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-08] Portal por senha: runtime e migração
+- O CLI Convex no Windows pode imprimir o resultado concluído de `convex run` e depois encerrar com assertion `UV_HANDLE_CLOSING`, inclusive sob Node 24. Não repetir mutações cegamente por causa do exit code; conferir o resultado e o estado persistido. Nesta tarefa, migração idempotente e login real no backend local confirmaram a persistência.
+- `convex codegen` nesta versão inicia o backend local e executa a análise de push necessária às bindings; a análise de actions Node falha com Node 25 no PATH. Executar o CLI e iniciar o backend com Node 24 no PATH. Funções auxiliares que importam `node:crypto` também precisam de `"use node"`.
+- A migração `portalAuth:migrateExisting` é paginada e restrita ao operador do deployment. A versão de sessão invalida links antigos imediatamente; executar todas as páginas antes de liberar o novo frontend. Ver evidências e roteiro em `TASK_PORTAL_LOGIN.md`.
+
 Este arquivo é lido no início de cada nova sessão e atualizado ao final de cada sessão para garantir auto-aprendizado contínuo.
 
 ---

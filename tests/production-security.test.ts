@@ -100,7 +100,7 @@ describe('Backend authorization', () => {
 describe('Integrity and patient boundary',()=>{
   test('toggle patient active preserves all personal fields',async()=>{
     const {t,patientId}=await fixture()
-    await t.mutation(api.patients.updatePatient,{sessionToken:'reception',id:patientId,active:false})
+    await t.mutation(api.patients.updatePatient,{sessionToken:'admin',id:patientId,active:false})
     const result=await t.query(api.patients.getPatient,{sessionToken:'admin',id:patientId})
     expect(result).toMatchObject({...patient,active:false})
   })
@@ -163,7 +163,7 @@ describe('Integrity and patient boundary',()=>{
     const {t,patientId,otherPatientId}=await fixture()
     const portalToken='a'.repeat(64)
     const tokenHash=await hashToken(portalToken)
-    const sessionId=await t.run(ctx=>ctx.db.insert('patientSessions',{patientId,tokenHash,createdAt:Date.now(),expiresAt:Date.now()+60_000}))
+    const sessionId=await t.run(ctx=>ctx.db.insert('patientSessions',{patientId,tokenHash,authVersion:2,createdAt:Date.now(),expiresAt:Date.now()+60_000}))
     expect(await t.query(api.portalAccess.current,{portalToken})).toEqual({_id:patientId})
     await expect(t.query(api.patientPortal.getPatientPortalData,{portalToken,patientId:otherPatientId})).rejects.toThrow(/Acesso/)
     await expect(t.query(api.patientPortal.getPatientPortalData,{portalToken:'admin',patientId})).rejects.toThrow(/Acesso/)
@@ -182,11 +182,14 @@ test('provisioning requires 12 characters; login works and reset revokes old ses
   await t.action(internal.authActions.provisionUser,{...account,password:'new-isolated-test-password-54321'})
   expect(await t.query(api.auth.getCurrentUser,{token:login.token})).toBeNull()
 })
-test('issuing new patient link revokes previous link; logout invalidates it',async()=>{
+test('password reset revokes previous patient session; logout invalidates new session',async()=>{
   const {t,patientId}=await fixture()
-  const first=await t.action(api.portalAccess.issueLink,{sessionToken:'reception',patientId})
+  await t.mutation(api.patients.updatePatient,{sessionToken:'admin',id:patientId,documentCpf:'52998224725'})
+  await t.action(api.portalAuth.changePassword,{sessionToken:'admin',patientId,password:'@mudar123'})
+  const first=await t.action(api.portalAuth.login,{type:'cpf',identifier:'52998224725',password:'@mudar123'})
   expect(await t.query(api.portalAccess.current,{portalToken:first.token})).toEqual({_id:patientId})
-  const second=await t.action(api.portalAccess.issueLink,{sessionToken:'reception',patientId})
+  await t.action(api.portalAuth.changePassword,{sessionToken:'admin',patientId,password:'NovaSenha123'})
+  const second=await t.action(api.portalAuth.login,{type:'cpf',identifier:'52998224725',password:'NovaSenha123'})
   expect(await t.query(api.portalAccess.current,{portalToken:first.token})).toBeNull()
   const portal=await t.query(api.patientPortal.getPatientPortalData,{portalToken:second.token,patientId})
   expect(portal?.patient.name).toBe(patient.name)
@@ -195,7 +198,7 @@ test('issuing new patient link revokes previous link; logout invalidates it',asy
 })
 test('public booking rejects unoffered intervals before altering patients',async()=>{
   const {t}=await fixture()
-  await expect(t.mutation(api.bookingBuilder.submitPublicBooking,{name:'Pessoa',documentCpf:'00000000000',phone:'00000000000',birthDate:'1990-01-01',date:'2099-09-09',startTime:'25:00',endTime:'26:00',answers:[]})).rejects.toThrow()
+  await expect(t.action(api.bookingBuilder.submitPublicBooking,{name:'Pessoa',documentCpf:'52998224725',phone:'11987654321',birthDate:'1990-01-01',date:'2099-09-09',startTime:'25:00',endTime:'26:00',answers:[]})).rejects.toThrow()
   expect(await t.query(api.patients.listPatients,{sessionToken:'admin'})).toHaveLength(2)
 })
 test('deployment and integration URL validation reject unsafe destinations',()=>{
@@ -219,7 +222,9 @@ test('patient cannot replay a completed reschedule to create another reservation
     const source=await ctx.db.insert('scheduleParticipants',{scheduleId:sourceSchedule,patientId,status:'scheduled'})
     return {source,first,second}
   })
-  const link=await t.action(api.portalAccess.issueLink,{sessionToken:'reception',patientId})
+  await t.mutation(api.patients.updatePatient,{sessionToken:'admin',id:patientId,documentCpf:'52998224725'})
+  await t.action(api.portalAuth.changePassword,{sessionToken:'admin',patientId,password:'@mudar123'})
+  const link=await t.action(api.portalAuth.login,{type:'cpf',identifier:'52998224725',password:'@mudar123'})
   await t.mutation(api.patientPortal.rescheduleAppointmentByPatient,{portalToken:link.token,patientId,participantId:source,targetScheduleId:first})
   await expect(t.mutation(api.patientPortal.rescheduleAppointmentByPatient,{portalToken:link.token,patientId,participantId:source,targetScheduleId:second})).rejects.toThrow(/processado/)
   const participants=await t.run(ctx=>ctx.db.query('scheduleParticipants').collect())

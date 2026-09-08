@@ -1,5 +1,6 @@
+import { formatCpf, formatPhone, isValidCpf, isValidPhone } from '../../shared/patientIdentity'
 import React, { useState, useMemo, useRef, useEffect } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useQuery, useAction } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -51,7 +52,7 @@ export const PublicBookingPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
   const clinicSettings = useQuery(api.clinic.getSettings)
   const publicPackages = useQuery(api.bookingBuilder.listPublicPackages)
-  const submitBooking = useMutation(api.bookingBuilder.submitPublicBooking)
+  const submitBooking = useAction(api.bookingBuilder.submitPublicBooking)
 
   // Rastreia especialidade da URL se houver (ex: ?servico=pilates)
   const urlParams = new URLSearchParams(window.location.search)
@@ -154,28 +155,12 @@ export const PublicBookingPage: React.FC = () => {
   // Lista de etapas ordenadas
   const steps = useMemo(() => {
     if (!config?.steps) return []
-    return [...config.steps].sort((a, b) => a.order - b.order)
+    const ordered = [...config.steps].sort((a, b) => a.order - b.order)
+    if (!ordered.some(step => step.type === 'patient_info')) ordered.push({ id: 'required_patient_info', title: 'Seus dados', description: 'Dados obrigatórios para agendar', type: 'patient_info', order: ordered.length })
+    return ordered
   }, [config])
 
   const currentStep = steps[currentStepIndex]
-
-  // Máscaras de formulário
-  const formatPhone = (val: string) => {
-    const clean = val.replace(/\D/g, "").slice(0, 11)
-    if (clean.length <= 10) {
-      return clean.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").trim()
-    }
-    return clean.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").trim()
-  }
-
-  const formatCpf = (val: string) => {
-    const clean = val.replace(/\D/g, "").slice(0, 11)
-    return clean
-      .replace(/^(\d{3})(\d)/, "$1.$2")
-      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/\.(\d{3})(\d)/, ".$1-$2")
-      .trim()
-  }
 
   // Avaliação de Regra Condicional
   const isFieldVisible = (field: any): boolean => {
@@ -276,11 +261,11 @@ export const PublicBookingPage: React.FC = () => {
       }
     } else if (currentStep.type === "patient_info") {
       if (!patientName.trim()) errors.name = "Nome completo é obrigatório."
-      if (!patientPhone.trim() || patientPhone.replace(/\D/g, "").length < 10) {
+      if (!isValidPhone(patientPhone)) {
         errors.phone = "WhatsApp ou telefone celular válido com DDD é obrigatório."
       }
-      if (!patientCpf.trim() || patientCpf.replace(/\D/g, "").length !== 11) {
-        errors.cpf = "CPF válido com 11 dígitos é obrigatório."
+      if (!isValidCpf(patientCpf)) {
+        errors.cpf = "Informe um CPF válido."
       }
       if (!patientBirthDate) {
         errors.birthDate = "Data de nascimento é obrigatória."
@@ -312,6 +297,12 @@ export const PublicBookingPage: React.FC = () => {
 
   // Submissão Final
   const handleSubmitBooking = async () => {
+    if (!isValidCpf(patientCpf) || !isValidPhone(patientPhone) || !patientName.trim() || !patientBirthDate) {
+      setFormErrors({ cpf: !isValidCpf(patientCpf) ? 'Informe um CPF válido.' : '', phone: !isValidPhone(patientPhone) ? 'Informe um telefone válido com DDD.' : '', submit: 'Confira seus dados para concluir o agendamento.' })
+      const index = steps.findIndex(step => step.type === 'patient_info')
+      if (index >= 0) setCurrentStepIndex(index)
+      return
+    }
     setIsSubmitting(true)
     setFormErrors({})
 
@@ -443,6 +434,12 @@ export const PublicBookingPage: React.FC = () => {
             </div>
 
             <CardContent className="p-6 sm:p-8 space-y-6">
+              {/* Acesso criado junto com o cadastro, sem alterar senhas existentes. */}
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+                <h2 className="font-semibold">Acesso ao portal do paciente</h2>
+                <p className="text-sm text-muted-foreground">{bookingSuccessData.portalAccessCreated ? <>Seu acesso foi criado. Entre com CPF ou telefone e a senha inicial <strong className="text-foreground">@mudar123</strong>.</> : 'Seu acesso está disponível. Entre com CPF ou telefone e sua senha atual.'}</p>
+                <a className="inline-flex min-h-11 items-center font-medium text-primary underline" href="/portal">Acessar meu portal</a>
+              </div>
               {/* Voucher Ticket de Confirmação */}
               <div className="rounded-2xl bg-muted/40 border border-border p-5 relative overflow-hidden">
                 <div className="flex items-center justify-between border-b border-border/70 pb-3 mb-4">

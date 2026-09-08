@@ -348,7 +348,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createProfessionalMutation = useMutation(api.professionals.createProfessional)
   const updateProfessionalMutation = useMutation(api.professionals.updateProfessional)
   const deleteProfessionalMutation = useMutation(api.professionals.deleteProfessional)
-  const createPatientMutation = useMutation(api.patients.createPatient)
+  const createPatientMutation = useAction(api.patients.createPatient)
   const updatePatientMutation = useMutation(api.patients.updatePatient)
   const deletePatientMutation = useMutation(api.patients.deletePatient)
   const createScheduleMutation = useMutation(api.schedules.createSchedule)
@@ -758,12 +758,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }
 
   const deletePatient = async (id: string) => {
+    await deletePatientMutation({ id: id as any })
     setPatients((prev) => prev.filter((p) => p.id !== id))
-    try {
-      await deletePatientMutation({ id: id as any })
-    } catch (err) {
-      throw err
-    }
   }
 
 

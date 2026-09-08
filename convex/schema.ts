@@ -60,6 +60,8 @@ export default defineSchema({
 
   // Pacientes e Alunos
   patients: defineTable({
+    normalizedCpf: v.optional(v.string()),
+    normalizedPhone: v.optional(v.string()),
     name: v.string(),
     documentCpf: v.string(),
     phone: v.string(),
@@ -75,6 +77,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_cpf", ["documentCpf"])
+    .index("by_normalizedCpf", ["normalizedCpf"])
+    .index("by_normalizedPhone", ["normalizedPhone"])
     .index("by_name", ["name"])
     .index("by_phone", ["phone"])
     .index("by_active", ["active"])
@@ -316,7 +320,8 @@ export default defineSchema({
     .index("by_expiresAt", ["expiresAt"]),
 
   authAttempts: defineTable({ key: v.string(), count: v.number(), resetAt: v.number() }).index('by_key', ['key']).index('by_resetAt', ['resetAt']),
-  patientSessions: defineTable({ patientId: v.id('patients'), tokenHash: v.string(), expiresAt: v.number(), createdAt: v.number() }).index('by_tokenHash', ['tokenHash']).index('by_patient', ['patientId']).index('by_expiresAt', ['expiresAt']),
+  patientCredentials: defineTable({ patientId: v.id('patients'), salt: v.string(), passwordHash: v.string(), updatedAt: v.number() }).index('by_patient', ['patientId']),
+  patientSessions: defineTable({ authVersion: v.optional(v.number()), patientId: v.id('patients'), tokenHash: v.string(), expiresAt: v.number(), createdAt: v.number() }).index('by_tokenHash', ['tokenHash']).index('by_patient', ['patientId']).index('by_expiresAt', ['expiresAt']),
 
   // Trilha de Auditoria LGPD e COFFITO
   auditLogs: defineTable({

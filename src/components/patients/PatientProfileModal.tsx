@@ -1,4 +1,6 @@
-import { useAction, useQuery } from '@/lib/staffConvex'
+import { useAuth } from '@/contexts/AuthContext'
+import { PortalAccessSettings } from './PortalAccessSettings'
+import { useQuery } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import React, { useState, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
@@ -85,20 +87,8 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     getEvolutions,
   } = useClinicData()
 
-  const issuePortalLink = useAction(api.portalAccess.issueLink)
-  const [portalLink, setPortalLink] = useState('')
-  const [portalError, setPortalError] = useState('')
-  const [issuingLink, setIssuingLink] = useState(false)
-  React.useEffect(() => { setPortalLink(''); setPortalError('') }, [patient?.id, isOpen])
-  const createPortalLink = async () => {
-    if (!patient) return
-    setIssuingLink(true); setPortalError(''); setPortalLink('')
-    try {
-      const result = await issuePortalLink({ patientId: patient.id as any })
-      setPortalLink(window.location.origin + '/portal#access=' + result.token)
-    } catch (error) { setPortalError(error instanceof Error ? error.message : 'Falha ao gerar acesso.') }
-    finally { setIssuingLink(false) }
-  }
+  const { role } = useAuth()
+  const canEditPatient = role === 'admin'
   const [activeTab, setActiveTab] = useState<
     "overview" | "classes" | "clinical" | "financial" | "reports"
   >("overview")
@@ -441,7 +431,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                   <span className="hidden sm:inline">Imprimir PDF</span>
                 </Button>
 
-                <Button
+                {canEditPatient && <Button
                   size="sm"
                   variant="default"
                   onClick={() => {
@@ -452,7 +442,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                 >
                   <Edit2 className="h-3.5 w-3.5" />
                   <span>Editar</span>
-                </Button>
+                </Button>}
               </div>
             </div>
 
@@ -628,6 +618,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
               {/* ABA 1: VISÃO GERAL & DADOS CADASTRAIS                     */}
               {/* ========================================================= */}
               <TabsContent value="overview" className="m-0 space-y-5">
+                {canEditPatient && <PortalAccessSettings key={patient.id} patientId={patient.id as any} />}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Dados Pessoais & Contato */}
                   <Card className="border-border shadow-xs">
@@ -1528,12 +1519,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                 {selectedPhotoZoom.title} — {patient.name}
               </DialogTitle>
             </DialogHeader>
-        <div className="p-3 border rounded-xl space-y-2">
-          <p className="text-xs text-muted-foreground">Confira a identidade do paciente antes de compartilhar. Acesso válido por 24 horas. Gerar novo link revoga o anterior.</p>
-          <Button type="button" disabled={issuingLink} onClick={createPortalLink}>{issuingLink ? 'Gerando…' : 'Gerar acesso ao portal'}</Button>
-          {portalLink && <div className="flex gap-2"><input aria-label="Link de acesso individual" className="min-w-0 flex-1 border rounded p-2 text-xs" readOnly value={portalLink} /><Button onClick={async () => { try { await navigator.clipboard.writeText(portalLink) } catch { setPortalError('Selecione e copie o link no campo.') } }}>Copiar</Button></div>}
-          {portalError && <p role="alert" className="text-xs text-destructive">{portalError}</p>}
-        </div>
 
             <div className="max-h-[75vh] overflow-hidden rounded-xl bg-black/10 flex items-center justify-center p-1">
               <img

@@ -30,7 +30,7 @@ export async function requirePatient(ctx: QueryCtx | MutationCtx, token: string,
   if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Acesso ao portal inválido ou expirado.')
   const digest = await hashToken(token)
   const session = await ctx.db.query('patientSessions').withIndex('by_tokenHash', q => q.eq('tokenHash', digest)).first()
-  if (!session || session.expiresAt <= Date.now() || (patientId && patientId !== session.patientId)) {
+  if (!session || session.authVersion !== 2 || session.expiresAt <= Date.now() || (patientId && patientId !== session.patientId)) {
     throw new Error('Acesso ao portal inválido ou expirado.')
   }
   const patient = await ctx.db.get(session.patientId)

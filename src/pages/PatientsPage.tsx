@@ -1,3 +1,5 @@
+import { useAuth } from '@/contexts/AuthContext'
+import { formatCpf, formatPhone, isValidCpf, isValidPhone } from '../../shared/patientIdentity'
 import React, { useState } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient } from "@/types"
@@ -40,6 +42,8 @@ interface PatientsPageProps {
 }
 
 export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical }) => {
+  const { role } = useAuth()
+  const canEditPatient = role === 'admin'
   const { patients, addPatient, updatePatient, deletePatient, clinicalOverview } = useClinicData()
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -130,10 +134,11 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   }
 
   const handleOpenEdit = (patient: Patient) => {
+    if (!canEditPatient) return
     setEditingPatientId(patient.id)
     setName(patient.name)
-    setCpf(patient.documentCpf)
-    setPhone(patient.phone)
+    setCpf(formatCpf(patient.documentCpf))
+    setPhone(formatPhone(patient.phone))
     setEmail(patient.email || "")
     setBirthDate(patient.birthDate || "1990-01-01")
     setGender(patient.gender || "Feminino")
@@ -148,8 +153,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !cpf || !phone) {
-      alert("Por favor, preencha Nome, CPF e Telefone!")
+    if (editingPatientId && !canEditPatient) return
+    if (!name.trim() || !isValidCpf(cpf) || !isValidPhone(phone)) {
+      alert("Informe nome, CPF válido e telefone com DDD.")
       return
     }
 
@@ -185,7 +191,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           healthInsurance,
           notes,
         })
-        showToast(`Paciente "${name}" cadastrado com sucesso!`)
+        showToast(`Paciente "${name}" cadastrado com sucesso! Acesso ao portal criado com a senha @mudar123.`)
       }
       setIsModalOpen(false)
     } catch (err: any) {
@@ -196,7 +202,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   }
 
   const handleConfirmDelete = async () => {
-    if (!deletingPatient) return
+    if (!deletingPatient || !canEditPatient) return
     setIsDeleting(true)
     try {
       await deletePatient(deletingPatient.id)
@@ -210,6 +216,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   }
 
   const handleToggleStatus = async (patient: Patient) => {
+    if (!canEditPatient) return
     try {
       await updatePatient(patient.id, { active: !patient.active })
       showToast(
@@ -462,7 +469,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                       </Button>
 
                       <div className="flex items-center gap-1.5">
-                        <Button
+                        {canEditPatient && (<Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleToggleStatus(patient)}
@@ -478,9 +485,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                           ) : (
                             <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
                           )}
-                        </Button>
+                        </Button>)}
 
-                        <Button
+                        {canEditPatient && (<Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleOpenEdit(patient)}
@@ -488,9 +495,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                           <span>Editar</span>
-                        </Button>
+                        </Button>)}
 
-                        <Button
+                        {canEditPatient && (<Button
                           size="sm"
                           variant="outline"
                           onClick={() => setDeletingPatient(patient)}
@@ -498,7 +505,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                           title="Excluir paciente"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </Button>)}
                       </div>
                     </div>
                   </div>
@@ -622,7 +629,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             <span className="hidden lg:inline">Prontuário</span>
                           </Button>
 
-                          <Button
+                          {canEditPatient && (<Button
                             size="icon"
                             variant="ghost"
                             onClick={() => handleToggleStatus(patient)}
@@ -634,9 +641,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             title={patient.active ? "Inativar Paciente" : "Reativar Paciente"}
                           >
                             {patient.active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                          </Button>
+                          </Button>)}
 
-                          <Button
+                          {canEditPatient && (<Button
                             size="icon"
                             variant="ghost"
                             onClick={() => handleOpenEdit(patient)}
@@ -644,9 +651,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             title="Editar Paciente"
                           >
                             <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
+                          </Button>)}
 
-                          <Button
+                          {canEditPatient && (<Button
                             size="icon"
                             variant="ghost"
                             onClick={() => setDeletingPatient(patient)}
@@ -654,7 +661,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             title="Excluir Paciente"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          </Button>)}
                         </div>
                       </td>
                     </tr>
@@ -745,22 +752,22 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                       <FileText className="h-3.5 w-3.5 text-rose-500" />
                       <span>Prontuário</span>
                     </Button>
-                    <Button
+                    {canEditPatient && (<Button
                       size="icon"
                       variant="outline"
                       onClick={() => handleOpenEdit(patient)}
                       className="h-8 w-8 text-muted-foreground shrink-0"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </Button>)}
+                    {canEditPatient && (<Button
                       size="icon"
                       variant="outline"
                       onClick={() => setDeletingPatient(patient)}
                       className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </Button>)}
                   </div>
                 </div>
               )
@@ -799,7 +806,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                   <Input
                     required
                     value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
+                    onChange={(e) => setCpf(formatCpf(e.target.value))}
                     placeholder="000.000.000-00"
                   />
                 </div>
@@ -808,7 +815,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                   <Input
                     required
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
                     placeholder="(11) 98888-8888"
                   />
                 </div>

@@ -3,7 +3,7 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "clinic:getNotificationSettings": ["admin", "reception"],
   "clinical:attachPosturalPhoto": ["admin", "professional"],
   "clinic:getAdminSettings": ["admin"],
-  "portalAccess:issueLink": ["admin", "professional", "reception"],
+  "portalAuth:changePassword": ["admin"],
   "audit:logAction": [
     "admin",
     "professional",
@@ -279,14 +279,10 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "reception"
   ],
   "patients:updatePatient": [
-    "admin",
-    "professional",
-    "reception"
+    "admin"
   ],
   "patients:deletePatient": [
-    "admin",
-    "professional",
-    "reception"
+    "admin"
   ],
   "professionals:listProfessionals": [
     "admin",

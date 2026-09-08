@@ -9,7 +9,7 @@ vi.mock('@/contexts/AuthContext',()=>({useAuth:()=>({user:{id:'fixture',name:'Te
 vi.mock('@/lib/staffConvex',()=>({
   useQuery:()=>undefined,
   useMutation:(reference:any)=>(args:any)=>mocks.write(getFunctionName(reference),args),
-  useAction:() => vi.fn(),
+  useAction:(reference:any)=>(args:any)=>mocks.write(getFunctionName(reference),args),
 }))
 vi.mock('@/components/ui/dialog',()=>{
   const Box=({children}:any)=><div>{children}</div>

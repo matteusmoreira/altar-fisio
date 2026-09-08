@@ -1,9 +1,12 @@
 import { validDate, validateSchedule } from './lib/validation'
 import type { QueryCtx, MutationCtx } from './_generated/server'
 import { requireStaff } from './lib/security'
-import { query, mutation } from "./_generated/server"
+import { query, mutation, action, internalMutation } from "./_generated/server"
+import { credentialFields, ensurePatientCredential, findPatients } from './lib/patientCredentials'
+import { isValidCpf, isValidPhone, normalizeCpf, normalizePhone } from '../shared/patientIdentity'
+import type { Id, Doc } from './_generated/dataModel'
 import { api, internal } from "./_generated/api"
-import { v } from "convex/values"
+import { v, ConvexError } from "convex/values"
 import { sliceTimeWindowIntoSlots } from "./availability"
 
 export const DEFAULT_BOOKING_STEPS = [
@@ -298,8 +301,7 @@ export const listPublicPackages = query({
 })
 
 // 5. Submeter Agendamento Público (Realizado pelo Paciente na Página /agendar)
-export const submitPublicBooking = mutation({
-  args: {
+const publicBookingArgs = {
     name: v.string(),
     documentCpf: v.string(),
     phone: v.string(),
@@ -327,46 +329,51 @@ export const submitPublicBooking = mutation({
       })
     ),
     notes: v.optional(v.string()),
+  }
+export const submitPublicBooking = action({
+  args: publicBookingArgs,
+  handler: async (ctx, args): Promise<{ success: boolean; bookingId: Id<'publicBookings'>; patientId: Id<'patients'>; status: string; requireApproval: boolean; scheduledDate: string; scheduledTime: string; patientName: string; portalAccessCreated: boolean }> => {
+    if (!isValidCpf(args.documentCpf) || !isValidPhone(args.phone)) throw new ConvexError('CPF ou telefone inválido.')
+    await ctx.runMutation(internal.portalAccess.reserveAttempt, { key: 'booking:' + normalizePhone(args.phone) })
+    const credential = await ctx.runAction(internal.portalAuth.prepareDefault, {})
+    return ctx.runMutation(internal.bookingBuilder.persistPublicBooking, { ...args, credential })
   },
+})
+export const persistPublicBooking = internalMutation({
+  args: { ...publicBookingArgs, credential: v.object(credentialFields) },
   handler: async (ctx, args) => {
     const now = Date.now()
     validDate(args.date); validDate(args.birthDate)
-    if (!args.name.trim() || args.name.length > 200 || args.answers.length > 50 || args.answers.some(a => a.answer.length > 5000) || (args.notes?.length || 0) > 5000) throw new Error('Dados de agendamento inválidos.')
-    if (!/^[0-9]{11}$/.test(args.documentCpf.replace(/\D/g, '')) || !/^[0-9]{10,13}$/.test(args.phone.replace(/\D/g, ''))) throw new Error('CPF ou telefone inválido.')
-    if (new Date(args.date + 'T' + args.startTime + ':00-03:00').getTime() <= now) throw new Error('Selecione um horário futuro.')
+    if (!args.name.trim() || args.name.length > 200 || args.answers.length > 50 || args.answers.some(a => a.answer.length > 5000) || (args.notes?.length || 0) > 5000) throw new ConvexError('Dados de agendamento inválidos.')
+    if (!isValidCpf(args.documentCpf) || !isValidPhone(args.phone)) throw new ConvexError('CPF ou telefone inválido.')
+    if (new Date(args.date + 'T' + args.startTime + ':00-03:00').getTime() <= now) throw new ConvexError('Selecione um horário futuro.')
     const slots = await getPublicSlots(ctx, { date: args.date, specialty: args.specialty, professionalId: args.professionalId })
     const selected = slots.find(slot => slot.startTime === args.startTime && slot.endTime === args.endTime && slot.isAvailable)
     const selectedRoom = selected?.rooms.find(room => !args.roomId || room.roomId === args.roomId)
     const selectedProfessional = selected?.availableProfessionals.find(prof => !args.professionalId || prof.id === args.professionalId)
-    if (!selectedRoom || !selectedProfessional) throw new Error('Horário indisponível. Atualize a agenda e selecione novamente.')
+    if (!selectedRoom || !selectedProfessional) throw new ConvexError('Horário indisponível. Atualize a agenda e selecione novamente.')
     args.roomId = selectedRoom.roomId
     args.professionalId = selectedProfessional.id
     if (args.packageId) {
       const pkg = await ctx.db.get(args.packageId)
-      if (!pkg?.active || pkg.showInPublicBooking === false) throw new Error('Plano indisponível.')
+      if (!pkg?.active || pkg.showInPublicBooking === false) throw new ConvexError('Plano indisponível.')
       const service = await ctx.db.get(pkg.serviceId)
-      if (!service?.active) throw new Error('Serviço indisponível.')
+      if (!service?.active) throw new ConvexError('Serviço indisponível.')
       args.serviceId = pkg.serviceId; args.packageName = pkg.name; args.specialty = service.specialty
       args.selectedPrice = args.hasHealthInsurance ? (args.selectedPaymentMethod === 'pix' ? pkg.insurancePricePix ?? pkg.insurancePrice ?? pkg.price : pkg.insurancePrice ?? pkg.price) : (args.selectedPaymentMethod === 'pix' ? pkg.pricePix ?? pkg.price : pkg.price)
     } else if (args.serviceId) {
       const service = await ctx.db.get(args.serviceId)
-      if (!service?.active) throw new Error('Serviço indisponível.')
+      if (!service?.active) throw new ConvexError('Serviço indisponível.')
       args.selectedPrice = service.defaultPrice; args.specialty = service.specialty
     } else { args.selectedPrice = undefined }
-    const rateKey = 'booking:' + args.phone.replace(/\D/g, '')
-    const rate = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', rateKey)).first()
-    if (rate && rate.resetAt > now && rate.count >= 5) throw new Error('Limite de solicitações atingido. Tente mais tarde.')
-    if (rate) await ctx.db.patch(rate._id, { count: rate.resetAt > now ? rate.count + 1 : 1, resetAt: now + 15 * 60000 })
-    else await ctx.db.insert('authAttempts', { key: rateKey, count: 1, resetAt: now + 15 * 60000 })
 
     // 1. Busca ou cadastra o paciente pelo CPF ou Telefone
-    const cleanCpf = args.documentCpf.replace(/\D/g, "")
-    const cleanPhone = args.phone.replace(/\D/g, "")
+    const cleanCpf = normalizeCpf(args.documentCpf)
+    const cleanPhone = normalizePhone(args.phone)
 
-    let patient = await ctx.db
-      .query("patients")
-      .withIndex("by_cpf", (q) => q.eq("documentCpf", cleanCpf))
-      .first()
+    const matches = await findPatients(ctx, 'cpf', cleanCpf)
+    if (matches.length > 1 || (matches.length === 1 && !matches[0].active)) throw new ConvexError('Procure a clínica para conferir seu cadastro.')
+    let patient: Doc<'patients'> | null = matches[0] ?? null
 
     const insuranceToSave = args.hasHealthInsurance
       ? args.healthInsuranceName || "Com Convênio"
@@ -377,6 +384,8 @@ export const submitPublicBooking = mutation({
         name: args.name.trim(),
         documentCpf: cleanCpf,
         phone: cleanPhone,
+        normalizedCpf: cleanCpf,
+        normalizedPhone: cleanPhone,
         email: args.email?.trim() || undefined,
         birthDate: args.birthDate,
         healthInsurance: insuranceToSave,
@@ -388,8 +397,9 @@ export const submitPublicBooking = mutation({
     }
 
     if (!patient) {
-      throw new Error("Erro ao registrar os dados do paciente.")
+      throw new ConvexError("Erro ao registrar os dados do paciente.")
     }
+    const portalAccessCreated = await ensurePatientCredential(ctx, patient._id, args.credential)
 
     // 2. Consulta configuração do construtor para verificar aprovação necessária
     const config = await ctx.db.query("bookingFormConfig").first()
@@ -430,10 +440,10 @@ export const submitPublicBooking = mutation({
           .first()
 
         if (existingSchedule) {
-          if (existingSchedule.status === 'cancelled' || existingSchedule.endTime !== args.endTime || existingSchedule.professionalId !== profId) throw new Error('Horário indisponível.')
+          if (existingSchedule.status === 'cancelled' || existingSchedule.endTime !== args.endTime || existingSchedule.professionalId !== profId) throw new ConvexError('Horário indisponível.')
           const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', existingSchedule._id)).collect()
           const active = participants.filter(p => !['absence','justified_absence'].includes(p.status))
-          if (active.length >= existingSchedule.maxCapacity || active.some(p => p.patientId === patient!._id)) throw new Error('Horário lotado ou já reservado para este paciente.')
+          if (active.length >= existingSchedule.maxCapacity || active.some(p => p.patientId === patient!._id)) throw new ConvexError('Horário lotado ou já reservado para este paciente.')
           assignedScheduleId = existingSchedule._id
           // Adiciona participante
           await ctx.db.insert("scheduleParticipants", {
@@ -552,6 +562,7 @@ export const submitPublicBooking = mutation({
     return {
       success: true,
       bookingId: publicBookingId,
+      portalAccessCreated,
       patientId: patient._id,
       status: initialStatus,
       requireApproval,
@@ -623,7 +634,7 @@ export const updatePublicBookingStatus = mutation({
 
     const booking = await ctx.db.get(args.bookingId)
     if (!booking) {
-      throw new Error("Agendamento público não encontrado.")
+      throw new ConvexError("Agendamento público não encontrado.")
     }
 
     const now = Date.now()
