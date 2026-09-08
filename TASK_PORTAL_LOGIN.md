@@ -6,7 +6,7 @@
 - Apenas admin edita cadastro, status, exclusão e senha; criação/consulta mantêm perfis atuais.
 - Telefone compartilhado exige CPF. CPF válido obrigatório no agendamento e novos cadastros.
 - Sessões de 24 horas, hash scrypt individual, bloqueio de links legados e tentativas limitadas.
-- Sem publicação em produção nesta tarefa.
+- Publicação em produção ficou fora da tarefa de implementação e foi autorizada em release separado.
 
 ## Andamento
 - [x] Inspecionar implementação atual e pontos de integração.
@@ -39,8 +39,12 @@ A migração será uma action interna paginada: preparar hashes individuais ante
 Este bloco registra o estado anterior à autorização de release. Nesta sessão, o commit, push e deploy do backend Convex foram autorizados explicitamente; a migração remota permanece como etapa operacional posterior ao deploy.
 
 ## Release autorizado — 2026-09-08
-O backend e o schema Convex serão publicados no deployment de produção antes de qualquer publicação do frontend. A validação de build, testes e bundling foi concluída localmente.
+O backend e o schema Convex foram publicados no deployment de produção antes de qualquer publicação do frontend. A validação de build, testes e bundling foi concluída localmente.
 
-Na publicação autorizada, confirmar o alvo e publicar backend/schema antes do frontend. Executar a action interna `portalAuth:migrateExisting` com `cursor: null`, repetir com o cursor retornado até `done: true` e guardar apenas o relatório de IDs duplicados para correção pelo admin. Repetir a migração é seguro e não redefine senhas personalizadas. CPFs legados inválidos precisam ser corrigidos pelo admin para permitir entrada por CPF; telefone válido e exclusivo continua disponível.
+- Commit e push: `6f61833` em `main` / `origin/main`.
+- Convex: deployment `exuberant-guanaco-180`, com os três índices novos publicados e nenhuma remoção.
+- Migração: `portalAuth:migrateExisting` executada com `cursor: null`, `done: true`, `created: 0` e `duplicatePatientIds: []`.
+
+Para futuras publicações, confirmar o alvo e publicar backend/schema antes do frontend. Se houver pacientes novos sem credencial, executar a action interna `portalAuth:migrateExisting` com `cursor: null`, repetir com o cursor retornado até `done: true` e guardar apenas o relatório de IDs duplicados para correção pelo admin. Repetir a migração é seguro e não redefine senhas personalizadas. CPFs legados inválidos precisam ser corrigidos pelo admin para permitir entrada por CPF; telefone válido e exclusivo continua disponível.
 
 Homologação remota, entrega de mensagens e dispositivo físico não foram realizados. Os agendamentos positivos foram testados em base simulada isolada; no navegador, a validação pública foi exercitada sem enviar agendamento ou mensagens externas.

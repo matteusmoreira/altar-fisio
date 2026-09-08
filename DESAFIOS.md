@@ -1,5 +1,9 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-08] Build de produção e deploy Convex no Windows
+- O `.env.local` deste projeto aponta para o backend local; o guard do Vite rejeita esse valor no build de produção. Para validar sem alterar segredos, carregar `VITE_CONVEX_URL` HTTPS apenas no processo do comando.
+- Nesta versão da CLI Convex, `deploy --typecheck enable` retornou código 1 ao encontrar Node 25 e ausência de `convex/tsconfig.json`, embora o build local (`tsc -b`), testes, bundling e o `deploy --dry-run --typecheck disable` tenham passado. O deploy desta release foi feito com esse check desabilitado e a limitação deve ser resolvida em uma tarefa própria de tooling, preferencialmente com Node 24 e configuração Convex dedicada.
+
 ### [2026-09-08] Portal por senha: runtime e migração
 - O CLI Convex no Windows pode imprimir o resultado concluído de `convex run` e depois encerrar com assertion `UV_HANDLE_CLOSING`, inclusive sob Node 24. Não repetir mutações cegamente por causa do exit code; conferir o resultado e o estado persistido. Nesta tarefa, migração idempotente e login real no backend local confirmaram a persistência.
 - `convex codegen` nesta versão inicia o backend local e executa a análise de push necessária às bindings; a análise de actions Node falha com Node 25 no PATH. Executar o CLI e iniciar o backend com Node 24 no PATH. Funções auxiliares que importam `node:crypto` também precisam de `"use node"`.
