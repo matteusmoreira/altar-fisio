@@ -359,7 +359,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Defina os dias e horários em que os profissionais atendem em cada sala e controle folgas e plantões.
+                  Defina a janela semanal que será dividida automaticamente em horários para os pacientes, além de folgas e plantões.
                 </DialogDescription>
               </div>
             </div>

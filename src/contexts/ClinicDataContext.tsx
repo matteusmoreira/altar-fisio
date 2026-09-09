@@ -1084,9 +1084,9 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }
 
   const deletePackage = async (id: string) => {
-    setPackages((prev) => prev.filter((p) => p.id !== id))
     try {
       await deletePackageMutation({ id: id as any })
+      setPackages((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
       throw err
     }

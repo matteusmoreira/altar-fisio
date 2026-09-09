@@ -275,6 +275,7 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "patientPortal:rescheduleAppointmentByPatient": "patient",
   "patientPortal:useReplacementCreditToBook": "patient",
   "patientPortal:listAvailableSlotsForBooking": "patient",
+  "patientPortal:listAvailabilitySlotsForPatientBooking": "patient",
   "patientPortal:bookAppointmentFromPortal": "patient",
   "patients:listPatients": [
     "admin",

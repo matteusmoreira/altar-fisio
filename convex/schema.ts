@@ -129,6 +129,7 @@ export default defineSchema({
   patientPackages: defineTable({
     patientId: v.id("patients"),
     packageId: v.id("packages"),
+    serviceId: v.optional(v.id("services")), // Snapshot do serviço para preservar a modalidade contratada
     totalSessions: v.number(),
     usedSessions: v.number(),
     remainingSessions: v.number(),

@@ -120,6 +120,13 @@ export const deletePackage = mutation({
     const pkg = await ctx.db.get(args.id)
     if (!pkg) throw new Error("Pacote não encontrado")
 
+    const assignedPackage = (await ctx.db.query("patientPackages").collect()).find(
+      (patientPackage) => patientPackage.packageId === args.id
+    )
+    if (assignedPackage) {
+      throw new Error("Este plano já foi atribuído a um paciente. Desative-o para novas vendas em vez de excluí-lo.")
+    }
+
     await ctx.db.delete(args.id)
     return { success: true, id: args.id }
   },
@@ -310,6 +317,7 @@ export const assignPackageToPatient = mutation({
     const patientPackageId = await ctx.db.insert("patientPackages", {
       patientId: args.patientId,
       packageId: args.packageId,
+      serviceId: pkg.serviceId,
       totalSessions: pkg.sessionCount,
       usedSessions: 0,
       remainingSessions: pkg.sessionCount,

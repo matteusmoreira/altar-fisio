@@ -1,5 +1,10 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-09] Portal do paciente mostrava uma sessão de expediente inteiro
+- A grade semanal e as sessões operacionais são conceitos diferentes: uma regra `08:00–17:00` com duração 30 gera slots virtuais, enquanto uma turma manual `08:00–17:00` ocupa sala e profissional por nove horas. O Portal de novo agendamento deve consultar a grade via motor compartilhado e materializar/reutilizar somente o slot escolhido.
+- O plano atribuído ao paciente agora guarda `serviceId` como snapshot, restringindo horários ao serviço contratado mesmo após mudanças no catálogo. Definições comerciais com planos já atribuídos não podem ser excluídas; devem ser desativadas.
+- Uma série vazia de 12 sessões `08:00–17:00` foi removida em produção com pré-condições exatas. As 7 regras semanais foram preservadas; sexta-feira de Pilates/RPG retorna 8 slots e segunda-feira retorna 18 slots de 30 minutos.
+
 ### [2026-09-08] Agenda pública com serviço indisponível
 - Os logs remotos de `bookingBuilder:listPublicAvailableSlots` confirmaram `ConvexError: Serviço indisponível`. Planos públicos precisam ter serviço existente e ativo; a consulta de horários deve retornar lista vazia para seleções que ficaram indisponíveis, sem derrubar a página. A confirmação continua rejeitando a reserva. Regressões em `tests/group-booking.test.ts` cobrem serviço inativo/removido e plano inativo/oculto/removido.
 

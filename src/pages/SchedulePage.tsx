@@ -53,6 +53,20 @@ import { WeeklyScheduleView } from "@/components/schedule/WeeklyScheduleView"
 import { MonthlyScheduleView } from "@/components/schedule/MonthlyScheduleView"
 import { ScheduleDetailModal } from "@/components/schedule/ScheduleDetailModal"
 
+function getTimeRangeMinutes(startTime: string, endTime: string) {
+  const [startHour, startMinute] = startTime.split(":").map(Number)
+  const [endHour, endMinute] = endTime.split(":").map(Number)
+  const duration = endHour * 60 + endMinute - (startHour * 60 + startMinute)
+  return Number.isFinite(duration) && duration > 0 ? duration : 0
+}
+
+function formatDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} minutos`
+  const hours = Math.floor(minutes / 60)
+  const remainder = minutes % 60
+  return `${hours}h${remainder ? ` ${remainder}min` : ""}`
+}
+
 export const SchedulePage: React.FC = () => {
   const { user, isProfessional } = useAuth()
   const {
@@ -105,6 +119,7 @@ export const SchedulePage: React.FC = () => {
   const [enrolledPatients, setEnrolledPatients] = useState<string[]>([])
   const [modalError, setModalError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const fixedSessionDuration = getTimeRangeMinutes(startTime, endTime)
 
   // Seleção de Paciente no Agendamento Único (Balcão / Presencial)
   const [singlePatientId, setSinglePatientId] = useState("")
@@ -1012,7 +1027,7 @@ export const SchedulePage: React.FC = () => {
                 </span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Configure os detalhes do horário, ambiente, profissional e recorrência da grade.
+                Crie uma sessão fixa na agenda. Para oferecer horários automáticos aos pacientes, use Escalas &amp; Horários.
               </DialogDescription>
             </DialogHeader>
 
@@ -1141,6 +1156,20 @@ export const SchedulePage: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {fixedSessionDuration > 0 && (
+                <div className={`rounded-xl border p-3 text-xs flex items-start gap-2 ${
+                  fixedSessionDuration > 180
+                    ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                    : "border-primary/20 bg-primary/5 text-foreground"
+                }`}>
+                  <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+                  <p>
+                    Este cadastro criará <strong>uma única sessão fixa de {formatDuration(fixedSessionDuration)}</strong>, das {startTime} às {endTime}.
+                    {fixedSessionDuration > 180 && " Para gerar opções de 30 em 30 minutos, configure a Grade semanal em Escalas & Horários."}
+                  </p>
+                </div>
+              )}
 
               {/* Seção de Paciente no Agendamento Único (Balcão / Presencial) */}
               {creationMode === "single" && (

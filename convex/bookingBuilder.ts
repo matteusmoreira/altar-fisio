@@ -411,7 +411,9 @@ export const persistPublicBooking = internalMutation({
     const requireApproval = config?.requireApproval ?? false
     const initialStatus = requireApproval ? "pending_approval" : "confirmed"
 
-    const assignedScheduleId = requireApproval ? undefined : await bookGroupSession(ctx, { ...args, patientId: patient._id })
+    const assignedScheduleId = requireApproval
+      ? undefined
+      : (await bookGroupSession(ctx, { ...args, patientId: patient._id })).scheduleId
 
     // 4. Salva a submissão do agendamento público com as respostas da triagem
     const publicBookingId = await ctx.db.insert("publicBookings", {
@@ -567,7 +569,7 @@ export const updatePublicBookingStatus = mutation({
     const now = Date.now()
 
     if (args.status === "confirmed" && !booking.scheduleId) {
-      const scheduleId = await bookGroupSession(ctx, { ...booking, specialty: booking.specialty })
+      const { scheduleId } = await bookGroupSession(ctx, { ...booking, specialty: booking.specialty })
       await ctx.db.patch(args.bookingId, { status: 'confirmed', scheduleId })
     } else {
       await ctx.db.patch(args.bookingId, {

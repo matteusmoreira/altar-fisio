@@ -187,14 +187,12 @@ const PatientPortalContent: React.FC = () => {
 
   // Vagas Livres para o Modal de Novo Agendamento
   const availableSlotsBooking = useQuery(
-    api.patientPortal.listAvailableSlotsForBooking,
+    api.patientPortal.listAvailabilitySlotsForPatientBooking,
     isBookingModalOpen && currentBookingPackage
       ? {
           portalToken: portalToken!,
-          specialty: currentBookingPackage.specialty || "pilates",
-          startDate: bookingDate,
-          daysCount: 1,
-          patientId: patientId || undefined,
+          patientPackageId: currentBookingPackage._id,
+          date: bookingDate,
         }
       : "skip"
   )
@@ -292,7 +290,11 @@ const PatientPortalContent: React.FC = () => {
       const res = await bookAppointmentMutation({ portalToken: portalToken!,
         patientId: patientId as any,
         patientPackageId: currentBookingPackage._id as any,
-        scheduleId: bookingTargetSlot.scheduleId as any,
+        date: bookingTargetSlot.date,
+        startTime: bookingTargetSlot.startTime,
+        endTime: bookingTargetSlot.endTime,
+        roomId: bookingTargetSlot.roomId,
+        professionalId: bookingTargetSlot.professionalId,
         notes: bookingNotes.trim() || undefined,
       })
       showToast(res.message)
@@ -1455,12 +1457,12 @@ const PatientPortalContent: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
                       {availableSlotsBooking.map((slot: any) => {
-                        const isSelected = bookingTargetSlot?.scheduleId === slot.scheduleId
+                        const isSelected = bookingTargetSlot?.slotKey === slot.slotKey
                         const isEnrolled = slot.isAlreadyEnrolled
 
                         return (
                           <div
-                            key={slot.scheduleId}
+                            key={slot.slotKey}
                             onClick={() => {
                               if (!isEnrolled) setBookingTargetSlot(slot)
                             }}

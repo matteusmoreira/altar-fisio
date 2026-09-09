@@ -1,7 +1,12 @@
 import { requirePatient } from './lib/security'
 import { bookCredit, cancelReplacement, processWaitlist } from './lib/waitlist'
 import { cancelParticipantJobs, clinicToday, occupiesSeat, prepareReminders } from './lib/appointmentJobs'
+import { bookGroupSession } from './lib/bookGroupSession'
+import { getPublicSlots } from './lib/bookingSlots'
+import { validDate } from './lib/validation'
 import { query, mutation } from "./_generated/server"
+import type { QueryCtx, MutationCtx } from './_generated/server'
+import type { Doc } from './_generated/dataModel'
 import { api, internal } from "./_generated/api"
 import { v } from "convex/values"
 import { parseDateTimeToMs, checkTimeOverlap } from "./schedules"
@@ -9,6 +14,16 @@ import { parseDateTimeToMs, checkTimeOverlap } from "./schedules"
 // Limpa caracteres especiais de CPF e Telefones
 function cleanNumbers(val: string): string {
   return val.replace(/\D/g, "")
+}
+
+async function resolvePatientPackageService(
+  ctx: QueryCtx | MutationCtx,
+  patientPackage: Doc<'patientPackages'>
+): Promise<{ packageDefinition: Doc<'packages'> | null; service: Doc<'services'> | null }> {
+  const packageDefinition = await ctx.db.get(patientPackage.packageId)
+  const serviceId = patientPackage.serviceId ?? packageDefinition?.serviceId
+  const service = serviceId ? await ctx.db.get(serviceId) : null
+  return { packageDefinition, service: service?.active ? service : null }
 }
 
 // 1. Identificacao Rapida do Paciente (Opcao A - Sem Friccao de Senhas)
@@ -114,13 +129,12 @@ export const getPatientPortalData = query({
 
     const enrichedPackages = await Promise.all(
       rawPackages.map(async (pkg) => {
-        const pkgDef = await ctx.db.get(pkg.packageId)
+        const { packageDefinition: pkgDef, service } = await resolvePatientPackageService(ctx, pkg)
         let specialty: "pilates" | "fisioterapia" | "rpg" = "pilates"
         let serviceName = "Pilates"
-        if (pkgDef?.serviceId) {
-          const service = await ctx.db.get(pkgDef.serviceId)
-          if (service?.specialty) specialty = service.specialty
-          if (service?.name) serviceName = service.name
+        if (service) {
+          specialty = service.specialty
+          serviceName = service.name
         } else {
           const nameLower = (pkgDef?.name || "").toLowerCase()
           if (nameLower.includes("fisio")) specialty = "fisioterapia"
@@ -151,6 +165,7 @@ export const getPatientPortalData = query({
           status: actualStatus,
           packageName: pkgDef?.name || "Plano Altar Fisio",
           packagePrice: pkgDef?.price,
+          serviceId: service?._id,
           serviceName,
           specialty,
           usagePercentage,
@@ -532,6 +547,58 @@ export const listAvailableSlotsForBooking = query({
   },
 })
 
+// Slots virtuais da grade semanal para novos agendamentos pelo Portal.
+// Remarcações e reposições continuam usando apenas sessões já materializadas.
+export const listAvailabilitySlotsForPatientBooking = query({
+  args: {
+    portalToken: v.string(),
+    patientPackageId: v.string(),
+    date: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const patient = await requirePatient(ctx, args.portalToken)
+    validDate(args.date)
+
+    const patientPackageId = ctx.db.normalizeId('patientPackages', args.patientPackageId)
+    if (!patientPackageId) throw new Error('Plano/Pacote não encontrado.')
+    const patientPackage = await ctx.db.get(patientPackageId)
+    if (!patientPackage || patientPackage.patientId !== patient._id) throw new Error('Este plano pertence a outro paciente.')
+    if (patientPackage.status !== 'active' || patientPackage.remainingSessions < 1 || patientPackage.expiryDate < args.date) return []
+
+    const { service } = await resolvePatientPackageService(ctx, patientPackage)
+    if (!service) throw new Error('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
+
+    const patientParticipations = await ctx.db
+      .query('scheduleParticipants')
+      .withIndex('by_patient', q => q.eq('patientId', patient._id))
+      .collect()
+    const activeScheduleIds = new Set(
+      patientParticipations
+        .filter(participant => occupiesSeat(participant))
+        .map(participant => participant.scheduleId)
+    )
+
+    const slots = await getPublicSlots(ctx, { date: args.date, serviceId: service._id })
+    return slots.flatMap(slot => slot.rooms.map(room => ({
+      slotKey: `${args.date}-${slot.startTime}-${slot.endTime}-${room.roomId}-${room.professionalId}`,
+      scheduleId: room.existingScheduleId,
+      title: service.name,
+      specialty: service.specialty,
+      type: room.modality,
+      date: args.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      roomId: room.roomId,
+      roomName: room.roomName,
+      professionalId: room.professionalId,
+      professionalName: slot.availableProfessionals.find(professional => professional.id === room.professionalId)?.name || 'Profissional',
+      vacanciesLeft: room.availableSpots,
+      maxCapacity: room.capacity,
+      isAlreadyEnrolled: room.existingScheduleId ? activeScheduleIds.has(room.existingScheduleId) : false,
+    })))
+  },
+})
+
 // 7. Seed Auxiliar de Demonstracao (Garante agendamentos e vagas para teste imediato)
 
 
@@ -540,7 +607,11 @@ export const bookAppointmentFromPortal = mutation({
   args: { portalToken: v.string(),
     patientId: v.string(),
     patientPackageId: v.string(),
-    scheduleId: v.string(),
+    date: v.string(),
+    startTime: v.string(),
+    endTime: v.string(),
+    roomId: v.id('rooms'),
+    professionalId: v.id('professionals'),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
@@ -553,9 +624,6 @@ export const bookAppointmentFromPortal = mutation({
     const normPackageId = ctx.db.normalizeId("patientPackages", args.patientPackageId)
     if (!normPackageId) throw new Error("Plano/Pacote não encontrado.")
 
-    const normScheduleId = ctx.db.normalizeId("schedules", args.scheduleId)
-    if (!normScheduleId) throw new Error("Horário de aula não encontrado.")
-
     const patient = await ctx.db.get(normPatientId)
     if (!patient) throw new Error("Paciente não encontrado.")
 
@@ -564,7 +632,7 @@ export const bookAppointmentFromPortal = mutation({
     if (pkg.patientId !== normPatientId) throw new Error("Este plano pertence a outro aluno.")
 
     const todayStr = new Date().toISOString().split("T")[0]
-    if (pkg.status !== "active" || pkg.expiryDate < todayStr) {
+    if (pkg.status !== "active" || pkg.expiryDate < args.date || pkg.startDate > args.date) {
       throw new Error("Este plano está inativo ou expirado. Renove seu pacote na recepção.")
     }
 
@@ -598,62 +666,40 @@ export const bookAppointmentFromPortal = mutation({
       )
     }
 
-    // 2. Validar horário da aula
-    const schedule = await ctx.db.get(normScheduleId)
-    if (!schedule || schedule.status === "cancelled") {
-      throw new Error("Esta aula não está disponível para agendamento.")
-    }
+    const { service } = await resolvePatientPackageService(ctx, pkg)
+    if (!service) throw new Error('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
 
-    if (schedule.date < todayStr) {
-      throw new Error("Não é possível agendar aulas em datas passadas.")
-    }
-
-    // 3. Validar se o paciente já está matriculado nesta aula
-    await processWaitlist(ctx, normScheduleId)
-    const scheduleParts = await ctx.db
-      .query("scheduleParticipants")
-      .withIndex("by_schedule", (q) => q.eq("scheduleId", normScheduleId))
-      .collect()
-
-    const alreadyEnrolled = scheduleParts.some(
-      (p) => p.patientId === normPatientId && p.status !== "justified_absence" && p.status !== "absence"
-    )
-    if (alreadyEnrolled) {
-      throw new Error("Você já está matriculado(a) neste horário!")
-    }
-
-    // 4. Validar capacidade da turma
-    const activeParticipants = scheduleParts.filter(
-      (p) => p.status !== "justified_absence" && p.status !== "absence"
-    )
-    if (activeParticipants.length >= schedule.maxCapacity) {
-      throw new Error("Este horário acabou de preencher todas as vagas disponíveis!")
-    }
-
-    // 5. Validar anti-conflito de horário do paciente no mesmo dia
+    // 2. Validar anti-conflito de horário do paciente no mesmo dia
     for (const p of participations) {
       if (p.status === "justified_absence" || p.status === "absence") continue
       const s = await ctx.db.get(p.scheduleId)
-      if (!s || s.status === "cancelled" || s.date !== schedule.date) continue
+      if (!s || s.status === "cancelled" || s.date !== args.date) continue
 
-      if (checkTimeOverlap(s.startTime, s.endTime, schedule.startTime, schedule.endTime)) {
+      if (checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)) {
         throw new Error(
-          `Você já possui um atendimento conflitante das ${s.startTime} às ${s.endTime} no dia ${schedule.date}.`
+          `Você já possui um atendimento conflitante das ${s.startTime} às ${s.endTime} no dia ${args.date}.`
         )
       }
     }
 
-    // 6. Inserir participante na turma
-    const participantId = await ctx.db.insert("scheduleParticipants", {
-      scheduleId: normScheduleId,
+    // 3. Revalidar o slot e criar/reutilizar a turma de forma atômica.
+    const { scheduleId, participantId } = await bookGroupSession(ctx, {
       patientId: normPatientId,
-      status: "scheduled",
       patientPackageId: normPackageId,
+      serviceId: service._id,
+      packageName: service.name,
+      date: args.date,
+      startTime: args.startTime,
+      endTime: args.endTime,
+      roomId: args.roomId,
+      professionalId: args.professionalId,
       notes: args.notes || "Agendado pelo próprio aluno no Portal",
     })
-    await prepareReminders(ctx, participantId)
 
-    // 7. Notificações
+    const schedule = await ctx.db.get(scheduleId)
+    if (!schedule) throw new Error('Não foi possível confirmar o horário selecionado.')
+
+    // 4. Notificações
     const room = await ctx.db.get(schedule.roomId)
     const prof = await ctx.db.get(schedule.professionalId)
 

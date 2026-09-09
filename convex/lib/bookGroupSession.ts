@@ -8,7 +8,13 @@ import { prepareReminders } from './appointmentJobs'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
 
 export async function bookGroupSession(ctx: MutationCtx, args: BookingSelection & {
-  patientId: Id<'patients'>; roomId?: Id<'rooms'>; startTime: string; endTime: string; packageName?: string
+  patientId: Id<'patients'>
+  patientPackageId?: Id<'patientPackages'>
+  roomId?: Id<'rooms'>
+  startTime: string
+  endTime: string
+  packageName?: string
+  notes?: string
 }) {
   if (new Date(`${args.date}T${args.startTime}:00-03:00`).getTime() <= Date.now()) throw new ConvexError('Selecione um horário futuro.')
   const slots = await getPublicSlots(ctx, args)
@@ -26,7 +32,13 @@ export async function bookGroupSession(ctx: MutationCtx, args: BookingSelection 
     await validateSchedule(ctx, data)
     scheduleId = await ctx.db.insert('schedules', { ...data, title: `${args.packageName || selected.specialty.toUpperCase()} (Online)`, type: selected.modality, specialty: selected.specialty, status: 'scheduled' })
   }
-  const participantId = await ctx.db.insert('scheduleParticipants', { scheduleId, patientId: args.patientId, status: 'scheduled', notes: 'Agendamento online' })
+  const participantId = await ctx.db.insert('scheduleParticipants', {
+    scheduleId,
+    patientId: args.patientId,
+    status: 'scheduled',
+    patientPackageId: args.patientPackageId,
+    notes: args.notes || 'Agendamento online',
+  })
   await prepareReminders(ctx, participantId)
-  return scheduleId
+  return { scheduleId, participantId }
 }
