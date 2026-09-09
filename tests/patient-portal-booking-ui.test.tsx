@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { getFunctionName } from 'convex/server'
 
-const mocks = vi.hoisted(() => ({ mutation: vi.fn(), action: vi.fn() }))
+const mocks = vi.hoisted(() => ({ mutation: vi.fn(), action: vi.fn(), closed: false }))
 const portalData = {
   patient: { _id: 'patient', name: 'Paciente Teste' },
   upcomingSchedules: [],
@@ -31,11 +31,13 @@ const slots = [
 ]
 
 vi.mock('convex/react', () => ({
-  useQuery: (ref: any) => {
+  useQuery: (ref: any, args: unknown) => {
+    if (args === "skip") return undefined
     const name = getFunctionName(ref)
     if (name === 'clinic:getSettings') return { clinicName: 'Altar Fisio' }
     if (name === 'portalAccess:current') return { _id: 'patient' }
-    if (name === 'patientPortal:getPatientPortalData') return portalData
+    if (name === 'patientPortal:getPatientPortalData') return { ...portalData, portalBookingEnabled: !mocks.closed, portalBookingMessage: [{ type: 'paragraph', runs: [{ text: 'Agende com nossa equipe', bold: true }] }] }
+    if (name === 'patientPortal:listMonthlyClasses') return { freeBalance: 8, groups: slots.map((s, i) => ({ key: s.slotKey, recurringGroupId: s.slotKey, dayOfWeek: i + 1, title: s.title, startTime: s.startTime, endTime: s.endTime, professionalName: s.professionalName, roomName: s.roomName, dates: [{ scheduleId: s.slotKey, date: s.date, alreadyBooked: false, vacancies: 8, error: null }] })) }
     if (name === 'patientPortal:listAvailabilitySlotsForPatientBooking') return slots
     return []
   },
@@ -47,19 +49,28 @@ vi.mock('@/components/patients/PatientWaitlist', () => ({ PatientWaitlist: () =>
 
 import { PatientPortalPage } from '../src/pages/PatientPortalPage'
 
-beforeEach(() => sessionStorage.setItem('altar_patient_portal_token_v2', 'a'.repeat(64)))
+beforeEach(() => { mocks.closed = false; sessionStorage.setItem('altar_patient_portal_token_v2', 'a'.repeat(64)) })
 afterEach(() => {
   cleanup()
   sessionStorage.clear()
   vi.clearAllMocks()
 })
 
-test('new booking modal renders each weekly-grid slot separately', () => {
+test('monthly booking offers five frequencies and actual classes', () => {
   render(<PatientPortalPage />)
   fireEvent.click(screen.getByRole('button', { name: 'Agendar Aula' }))
-
-  expect(screen.getByText('08:00 às 08:30 • RPG e Pilates')).toBeTruthy()
-  expect(screen.getByText('08:30 às 09:00 • RPG e Pilates')).toBeTruthy()
-  expect(screen.getAllByText('8 vaga(s)')).toHaveLength(2)
+  for (const n of [1,2,3,4,5]) expect(screen.getByRole('button', { name: `${n}×` })).toBeTruthy()
+  expect(screen.getByText('Segunda · 08:00–08:30')).toBeTruthy()
+  expect(screen.getByText('Terça · 08:30–09:00')).toBeTruthy()
   expect(screen.queryByText(/08:00 às 17:00/)).toBeNull()
+})
+
+test('closure replaces booking controls and closes an already open form', () => {
+  const { rerender } = render(<PatientPortalPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Agendar Aula' }))
+  mocks.closed = true
+  rerender(<PatientPortalPage />)
+  expect(screen.getByText('Agende com nossa equipe')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Agendar Aula' })).toBeNull()
+  expect(screen.queryByRole('dialog')).toBeNull()
 })

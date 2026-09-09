@@ -2,6 +2,9 @@ import { occupiesSeat } from '../../../shared/scheduleOccupancy'
 import { WaitlistPanel } from './WaitlistPanel'
 import type { Id } from '@convex/_generated/dataModel'
 import React, { useState } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useMutation } from "@/lib/staffConvex"
+import { api } from "@convex/_generated/api"
 import type { Schedule, ScheduleParticipant } from "@/types"
 import {
   Dialog,
@@ -24,6 +27,7 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldAlert,
+  Trash2,
 } from "lucide-react"
 import { formatDateWithWeekdayBR, formatDateBR } from "@/lib/dateUtils"
 
@@ -55,6 +59,8 @@ export const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
   onOpenCancel,
   onNavigateToDay,
 }) => {
+  const { isAdmin } = useAuth()
+  const deleteSchedule = useMutation(api.schedules.deleteSchedule)
   const [loadingActionId, setLoadingActionId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
 
@@ -314,6 +320,25 @@ export const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
         <WaitlistPanel key={schedule.id} scheduleId={schedule.id as Id<"schedules">} />
 
         <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t border-border">
+          {isAdmin && (
+            <Button variant="destructive" size="sm" disabled={loadingActionId !== null}
+              className="gap-1.5 text-xs rounded-xl"
+              onClick={async () => {
+                if (!window.confirm(`Excluir ${schedule.title} em ${formatDateBR(schedule.date)} às ${schedule.startTime}? Este horário e seus ${schedule.participants?.length || 0} participante(s) serão removidos permanentemente. Outros horários da série e solicitações online serão mantidos.`)) return
+                setLoadingActionId("delete")
+                try {
+                  await deleteSchedule({ id: schedule.id as Id<"schedules"> })
+                  onClose()
+                } catch (err: any) {
+                  alert(err?.message || "Erro ao excluir agendamento.")
+                } finally {
+                  setLoadingActionId(null)
+                }
+              }}>
+              <Trash2 className="h-3.5 w-3.5" />
+              {loadingActionId === "delete" ? "Excluindo..." : "Excluir agendamento"}
+            </Button>
+          )}
           {onNavigateToDay && (
             <Button
               variant="outline"

@@ -138,7 +138,8 @@ test.each([true, false])('online booking (approval=%s) creates access atomically
     await ctx.db.insert('professionals', { name: 'Profissional teste', email: 'teste@example.invalid', phone: '', crefito: 'test', specialties: ['fisioterapia'], commissionType: 'fixed', commissionValue: 0, active: true })
     await ctx.db.insert('bookingFormConfig', { requireApproval, steps: [], fields: [], updatedAt: 1 })
   })
-  const args = { ...patient, date: '2099-09-09', startTime: '09:00', endTime: '09:55', specialty: 'fisioterapia' as const, answers: [] }
+  const serviceId = await t.run(ctx => ctx.db.insert('services', { name: 'Avaliação', specialty: 'fisioterapia', modality: 'individual', durationMinutes: 55, defaultPrice: 100, active: true, isEvaluation: true }))
+  const args = { ...patient, serviceId, date: '2099-09-09', startTime: '09:00', endTime: '09:55', specialty: 'fisioterapia' as const, answers: [] }
   const booking = await t.action(api.bookingBuilder.submitPublicBooking, args)
   expect(booking).toMatchObject({ success: true, portalAccessCreated: true, requireApproval })
   expect((await login(t)).token).toBeTruthy()

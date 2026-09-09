@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -32,11 +33,15 @@ import {
   Sparkles,
   AlertCircle,
   RotateCcw,
+  Trash2,
 } from "lucide-react"
 import { formatDateBR } from "@/lib/dateUtils"
 import { exportSingleBookingToXls, exportAllBookingsToXls } from "@/lib/exportToXls"
 
 export const OnlineBookingsPage: React.FC = () => {
+  const { isAdmin } = useAuth()
+  const deleteBooking = useMutation(api.bookingBuilder.deletePublicBooking)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const publicBookings = useQuery(api.bookingBuilder.listPublicBookings, {})
   const updateStatus = useMutation(api.bookingBuilder.updatePublicBookingStatus)
 
@@ -320,7 +325,27 @@ export const OnlineBookingsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                  <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 self-end md:self-center max-w-full">
+                    {isAdmin && (
+                      <Button variant="ghost" size="sm" className="text-destructive gap-1.5 h-8 text-xs"
+                        disabled={deletingId !== null}
+                        onClick={async () => {
+                          if (!window.confirm(`Excluir a solicitação de ${b.patientName} para ${formatDateBR(b.date)} às ${b.startTime}? As respostas serão apagadas permanentemente. Se houver um horário confirmado na agenda, ele será mantido e deverá ser excluído pela Agenda.`)) return
+                          setDeletingId(b._id)
+                          try {
+                            await deleteBooking({ bookingId: b._id })
+                            if (selectedBookingForModal?._id === b._id) setSelectedBookingForModal(null)
+                            showToast("Solicitação excluída com sucesso.")
+                          } catch (err: any) {
+                            showToast(err?.message || "Erro ao excluir solicitação.")
+                          } finally {
+                            setDeletingId(null)
+                          }
+                        }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {deletingId === b._id ? "Excluindo..." : "Excluir solicitação"}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

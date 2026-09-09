@@ -1,3 +1,4 @@
+import { InsuranceEditor } from "@/components/booking/InsuranceEditor"
 import React, { useState, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
@@ -104,7 +105,7 @@ export const BookingBuilderPage: React.FC = () => {
           "Seu agendamento foi registrado com sucesso! Entraremos em contato via WhatsApp com os detalhes da sua sessão."
       )
     }
-  }, [config])
+  }, [config?.requireApproval, config?.welcomeTitle, config?.welcomeMessage, config?.successMessage])
 
   // Link público base
   const publicUrl =
@@ -140,8 +141,9 @@ export const BookingBuilderPage: React.FC = () => {
 
   // Salvar Edição de Etapa
   const handleSaveStep = async () => {
-    if (!config || !editingStep) return
-    const updatedSteps = config.steps.map((s) =>
+    if (!config || !editingStep || !editingStep.title.trim()) return
+    const baseSteps = config.steps.some(s => s.id === editingStep.id) ? config.steps : [...config.steps, { ...editingStep, type: "intake_form" as const, order: config.steps.length + 1 }]
+    const updatedSteps = baseSteps.map((s) =>
       s.id === editingStep.id
         ? { ...s, title: editingStep.title.trim(), description: editingStep.description.trim() }
         : s
@@ -160,6 +162,17 @@ export const BookingBuilderPage: React.FC = () => {
     } catch (err: any) {
       showToast("Erro ao atualizar etapa: " + (err?.message || "Tente novamente"))
     }
+  }
+
+  const handleDeleteStep = async (stepId: string) => {
+    if (!config || !confirm("Excluir esta etapa e suas perguntas? As condições que dependem dessas perguntas também serão removidas.")) return
+    const steps = config.steps.filter(s => s.id !== stepId).map((s, i) => ({ ...s, order: i + 1 }))
+    const remaining = config.fields.filter(f => f.stepId !== stepId)
+    const fields = remaining.map(f => f.conditional && !remaining.some(parent => parent.id === f.conditional?.dependsOnFieldId) ? { ...f, conditional: undefined } : f)
+    try {
+      await updateConfig({ requireApproval, steps, fields, welcomeTitle, welcomeMessage, successMessage })
+      showToast("Etapa e perguntas removidas.")
+    } catch (err: any) { showToast("Erro ao excluir etapa: " + err.message) }
   }
 
   // Reordenar Etapa (Subir/Descer)
@@ -193,7 +206,7 @@ export const BookingBuilderPage: React.FC = () => {
   // Abrir Modal de Nova Pergunta
   const handleOpenNewField = () => {
     setEditingFieldId(null)
-    setFieldStepId("step_triagem")
+    setFieldStepId(config?.steps.find(s => s.type === "intake_form")?.id ?? "")
     setFieldLabel("")
     setFieldType("select")
     setFieldOptionsText("Opção 1, Opção 2, Opção 3")
@@ -230,7 +243,7 @@ export const BookingBuilderPage: React.FC = () => {
 
   // Salvar Pergunta no Construtor
   const handleSaveField = async () => {
-    if (!config || !fieldLabel.trim()) return
+    if (!config || !fieldLabel.trim() || !fieldStepId) return
 
     const parsedOptions =
       fieldType === "select" || fieldType === "multiselect"
@@ -301,7 +314,7 @@ export const BookingBuilderPage: React.FC = () => {
   // Excluir Pergunta
   const handleDeleteField = async (fieldId: string) => {
     if (!config) return
-    const updatedFields = config.fields.filter((f) => f.id !== fieldId)
+    const updatedFields = config.fields.filter((f) => f.id !== fieldId).map(f => f.conditional?.dependsOnFieldId === fieldId ? { ...f, conditional: undefined } : f)
     try {
       await updateConfig({
         requireApproval,
@@ -584,6 +597,8 @@ export const BookingBuilderPage: React.FC = () => {
             </CardContent>
           </Card>
 
+          <InsuranceEditor config={config} />
+
           {/* Card 3: Gerenciador de Etapas */}
           <Card className="border-border/70 shadow-sm rounded-2xl">
             <CardHeader className="p-5 border-b border-border/50">
@@ -596,13 +611,14 @@ export const BookingBuilderPage: React.FC = () => {
                     Etapas do Fluxo de Agendamento
                   </CardTitle>
                   <CardDescription className="text-xs text-muted-foreground">
-                    Reordene ou edite o título e a descrição de cada etapa exibida para o paciente.
+                    Adicione, exclua e reordene etapas de perguntas. Horário e dados pessoais são obrigatórios para concluir a reserva.
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
 
             <CardContent className="p-5 space-y-3">
+              <Button size="sm" disabled={!config} onClick={() => setEditingStep({ id: "step_" + crypto.randomUUID(), title: "Nova etapa", description: "" })}><Plus className="h-4 w-4 mr-1" />Adicionar etapa</Button>
               {config?.steps?.map((step, idx) => (
                 <div
                   key={step.id}
@@ -665,6 +681,7 @@ export const BookingBuilderPage: React.FC = () => {
                       <Edit2 className="h-3 w-3" />
                       <span>Editar</span>
                     </Button>
+                    {step.type === "intake_form" ? <Button variant="outline" size="sm" onClick={() => handleDeleteStep(step.id)} aria-label={`Excluir etapa ${step.title}`}><Trash2 className="h-3 w-3 mr-1" />Excluir</Button> : <span className="text-[10px] text-muted-foreground">Obrigatória</span>}
                   </div>
                 </div>
               ))}
@@ -691,6 +708,7 @@ export const BookingBuilderPage: React.FC = () => {
 
                 <Button
                   size="sm"
+                  disabled={!config?.steps.some(s => s.type === "intake_form")}
                   onClick={handleOpenNewField}
                   className="rounded-xl text-xs font-bold gap-1.5 h-9 shadow-sm shadow-primary/20 shrink-0"
                 >
@@ -879,6 +897,7 @@ export const BookingBuilderPage: React.FC = () => {
 
           {editingStep && (
             <div className="space-y-4 py-2 text-xs">
+
               <div className="space-y-1.5">
                 <label className="font-semibold text-foreground">Título da Etapa *</label>
                 <Input
@@ -936,6 +955,11 @@ export const BookingBuilderPage: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
+            <label className="block space-y-1">Etapa da pergunta
+              <Select aria-label="Etapa da pergunta" value={fieldStepId} onChange={e => setFieldStepId(e.target.value)}>
+                {config?.steps.filter(s => s.type === "intake_form").map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+              </Select>
+            </label>
             <div className="space-y-1.5">
               <label className="font-semibold text-foreground">Texto da Pergunta *</label>
               <Input
@@ -958,6 +982,7 @@ export const BookingBuilderPage: React.FC = () => {
                   <option value="select">Lista de Seleção (Dropdown)</option>
                   <option value="text">Texto Curto</option>
                   <option value="textarea">Texto Longo (Parágrafo)</option>
+                  <option value="multiselect">Múltipla escolha</option>
                 </Select>
               </div>
 
@@ -975,7 +1000,7 @@ export const BookingBuilderPage: React.FC = () => {
             </div>
 
             {/* Opções para Select */}
-            {fieldType === "select" && (
+            {(fieldType === "select" || fieldType === "multiselect") && (
               <div className="space-y-1.5">
                 <label className="font-semibold text-foreground">
                   Opções do Dropdown (separadas por vírgula)
@@ -999,6 +1024,9 @@ export const BookingBuilderPage: React.FC = () => {
               />
             </div>
 
+            <label className="block space-y-1">Texto de ajuda
+              <Input aria-label="Texto de ajuda" value={fieldHelpText} onChange={e => setFieldHelpText(e.target.value)} />
+            </label>
             {/* Configuração de Regra Condicional */}
             <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-3">
               <div className="flex items-center justify-between">

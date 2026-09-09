@@ -1,10 +1,55 @@
+import { monthDates } from '../shared/monthlySchedule'
+
+export const unlinkedClassSeries = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin'])
+    const today = new Date().toISOString().slice(0, 10)
+    const sessions = await ctx.db.query('schedules').withIndex('by_date', q => q.gte('date', today)).collect()
+    const series = new Map<string, { recurringGroupId: string; title: string; specialty: 'pilates' | 'rpg' | 'fisioterapia'; count: number }>()
+    for (const s of sessions.filter(s => s.recurringGroupId && !s.serviceId && s.type === 'turma' && s.status !== 'cancelled')) {
+      const row = series.get(s.recurringGroupId!) ?? { recurringGroupId: s.recurringGroupId!, title: s.title, specialty: s.specialty, count: 0 }
+      row.count++; series.set(row.recurringGroupId, row)
+    }
+    return [...series.values()]
+  },
+})
+
+export const linkClassSeriesService = mutation({
+  args: { sessionToken: v.string(), recurringGroupId: v.string(), serviceId: v.id('services') },
+  handler: async (ctx, args) => {
+    const actor = await requireStaff(ctx, args.sessionToken, ['admin'])
+    const service = await ctx.db.get(args.serviceId)
+    if (!service?.active || service.modality !== 'turma') throw new ConvexError('Selecione um tratamento em grupo ativo.')
+    const sessions = await ctx.db.query('schedules').withIndex('by_recurring_group', q => q.eq('recurringGroupId', args.recurringGroupId)).collect()
+    for (const s of sessions) {
+      if (s.serviceId && s.serviceId !== service._id) throw new ConvexError('Esta série já está vinculada a outro tratamento.')
+      if (s.type !== service.modality || s.specialty !== service.specialty) throw new ConvexError('O serviço deve ter a mesma especialidade e modalidade da série.')
+    }
+    for (const s of sessions) if (!s.serviceId) await ctx.db.patch(s._id, { serviceId: service._id })
+    await ctx.db.insert('auditLogs', { action: 'link_class_service', userName: actor.name, userRole: actor.role, details: `${sessions.length} encontros vinculados a ${service.name}.`, timestamp: Date.now() })
+    return sessions.length
+  },
+})
+
+export const previewRecurringMonth = query({
+  args: { sessionToken: v.string(), month: v.string(), startDate: v.string(), daysOfWeek: v.array(v.number()), roomId: v.id('rooms'), professionalId: v.id('professionals'), startTime: v.string(), endTime: v.string(), maxCapacity: v.number() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'professional', 'reception'])
+    const dates = monthDates(args.month, args.daysOfWeek, args.startDate)
+    return Promise.all(dates.map(async date => {
+      try { await validateSchedule(ctx, { ...args, date }); return { date, error: null } }
+      catch (error) { return { date, error: error instanceof ConvexError ? String(error.data) : 'Não foi possível validar esta data.' } }
+    }))
+  },
+})
 import { validDate, validateSchedule } from './lib/validation'
 import { requireStaff } from './lib/security'
 import { bookCredit, cancelReplacement, closeScheduleQueue, processWaitlist } from './lib/waitlist'
 import { cancelParticipantJobs, occupiesSeat, prepareReminders, scheduleFingerprint } from './lib/appointmentJobs'
 import { query, mutation } from "./_generated/server"
 import { api, internal } from "./_generated/api"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 
 // Função utilitária para checar sobreposição de horários
 export function checkTimeOverlap(
@@ -249,7 +294,9 @@ export const createRecurringScheduleSeries = mutation({
     maxCapacity: v.number(),
     daysOfWeek: v.array(v.number()), // 0: Dom, 1: Seg, 2: Ter, 3: Qua, 4: Qui, 5: Sex, 6: Sab
     startDate: v.string(), // YYYY-MM-DD
-    weeksCount: v.number(), // Ex: 4, 8, 12 semanas
+    month: v.optional(v.string()),
+    serviceId: v.optional(v.id("services")),
+    weeksCount: v.optional(v.number()), // Ex: 4, 8, 12 semanas
     notes: v.optional(v.string()),
     enrolledPatientIds: v.optional(v.array(v.id("patients"))),
   },
@@ -258,16 +305,16 @@ export const createRecurringScheduleSeries = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     if (args.startTime >= args.endTime) {
-      throw new Error("Horário de início deve ser anterior ao término.")
+      throw new ConvexError("Horário de início deve ser anterior ao término.")
     }
     if (args.daysOfWeek.length === 0) {
-      throw new Error("Selecione pelo menos um dia da semana para a recorrência.")
+      throw new ConvexError("Selecione pelo menos um dia da semana para a recorrência.")
     }
 
     const room = await ctx.db.get(args.roomId)
-    if (!room) throw new Error("Sala não encontrada")
+    if (!room) throw new ConvexError("Sala não encontrada")
     if (args.maxCapacity > room.capacity) {
-      throw new Error(`Capacidade excede o limite físico de ${room.capacity} alunos da sala ${room.name}.`)
+      throw new ConvexError(`Capacidade excede o limite físico de ${room.capacity} alunos da sala ${room.name}.`)
     }
 
     const recurringGroupId = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
@@ -275,18 +322,25 @@ export const createRecurringScheduleSeries = mutation({
     const skippedDates: { date: string; reason: string }[] = []
 
     const start = new Date(`${args.startDate}T12:00:00Z`)
-    const totalDays = args.weeksCount * 7
+    const totalDays = (args.weeksCount ?? 4) * 7
+    const monthlyDates = args.month ? monthDates(args.month, args.daysOfWeek, args.startDate) : null
+    const service = args.serviceId ? await ctx.db.get(args.serviceId) : null
+    if (args.month && (!service?.active || service.modality !== args.type || service.specialty !== args.specialty)) throw new ConvexError("Selecione um serviço ativo compatível com a turma.")
+    if (service?.maxCapacity && args.maxCapacity > service.maxCapacity) throw new ConvexError("Capacidade excede o serviço selecionado.")
+    const patientIds = [...new Set(args.enrolledPatientIds ?? [])]
+    if (patientIds.length > args.maxCapacity) throw new ConvexError("Quantidade de alunos excede a capacidade.")
+    for (const id of patientIds) if (!(await ctx.db.get(id))?.active) throw new ConvexError("Paciente indisponível.")
     validDate(args.startDate)
-    if (!Number.isInteger(args.weeksCount) || args.weeksCount < 1 || args.weeksCount > 52 || args.daysOfWeek.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error('Recorrência inválida.')
+    if ((!args.month && (!Number.isInteger(args.weeksCount) || args.weeksCount! < 1 || args.weeksCount! > 52)) || args.daysOfWeek.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new ConvexError('Recorrência inválida.')
 
-    for (let d = 0; d < totalDays; d++) {
+    for (let d = 0; d < (monthlyDates?.length ?? totalDays); d++) {
       const current = new Date(start)
-      current.setDate(current.getDate() + d)
-      const dayOfWeek = current.getDay()
+      current.setUTCDate(current.getUTCDate() + d)
+      const dayOfWeek = current.getUTCDay()
 
-      if (!args.daysOfWeek.includes(dayOfWeek)) continue
+      if (!monthlyDates && !args.daysOfWeek.includes(dayOfWeek)) continue
 
-      const dateStr = current.toISOString().split("T")[0]
+      const dateStr = monthlyDates ? monthlyDates[d] : current.toISOString().split("T")[0]
 
       // Checar conflitos na data específica
       const daySchedules = await ctx.db
@@ -300,6 +354,7 @@ export const createRecurringScheduleSeries = mutation({
         (s) => s.roomId === args.roomId && checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)
       )
       if (roomConflict) {
+        if (args.month) throw new ConvexError(`${dateStr}: sala ocupada por ${roomConflict.title} (${roomConflict.startTime}–${roomConflict.endTime}). Nenhuma sessão foi criada.`)
         skippedDates.push({ date: dateStr, reason: `Sala ocupada (${roomConflict.startTime}-${roomConflict.endTime})` })
         continue
       }
@@ -308,6 +363,7 @@ export const createRecurringScheduleSeries = mutation({
         (s) => s.professionalId === args.professionalId && checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)
       )
       if (profConflict) {
+        if (args.month) throw new ConvexError(`${dateStr}: profissional ocupado (${profConflict.startTime}–${profConflict.endTime}). Nenhuma sessão foi criada.`)
         skippedDates.push({ date: dateStr, reason: `Profissional ocupado (${profConflict.startTime}-${profConflict.endTime})` })
         continue
       }
@@ -315,6 +371,7 @@ export const createRecurringScheduleSeries = mutation({
       // Criar agendamento
       await validateSchedule(ctx, { ...args, date: dateStr })
       const scheduleId = await ctx.db.insert("schedules", {
+        serviceId: args.serviceId,
         title: args.title,
         type: args.type,
         specialty: args.specialty,
@@ -332,7 +389,7 @@ export const createRecurringScheduleSeries = mutation({
 
       // Matricular alunos fixos na série
       if (args.enrolledPatientIds && args.enrolledPatientIds.length > 0) {
-        for (const patientId of args.enrolledPatientIds) {
+        for (const patientId of patientIds) {
           const reminderParticipantId = await ctx.db.insert("scheduleParticipants", {
             scheduleId,
             patientId,
@@ -368,11 +425,14 @@ export const addParticipantToSchedule = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const schedule = await ctx.db.get(args.scheduleId)
-    if (!schedule) throw new Error("Agendamento não encontrado")
-    if (schedule.status !== 'scheduled' || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now()) throw new Error('Sessão indisponível.')
+    if (!schedule) throw new ConvexError('Este horário não existe mais. Atualize a agenda e selecione outro horário.')
+    if (schedule.status !== 'scheduled') throw new ConvexError('Esta sessão foi cancelada ou concluída. Selecione uma sessão agendada.')
+    if (parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now()) throw new ConvexError('Este horário já começou ou passou. Selecione um horário futuro para agendar o paciente.')
+    const patient = await ctx.db.get(args.patientId)
+    if (!patient?.active) throw new ConvexError('Este paciente está inativo ou não existe mais. Atualize o cadastro antes de agendar.')
     await processWaitlist(ctx, args.scheduleId)
     if (args.isReplacement) {
-      if (!args.replacementCreditId) throw new Error('Selecione um crédito de reposição.')
+      if (!args.replacementCreditId) throw new ConvexError('Selecione um crédito de reposição.')
       return bookCredit(ctx, args.patientId, args.replacementCreditId, args.scheduleId)
     }
 
@@ -386,11 +446,10 @@ export const addParticipantToSchedule = mutation({
       occupiesSeat
     )
 
+    if (activeParticipants.some(p => p.patientId === args.patientId)) throw new ConvexError('Este paciente já está agendado nesta sessão. Confira a lista de participantes.')
     if (activeParticipants.length >= schedule.maxCapacity) {
-      throw new Error("Esta turma já atingiu a sua capacidade máxima!")
+      throw new ConvexError('Esta turma está lotada. Selecione outro horário com vaga disponível.')
     }
-
-    if (activeParticipants.some(p => p.patientId === args.patientId)) throw new Error('Paciente já inscrito nesta sessão.')
     const participantId = await ctx.db.insert("scheduleParticipants", {
       scheduleId: args.scheduleId,
       patientId: args.patientId,
@@ -415,7 +474,7 @@ export const checkInParticipant = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const participant = await ctx.db.get(args.participantId)
-    if (!participant) throw new Error("Participante não encontrado")
+    if (!participant) throw new ConvexError("Participante não encontrado")
 
     const schedule = await ctx.db.get(participant.scheduleId)
     const wasPresent = participant.status === "present"
@@ -423,14 +482,14 @@ export const checkInParticipant = mutation({
     const isNowAbsence = args.status === "absence"
     const isNowScheduled = args.status === "scheduled"
     if ((isNowScheduled || isNowPresent) && !occupiesSeat(participant)) {
-      if (!schedule || schedule.status === 'cancelled') throw new Error('Sessão indisponível.')
+      if (!schedule || schedule.status === 'cancelled') throw new ConvexError('Sessão indisponível.')
       await processWaitlist(ctx, participant.scheduleId)
       const active = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', participant.scheduleId)).collect()
-      if (active.filter(occupiesSeat).length >= schedule.maxCapacity) throw new Error('A vaga foi ocupada. Não é possível reativar este participante.')
-      if (participant.replacementCreditId) throw new Error('Agende novamente usando o crédito de reposição disponível.')
+      if (active.filter(occupiesSeat).length >= schedule.maxCapacity) throw new ConvexError('A vaga foi ocupada. Não é possível reativar este participante.')
+      if (participant.replacementCreditId) throw new ConvexError('Agende novamente usando o crédito de reposição disponível.')
     }
 
-    let deductedPackageId = participant.patientPackageId
+    let deductedPackageId = participant.packageDebited === false ? undefined : participant.patientPackageId
     let resultMessage = ""
     let hasPackage = false
     let remainingSessions: number | undefined
@@ -438,8 +497,8 @@ export const checkInParticipant = mutation({
     // Helper interno para debitar 1 sessão
     const debitSessionHelper = async () => {
       let targetPackage = null
-      if (deductedPackageId) {
-        targetPackage = await ctx.db.get(deductedPackageId)
+      if (participant.patientPackageId) {
+        targetPackage = await ctx.db.get(participant.patientPackageId)
       }
 
       if (!targetPackage || targetPackage.status !== "active" || targetPackage.remainingSessions <= 0) {
@@ -554,7 +613,8 @@ export const checkInParticipant = mutation({
 
     await ctx.db.patch(args.participantId, {
       status: args.status,
-      patientPackageId: deductedPackageId,
+      patientPackageId: deductedPackageId ?? participant.patientPackageId,
+      packageDebited: Boolean(deductedPackageId),
       checkedInAt: args.status === "present" ? Date.now() : undefined,
       notes: updatedNotes,
     })
@@ -580,7 +640,7 @@ export const batchCheckInClass = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const schedule = await ctx.db.get(args.scheduleId)
-    if (!schedule) throw new Error("Turma não encontrada")
+    if (!schedule) throw new ConvexError("Turma não encontrada")
 
     const participants = await ctx.db
       .query("scheduleParticipants")
@@ -595,6 +655,11 @@ export const batchCheckInClass = mutation({
       if (p.status === "present" || !occupiesSeat(p)) continue
 
       let deductedPackageId = p.patientPackageId
+      if (p.packageDebited === false && p.patientPackageId) {
+        const pkg = await ctx.db.get(p.patientPackageId)
+        if (!pkg || pkg.remainingSessions < 1) throw new ConvexError('Saldo insuficiente no plano vinculado.')
+        await ctx.db.patch(pkg._id, { usedSessions: pkg.usedSessions + 1, remainingSessions: pkg.remainingSessions - 1, status: pkg.remainingSessions === 1 ? 'completed' : 'active' })
+      }
 
       if (!deductedPackageId) {
         const allPatientPackages = await ctx.db
@@ -639,6 +704,7 @@ export const batchCheckInClass = mutation({
       await ctx.db.patch(p._id, {
         status: "present",
         patientPackageId: deductedPackageId,
+        packageDebited: Boolean(deductedPackageId),
         checkedInAt: Date.now(),
       })
       await cancelParticipantJobs(ctx, p._id)
@@ -665,12 +731,12 @@ export const cancelWithReplacementCredit = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const participant = await ctx.db.get(args.participantId)
-    if (!participant) throw new Error("Participante não encontrado")
+    if (!participant) throw new ConvexError("Participante não encontrado")
 
     const schedule = await ctx.db.get(participant.scheduleId)
-    if (!schedule) throw new Error("Agendamento não encontrado")
+    if (!schedule) throw new ConvexError("Agendamento não encontrado")
 
-    if (!['scheduled', 'replacement'].includes(participant.status)) throw new Error('Este agendamento já foi processado.')
+    if (!['scheduled', 'replacement'].includes(participant.status)) throw new ConvexError('Este agendamento já foi processado.')
 
     const settings = await ctx.db.query("clinicSettings").first()
     const noticeHoursRequired = settings?.cancellationNoticeHours ?? 2
@@ -683,7 +749,7 @@ export const cancelWithReplacementCredit = mutation({
 
     const isWithinPolicy = hoursNotice >= noticeHoursRequired
     const shouldGrantCredit = isWithinPolicy || !!args.forceExemption
-    if (sessionTimeMs <= nowMs) throw new Error('Não é possível desmarcar uma sessão já iniciada.')
+    if (sessionTimeMs <= nowMs) throw new ConvexError('Não é possível desmarcar uma sessão já iniciada.')
     if (participant.replacementCreditId) return { ...await cancelReplacement(ctx, participant, isWithinPolicy, args.reason), hoursNotice, isExemption: false }
 
     if (shouldGrantCredit) {
@@ -896,7 +962,7 @@ export const updateSchedule = mutation({
 
     const { id, ...data } = args
     const existing = await ctx.db.get(id)
-    if (!existing) throw new Error("Agendamento não encontrado")
+    if (!existing) throw new ConvexError("Agendamento não encontrado")
 
     for (const key of Object.keys(data)) if (data[key as keyof typeof data] === undefined) delete data[key as keyof typeof data]
     await validateSchedule(ctx, { ...existing, ...data }, id)
@@ -923,7 +989,7 @@ export const deleteSchedule = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const schedule = await ctx.db.get(args.id)
-    if (!schedule) throw new Error("Agendamento não encontrado")
+    if (!schedule) throw new ConvexError("Agendamento não encontrado")
 
     if (args.deleteSeries && schedule.recurringGroupId) {
       const series = await ctx.db
@@ -973,8 +1039,8 @@ export const removeParticipantFromSchedule = mutation({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const part = await ctx.db.get(args.participantRecordId)
-    if (!part) throw new Error("Participante não encontrado")
-    if (part.scheduleId !== args.scheduleId) throw new Error('Participante não pertence à sessão.')
+    if (!part) throw new ConvexError("Participante não encontrado")
+    if (part.scheduleId !== args.scheduleId) throw new ConvexError('Participante não pertence à sessão.')
     if (part.replacementCreditId && ['scheduled', 'replacement'].includes(part.status)) {
       const s = await ctx.db.get(part.scheduleId)
       const settings = await ctx.db.query('clinicSettings').first()

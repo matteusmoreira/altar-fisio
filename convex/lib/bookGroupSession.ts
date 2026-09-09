@@ -1,7 +1,7 @@
 import type { MutationCtx } from '../_generated/server'
 import type { Id } from '../_generated/dataModel'
 import { ConvexError } from 'convex/values'
-import { getPublicSlots, type BookingSelection } from './bookingSlots'
+import { getPublicSlots, resolveBookingService, type BookingSelection } from './bookingSlots'
 import { validateSchedule } from './validation'
 import { processWaitlist } from './waitlist'
 import { prepareReminders } from './appointmentJobs'
@@ -30,7 +30,7 @@ export async function bookGroupSession(ctx: MutationCtx, args: BookingSelection 
   } else {
     const data = { roomId: selected.roomId, professionalId: selected.professionalId, date: args.date, startTime: args.startTime, endTime: args.endTime, maxCapacity: selected.capacity }
     await validateSchedule(ctx, data)
-    scheduleId = await ctx.db.insert('schedules', { ...data, title: `${args.packageName || selected.specialty.toUpperCase()} (Online)`, type: selected.modality, specialty: selected.specialty, status: 'scheduled' })
+    scheduleId = await ctx.db.insert('schedules', { ...data, serviceId: (await resolveBookingService(ctx, args))?._id, title: `${args.packageName || selected.specialty.toUpperCase()} (Online)`, type: selected.modality, specialty: selected.specialty, status: 'scheduled' })
   }
   const participantId = await ctx.db.insert('scheduleParticipants', {
     scheduleId,

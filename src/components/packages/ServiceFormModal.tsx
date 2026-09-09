@@ -38,6 +38,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   const [packagePricePerSession, setPackagePricePerSession] = useState<number | "">("")
   const [description, setDescription] = useState("")
   const [active, setActive] = useState(true)
+  const [isEvaluation, setIsEvaluation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -45,6 +46,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
 
   useEffect(() => {
     if (serviceToEdit) {
+      setIsEvaluation(serviceToEdit.isEvaluation === true)
       setName(serviceToEdit.name)
       setSpecialty(serviceToEdit.specialty)
       setModality(serviceToEdit.modality)
@@ -55,6 +57,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       setDescription(serviceToEdit.description || "")
       setActive(serviceToEdit.active)
     } else {
+      setIsEvaluation(false)
       setName("")
       setSpecialty("pilates")
       setModality("turma")
@@ -131,6 +134,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       if (isEditing && serviceToEdit) {
         await updateService(serviceToEdit.id, {
           name: trimmedName,
+          isEvaluation: modality === "individual" && isEvaluation,
           specialty,
           modality,
           maxCapacity: modality === "turma" ? Number(maxCapacity) : 1,
@@ -146,6 +150,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
       } else {
         const newId = await addService({
           name: trimmedName,
+          isEvaluation: modality === "individual" && isEvaluation,
           specialty,
           modality,
           maxCapacity: modality === "turma" ? Number(maxCapacity) : 1,
@@ -357,7 +362,8 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
             </div>
           </div>
 
-          <DialogFooter className="gap-2 pt-2 sm:space-x-2">
+          <div className="rounded-lg border p-3 space-y-2"><label className="flex gap-2 text-sm"><input type="checkbox" checked={modality === 'individual' && isEvaluation} disabled={modality !== 'individual'} onChange={e => setIsEvaluation(e.target.checked)} />Avaliação inicial disponível no agendamento público</label><p className="text-xs text-muted-foreground">Somente serviços individuais marcados como avaliação aparecem no /agendar. Tratamentos em grupo são reservados no /portal.</p></div>
+        <DialogFooter className="gap-2 pt-2 sm:space-x-2">
             <Button
               type="button"
               variant="outline"

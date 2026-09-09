@@ -76,7 +76,7 @@ export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingS
     let slot = grouped.get(key)
     if (!slot) { slot = { startTime: candidate.start, endTime: candidate.end, rooms: [] }; grouped.set(key, slot) }
     const overlaps = schedules.filter(s => (s.roomId === room._id || s.professionalId === professional._id) && s.startTime < candidate.end && candidate.start < s.endTime)
-    const existing = overlaps.find(s => s.roomId === room._id && s.professionalId === professional._id && s.specialty === candidate.specialty && s.startTime === candidate.start && s.endTime === candidate.end && (!service || s.type === service.modality))
+    const existing = overlaps.find(s => s.roomId === room._id && s.professionalId === professional._id && s.specialty === candidate.specialty && s.startTime === candidate.start && s.endTime === candidate.end && (!service || (s.type === service.modality && (!s.serviceId || s.serviceId === service._id))))
     if (overlaps.some(s => s._id !== existing?._id)) continue
     const modality = service?.modality ?? existing?.type ?? (room.capacity > 1 ? 'turma' : 'individual')
     const capacity = Math.min(room.capacity, modality === 'individual' ? 1 : service?.maxCapacity ?? room.capacity, existing?.maxCapacity ?? room.capacity)

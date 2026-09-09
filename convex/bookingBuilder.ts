@@ -1,3 +1,4 @@
+import { DEFAULT_INSURANCE_PARTNERS } from "../shared/bookingInsurance"
 import { validDate } from './lib/validation'
 import { requireStaff } from './lib/security'
 import { query, mutation, action, internalMutation } from "./_generated/server"
@@ -6,7 +7,7 @@ import { isValidCpf, isValidPhone, normalizeCpf, normalizePhone } from '../share
 import type { Id, Doc } from './_generated/dataModel'
 import { api, internal } from "./_generated/api"
 import { v, ConvexError } from "convex/values"
-import { getPublicSlots } from './lib/bookingSlots'
+import { getPublicSlots, resolveBookingService } from './lib/bookingSlots'
 import { bookGroupSession } from './lib/bookGroupSession'
 
 export const DEFAULT_BOOKING_STEPS = [
@@ -77,6 +78,7 @@ export const getBookingConfig = query({
     if (!config) {
       return {
         requireApproval: false,
+        insurancePartners: DEFAULT_INSURANCE_PARTNERS,
         steps: DEFAULT_BOOKING_STEPS,
         fields: DEFAULT_BOOKING_FIELDS,
         welcomeTitle: "Agende sua Consulta ou Sessão",
@@ -88,6 +90,7 @@ export const getBookingConfig = query({
     }
     return {
       ...config,
+      insurancePartners: config.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS,
       isDefault: false,
     }
   },
@@ -97,6 +100,7 @@ export const getBookingConfig = query({
 export const updateBookingConfig = mutation({
   args: { sessionToken: v.string(),
     requireApproval: v.boolean(),
+    insurancePartners: v.optional(v.array(v.object({ id: v.string(), name: v.string(), logo: v.optional(v.string()) }))),
     steps: v.array(
       v.object({
         id: v.string(),
@@ -144,11 +148,27 @@ export const updateBookingConfig = mutation({
     const actor = await requireStaff(ctx, sessionToken, ["admin","reception"]);
 
     const existing = await ctx.db.query("bookingFormConfig").first()
+    for (const type of ["slot_picker", "patient_info"]) {
+      if (args.steps.filter(step => step.type === type).length !== 1) throw new ConvexError("Mantenha uma etapa de horário e uma de dados pessoais.")
+    }
+    if (new Set(args.steps.map(step => step.id)).size !== args.steps.length || args.steps.some(step => !step.title.trim())) throw new ConvexError("Etapas inválidas.")
+    if (args.fields.some(field => !args.steps.some(step => step.id === field.stepId && step.type === "intake_form"))) throw new ConvexError("Selecione uma etapa de perguntas válida.")
+    const fieldIds = new Set(args.fields.map(field => field.id))
+    if (args.fields.some(field => field.conditional && (!fieldIds.has(field.conditional.dependsOnFieldId) || field.conditional.dependsOnFieldId === field.id))) throw new ConvexError("Revise as condições das perguntas.")
+    if (args.insurancePartners) {
+      if (JSON.stringify(args.insurancePartners).length > 600000) throw new ConvexError("As logos excedem 600 KB no total. Use imagens menores ou URLs HTTPS.")
+      if (args.insurancePartners.length > 30 || new Set(args.insurancePartners.map(p => p.id)).size !== args.insurancePartners.length) throw new ConvexError("Lista de convênios inválida (máximo 30).")
+      for (const partner of args.insurancePartners) {
+        if (!partner.id.trim() || !partner.name.trim() || partner.name === "Outro") throw new ConvexError("Informe o nome do convênio.")
+        if (partner.logo && (partner.logo.length > 220000 || !/^(https:\/\/|\/assets\/convenios\/|data:image\/(png|jpeg|webp);base64,)/.test(partner.logo))) throw new ConvexError("Use uma imagem PNG, JPG, WebP ou URL HTTPS válida (até 150 KB).")
+      }
+    }
     const now = Date.now()
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         requireApproval: args.requireApproval,
+        insurancePartners: args.insurancePartners ?? existing?.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS,
         steps: args.steps,
         fields: args.fields,
         welcomeTitle: args.welcomeTitle,
@@ -159,6 +179,7 @@ export const updateBookingConfig = mutation({
     } else {
       await ctx.db.insert("bookingFormConfig", {
         requireApproval: args.requireApproval,
+        insurancePartners: args.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS,
         steps: args.steps,
         fields: args.fields,
         welcomeTitle: args.welcomeTitle,
@@ -193,7 +214,8 @@ export const resetBookingConfigToDefault = mutation({
 
     const defaultData = {
       requireApproval: false,
-      steps: DEFAULT_BOOKING_STEPS,
+      insurancePartners: DEFAULT_INSURANCE_PARTNERS,
+        steps: DEFAULT_BOOKING_STEPS,
       fields: DEFAULT_BOOKING_FIELDS,
       welcomeTitle: "Agende sua Consulta ou Sessão",
       welcomeMessage: "Bem-vindo à Altar Fisio (Dr. Marcelo). Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade.",
@@ -228,7 +250,11 @@ export const listPublicAvailableSlots = query({
     serviceId: v.optional(v.id("services")),
     packageId: v.optional(v.id("packages")),
   },
-  handler: getPublicSlots,
+  handler: async (ctx, args) => {
+    const service = await resolveBookingService(ctx, args)
+    if (!service?.isEvaluation || service.modality !== 'individual') return []
+    return getPublicSlots(ctx, args)
+  },
 })
 
 // 4.1 Listar Pacotes e Planos Ativos para Agendamento Público
@@ -242,7 +268,7 @@ export const listPublicPackages = query({
     const publicPackages = await Promise.all(
       activePublicPackages.map(async (pkg) => {
         const service = await ctx.db.get(pkg.serviceId)
-        if (!service?.active) return null
+        if (!service?.active || !service.isEvaluation || service.modality !== 'individual') return null
         return {
           ...pkg,
           serviceName: service?.name || "Serviço",
@@ -299,6 +325,8 @@ export const submitPublicBooking = action({
 export const persistPublicBooking = internalMutation({
   args: { ...publicBookingArgs, credential: v.object(credentialFields) },
   handler: async (ctx, args) => {
+    const evaluation = await resolveBookingService(ctx, args)
+    if (!evaluation?.isEvaluation || evaluation.modality !== 'individual') throw new ConvexError('O agendamento público aceita somente avaliação individual. Tratamentos são reservados no portal do paciente.')
     const now = Date.now()
     validDate(args.date); validDate(args.birthDate)
     if (!args.name.trim() || args.name.length > 200 || args.answers.length > 50 || args.answers.some(a => a.answer.length > 5000) || (args.notes?.length || 0) > 5000) throw new ConvexError('Dados de agendamento inválidos.')
@@ -310,11 +338,11 @@ export const persistPublicBooking = internalMutation({
       const service = await ctx.db.get(pkg.serviceId)
       if (!service?.active) throw new ConvexError('Serviço indisponível.')
       args.serviceId = pkg.serviceId; args.packageName = pkg.name; args.specialty = service.specialty
-      args.selectedPrice = args.hasHealthInsurance ? (args.selectedPaymentMethod === 'pix' ? pkg.insurancePricePix ?? pkg.insurancePrice ?? pkg.price : pkg.insurancePrice ?? pkg.price) : (args.selectedPaymentMethod === 'pix' ? pkg.pricePix ?? pkg.price : pkg.price)
+      args.selectedPrice = args.hasHealthInsurance ? (args.selectedPaymentMethod === 'pix' ? pkg.insurancePricePix ?? pkg.insurancePrice ?? 0 : pkg.insurancePrice ?? 0) : (args.selectedPaymentMethod === 'pix' ? pkg.pricePix ?? pkg.price : pkg.price)
     } else if (args.serviceId) {
       const service = await ctx.db.get(args.serviceId)
       if (!service?.active) throw new ConvexError('Serviço indisponível.')
-      args.selectedPrice = service.defaultPrice; args.specialty = service.specialty
+      args.selectedPrice = args.hasHealthInsurance ? 0 : service.defaultPrice; args.specialty = service.specialty
     } else { args.selectedPrice = undefined }
 
     const slots = await getPublicSlots(ctx, args)
@@ -504,6 +532,25 @@ export const listPublicBookings = query({
 })
 
 // 7. Atualizar Status do Agendamento Público (Aprovar / Rejeitar pela Recepção)
+export const deletePublicBooking = mutation({
+  args: { sessionToken: v.string(), bookingId: v.id("publicBookings") },
+  handler: async (ctx, { sessionToken, bookingId }) => {
+    const actor = await requireStaff(ctx, sessionToken, ["admin"])
+    const booking = await ctx.db.get(bookingId)
+    if (!booking) throw new ConvexError("Solicitação não encontrada.")
+    await ctx.db.delete(bookingId)
+    await ctx.db.insert("auditLogs", {
+      action: "public_booking_deleted",
+      userName: actor.name,
+      userRole: actor.role,
+      patientId: booking.patientId,
+      details: `Solicitação online de ${booking.date} às ${booking.startTime} excluída. Agendamento na agenda preservado.`,
+      timestamp: Date.now(),
+    })
+    return { success: true }
+  },
+})
+
 export const updatePublicBookingStatus = mutation({
   args: { sessionToken: v.string(),
     bookingId: v.id("publicBookings"),
@@ -522,6 +569,8 @@ export const updatePublicBookingStatus = mutation({
     const now = Date.now()
 
     if (args.status === "confirmed" && !booking.scheduleId) {
+      const evaluation = await resolveBookingService(ctx, booking)
+      if (!evaluation?.isEvaluation || evaluation.modality !== 'individual') throw new ConvexError('Esta solicitação não é uma avaliação individual. Agende o tratamento pelo painel da clínica.')
       const { scheduleId } = await bookGroupSession(ctx, { ...booking, specialty: booking.specialty })
       await ctx.db.patch(args.bookingId, { status: 'confirmed', scheduleId })
     } else {

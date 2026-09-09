@@ -1,5 +1,31 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-09] Turmas mensais e controle administrativo de agendamento pelo portal
+- Turmas mensais geradas com calendário real por mês e dias selecionados (`monthDates`), sem aproximação por 4 semanas, com prévia e prevenção atômica de conflitos de sala ou profissional.
+- Matrícula pelo portal com fluxo multi-etapas: plano -> mês -> frequência (1 a 5x) -> seleção de turmas do mesmo tratamento -> revisão com lista de encontros -> confirmação atômica e idempotente (`monthlyBookingReceipts`). Saldo livre deduz compromissos futuros e créditos de reposição válidos.
+- Fechamento do portal pelo administrador com editor visual rico (`PortalBookingSettings`), sanitização estrita no servidor (somente parágrafos/listas, negrito/itálico e links https/tel/mailto seguros) e persistência em `clinicSettings`. Quando fechado, todas as escritas no backend são bloqueadas por `assertPortalBookingOpen` e na interface os controles de novas reservas, remarcações e reposições são substituídos pelo aviso em destaque, interrompendo janelas abertas imediatamente.
+- Ambiente Node 25 em testes com jsdom: o global experimental `localStorage` do Node moderno exige stub com `vi.stubGlobal('localStorage', ...)` para evitar `TypeError: localStorage.getItem is not a function`.
+- Validação: Todos os 26 arquivos de teste (170 testes Vitest + 3 testes de service worker), typecheck TypeScript (`tsc --noEmit`), build de produção com Vite e verificação com oxlint passaram 100%.
+
+### [2026-09-09] Convênio sem preço no agendamento público
+- Valores ausentes de convênio não devem usar a tabela particular como fallback. Página e persistência agora usam zero; preços públicos aparecem somente em Particular, inclusive na confirmação.
+- Ao apagar preços de convênio na edição do pacote, enviar zero explicitamente: valores undefined são omitidos no transporte e podem preservar o preço antigo na atualização parcial.
+- Validação local: 37 testes de agenda/convênios, TypeScript e build passaram. Esta correção ainda não foi publicada.
+
+### [2026-09-09] Exclusão de solicitações e horários pelo administrador
+- Publicação concluída: Convex `exuberant-guanaco-180` e Vercel `dpl_HQL1hqDSs69iUL1bHq2ifw6Q3Enf` (READY), alias `https://altar-fisio.vercel.app`. Os 43 testes da cópia de publicação, TypeScript e build passaram; HTTP 200 e ambos os controles foram verificados nos assets publicados. Nenhum registro real foi excluído.
+- Produção estava à frente do HEAD: a primeira simulação com `git archive HEAD` foi rejeitada por não aceitar `bookingFormConfig.insurancePartners`, já persistido. A cópia de publicação precisou preservar as alterações locais de convênios/construtor; o segundo dry-run passou e a consulta posterior confirmou seis convênios. Antes de isolar releases pelo Git, verificar também a compatibilidade com o schema publicado.
+- Solicitações públicas e sessões são registros separados. `deletePublicBooking` exige admin, registra auditoria e preserva sessão, participantes e paciente. A confirmação explica essa separação.
+- Os detalhes da Agenda agora expõem a exclusão do horário ao admin, reutilizando `schedules.deleteSchedule` sem excluir a série. Essa operação existente remove todos os participantes daquele horário; a confirmação informa a quantidade afetada. As permissões preexistentes dessa operação para recepção/profissional foram preservadas.
+- Validação local: 31 testes passaram (exclusão, controles e agendamento em grupo), TypeScript e build passaram. Sem publicação ou exclusão de registros reais. O build usa URL HTTPS fictícia apenas para validação e deve ser regenerado com o destino correto antes de publicar.
+
+### [2026-09-09] Logos e edição estrutural do construtor
+- Logos com largura fixa ultrapassavam os cards ao distribuir sete colunas. A grade agora usa até cinco colunas e imagens limitadas à largura interna; conferência visual com dados de teste em 390 e 1920 px não apresentou overflow.
+- Convênios ficam em `bookingFormConfig.insurancePartners`. `undefined` mantém compatibilidade com os padrões; `[]` significa exclusão explícita. Salvar textos ou perguntas deve preservar a lista existente. Uploads aceitam PNG/JPG/WebP até 150 KB, com limite total de 600 KB; imagens maiores podem usar URL HTTPS.
+- Excluir uma etapa de perguntas exige excluir seus campos e remover condições dependentes. Horário e identificação continuam obrigatórios, com validação também no backend. A pergunta deve apontar para uma etapa de formulário existente.
+- Validação desta alteração: testes de persistência com convex-test, controles com Testing Library, build e layout estático renderizado dos componentes reais. Isso não comprova publicação ou fluxo autenticado em produção.
+
+
 ### [2026-09-09] Construtor divergente da agenda pública
 - Manter um mock manual da agenda dentro do construtor fez a prévia ficar desatualizada quando a página pública ganhou planos, preços e logos de convênios.
 - O construtor agora incorpora a própria rota `/agendar?preview=builder`, com visualizações de celular e desktop. O parâmetro de prévia bloqueia a mutação final, evitando reservas acidentais durante a simulação.
@@ -357,3 +383,16 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ### [2026-09-08] Erro genérico ao salvar horário semanal
 - A tela de disponibilidade mostrava criar/editar para todos os perfis, mas `availability.saveRule` sempre exigiu `admin` no backend. Em produção, erros `Error` do Convex apareciam apenas como `Server Error Called by client`, ocultando a causa para o usuário.
 - A interface agora deixa as regras visíveis para consulta e esconde as ações de escrita para não-admin; o backend mantém a proteção e devolve `ConvexError` para permissão, conflito de sala/profissional e valores inválidos. A regressão está coberta em `tests/availability.test.ts`.
+
+### [2026-09-09] Encaixe confirmava sem salvar o participante
+- `addParticipantToClass` consultava `schedules` e `patients` locais vazios, enquanto a tela exibia as queries Convex; o retorno silencioso gerava falso sucesso sem chamar a mutação. A função agora aguarda diretamente o servidor e propaga falhas, usando as consultas reativas para participantes, vagas e créditos. Isso também cobre o horário recém-criado antes da atualização da query.
+- Regressão reproduzida antes da correção. Seis testes do provider/tela cobrem os dois botões, atualização do participante/vagas, criação seguida de matrícula e propagação de erros. Total da verificação dirigida: 31 testes, TypeScript e build aprovados. Usar Node 24: o Node 25 do sistema expõe `localStorage` sem `getItem` no ambiente de teste.
+- Frontend publicado em `https://altar-fisio.vercel.app`, deployment `dpl_GrveXszpZK3Qs2SXQ9GAFqrYgGgr` READY. Sem alteração no backend ou agendamento em paciente real; a validação de fluxo foi automatizada com mocks das chamadas Convex. A regra existente do servidor continua rejeitando sessões passadas.
+
+
+### [2026-09-09] Erros claros no encaixe administrativo
+- Logs remotos de `schedules:addParticipantToSchedule` às 12:56 confirmaram `Sessão indisponível`. A mutação bloqueia sessões não agendadas ou cujo início já passou; a reprodução automatizada com 09/09 às 08:00 confirmou o bloqueio temporal. A permissão de registro retroativo ainda depende da decisão do responsável.
+- Regras da agenda, validação, autenticação de funcionários e créditos de reposição agora usam `ConvexError` para transportar motivos de negócio. `staffConvex` extrai somente os dados públicos de erros nas mutations/actions e usa orientação genérica nos imprevistos, preservando a causa técnica no erro. Não exibir diretamente a mensagem técnica do transporte Convex.
+- Encaixe verifica paciente ativo e prioriza aviso de duplicidade antes de lotação. Testes cobrem persistência, duplicidade, lotação, horário passado, status, sessão expirada, crédito obrigatório e tratamento de erros. Os 147 testes Vitest passaram entre a suíte e a repetição dirigida dos três testes afetados por texto; três testes de service worker, TypeScript e build de validação passaram. Alterações locais, sem publicação ou agendamento em paciente real.
+
+- Publicação autorizada e concluída: Convex `exuberant-guanaco-180` (dry-run e deploy aprovados) e Vercel `dpl_8ZfF1PK1e8W7VDkoAdg7soqPWM2P` READY no alias `https://altar-fisio.vercel.app`. Consulta remota com sessão inválida confirmou o novo `errorData` legível sem acessar pacientes. Bundle público contém o tratamento de erros e o host correto; `/`, `/login` e `/sw.js` responderam 200. Nenhum erro encontrado nos logs Vercel consultados. Horários passados continuam bloqueados; sem commit/push e sem agendamento real. Lint dirigido teve apenas aviso preexistente de import não utilizado.

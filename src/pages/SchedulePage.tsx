@@ -1,5 +1,7 @@
+import { useQuery } from '@/lib/staffConvex'
+import { api } from '@convex/_generated/api'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
 import type { Schedule, ScheduleParticipant } from "@/types"
@@ -70,6 +72,7 @@ function formatDuration(minutes: number) {
 export const SchedulePage: React.FC = () => {
   const { user, isProfessional } = useAuth()
   const {
+    services,
     schedules,
     rooms,
     professionals,
@@ -115,7 +118,14 @@ export const SchedulePage: React.FC = () => {
   const [startTime, setStartTime] = useState("08:00")
   const [endTime, setEndTime] = useState("08:55")
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 3]) // Seg e Qua
-  const [weeksCount, setWeeksCount] = useState<number>(4)
+  const [capacity, setCapacity] = useState(4)
+  useEffect(() => {
+    if (!isNewModalOpen) return
+    if (!rooms.some(r => r.id === roomId && r.isActive)) setRoomId(rooms.find(r => r.isActive)?.id ?? '')
+    if (!professionals.some(p => p.id === profId && p.active)) setProfId(professionals.find(p => p.active)?.id ?? '')
+  }, [isNewModalOpen, rooms, professionals, roomId, profId])
+  const [serviceId, setServiceId] = useState("")
+  const preview = useQuery(api.schedules.previewRecurringMonth, isNewModalOpen && creationMode === "recurring" && roomId && profId && daysOfWeek.length && startTime < endTime ? { month: selectedDate.slice(0, 7), startDate: selectedDate, daysOfWeek, roomId: roomId as any, professionalId: profId as any, startTime, endTime, maxCapacity: capacity } : "skip")
   const [enrolledPatients, setEnrolledPatients] = useState<string[]>([])
   const [modalError, setModalError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -271,6 +281,7 @@ export const SchedulePage: React.FC = () => {
           return
         }
 
+        if (!serviceId || !preview?.length || preview.some(d => d.error)) { setModalError("Selecione o tratamento e resolva os impedimentos da prévia."); return }
         const res = await addRecurringScheduleSeries({
           title: title || `Turma Recorrente de ${specialty.toUpperCase()}`,
           type,
@@ -279,10 +290,11 @@ export const SchedulePage: React.FC = () => {
           professionalId: profId,
           startTime,
           endTime,
-          maxCapacity: room.capacity,
+          maxCapacity: capacity,
           daysOfWeek,
           startDate: selectedDate,
-          weeksCount,
+          month: selectedDate.slice(0, 7),
+          serviceId,
           enrolledPatientIds: enrolledPatients,
         })
 
@@ -507,7 +519,7 @@ export const SchedulePage: React.FC = () => {
                 onChange={(e) => setSelectedRoom(e.target.value)}
               >
                 <option value="all">Todas as Salas</option>
-                {rooms.map((r) => (
+                {rooms.filter(r => r.isActive).map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
@@ -522,7 +534,7 @@ export const SchedulePage: React.FC = () => {
                 onChange={(e) => setSelectedProf(e.target.value)}
               >
                 <option value="all">Todos os Profissionais</option>
-                {professionals.map((p) => (
+                {professionals.filter(p => p.active).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
@@ -1022,7 +1034,7 @@ export const SchedulePage: React.FC = () => {
                 )}
                 <span>
                   {creationMode === "recurring"
-                    ? "Nova Turma Recorrente Semanal"
+                    ? "Nova Turma Recorrente Mensal"
                     : "Novo Agendamento / Horário"}
                 </span>
               </DialogTitle>
@@ -1115,7 +1127,7 @@ export const SchedulePage: React.FC = () => {
                     value={roomId}
                     onChange={(e) => setRoomId(e.target.value)}
                   >
-                    {rooms.map((r) => (
+                    {rooms.filter(r => r.isActive).map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name} (Capacidade: {r.capacity})
                       </option>
@@ -1129,7 +1141,7 @@ export const SchedulePage: React.FC = () => {
                     value={profId}
                     onChange={(e) => setProfId(e.target.value)}
                   >
-                    {professionals.map((p) => (
+                    {professionals.filter(p => p.active).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -1165,7 +1177,7 @@ export const SchedulePage: React.FC = () => {
                 }`}>
                   <Clock className="h-4 w-4 shrink-0 mt-0.5" />
                   <p>
-                    Este cadastro criará <strong>uma única sessão fixa de {formatDuration(fixedSessionDuration)}</strong>, das {startTime} às {endTime}.
+                    {creationMode === "recurring" ? "Cada encontro terá" : "Este cadastro criará uma sessão de"} <strong>{formatDuration(fixedSessionDuration)}</strong>, das {startTime} às {endTime}.
                     {fixedSessionDuration > 180 && " Para gerar opções de 30 em 30 minutos, configure a Grade semanal em Escalas & Horários."}
                   </p>
                 </div>
@@ -1253,6 +1265,7 @@ export const SchedulePage: React.FC = () => {
                 </div>
               )}
 
+              {creationMode === 'recurring' && <div className="space-y-2"><label className="block font-medium text-sm">Tratamento contratado</label><Select value={serviceId} onChange={e => { setServiceId(e.target.value); const svc = services.find(s => s.id === e.target.value); if (svc) { setSpecialty(svc.specialty); setType(svc.modality) } }}><option value="">Selecione o serviço</option>{services.filter(s => s.active && s.modality === 'turma').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select><p className="text-xs text-muted-foreground">Para o tratamento conjunto, selecione o serviço Pilates e RPG usado nos planos dos pacientes.</p></div>}
               {/* Seção Exclusiva para Turmas Recorrentes */}
               {creationMode === "recurring" && (
                 <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-3 mt-2">
@@ -1306,22 +1319,10 @@ export const SchedulePage: React.FC = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/85 mb-1.5">
-                        Duração da Série
-                      </label>
-                      <Select
-                        value={weeksCount}
-                        onChange={(e) => setWeeksCount(Number(e.target.value))}
-                      >
-                        <option value={4}>4 semanas (1 mês)</option>
-                        <option value={8}>8 semanas (2 meses)</option>
-                        <option value={12}>12 semanas (3 meses)</option>
-                        <option value={24}>24 semanas (6 meses)</option>
-                      </Select>
-                    </div>
+                    <div><label className="block text-xs font-semibold mb-1.5">Mês das turmas</label><Input type="month" value={selectedDate.slice(0, 7)} onChange={e => { if (e.target.value) setSelectedDate(`${e.target.value}-01`) }} /></div>
                   </div>
 
+                  <div className="rounded-lg bg-background p-3 text-xs space-y-1"><label className="block">Vagas por encontro<Input type="number" min={1} max={Math.min(rooms.find(r => r.id === roomId)?.capacity ?? 100, services.find(s => s.id === serviceId)?.maxCapacity ?? 100)} value={capacity} onChange={e => setCapacity(Number(e.target.value))} /></label><strong>Prévia: {preview?.length ?? 0} encontros no mês</strong>{preview?.map(d => <p key={d.date} className={d.error ? 'text-destructive' : ''}>{formatDateBR(d.date)} · {startTime}–{endTime}{d.error ? ` · ${d.error}` : ''}</p>)}</div>
                   {/* Seleção de Alunos Fixos da Turma */}
                   <div className="space-y-2 pt-2 border-t border-primary/10">
                     <label className="text-xs font-semibold text-foreground/90 flex items-center justify-between">

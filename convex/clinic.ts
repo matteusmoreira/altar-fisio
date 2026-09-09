@@ -2,6 +2,23 @@ import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
 import { v } from "convex/values"
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../shared/healthInsurance'
+import { validatePortalMessage, messageText } from '../shared/portalMessage'
+import { internal } from './_generated/api'
+
+export const updatePortalBooking = mutation({
+  args: { sessionToken: v.string(), enabled: v.boolean(), message: v.array(v.object({ type: v.union(v.literal('paragraph'), v.literal('bullet')), runs: v.array(v.object({ text: v.string(), bold: v.optional(v.boolean()), italic: v.optional(v.boolean()), href: v.optional(v.string()) })) })) },
+  handler: async (ctx, args) => {
+    const actor = await requireStaff(ctx, args.sessionToken, ['admin'])
+    const message = validatePortalMessage(args.message)
+    if (!args.enabled && !messageText(message)) throw new Error('Informe a mensagem que os pacientes verão.')
+    const settings = await ctx.db.query('clinicSettings').first()
+    const patch = { portalBookingEnabled: args.enabled, portalBookingMessage: message }
+    if (settings) await ctx.db.patch(settings._id, patch)
+    else await ctx.db.insert('clinicSettings', { clinicName: 'Altar Fisio', clinicSubtitle: '', primaryColor: '#10b981', colorPreset: 'emerald', mode: 'light', cancellationNoticeHours: 2, replacementExpiryDays: 30, ...patch })
+    await ctx.db.insert('auditLogs', { action: 'update_portal_booking', userName: actor.name, userRole: actor.role, details: `Reservas no portal: ${args.enabled ? 'abertas' : 'fechadas'}. Mensagem atualizada.`, timestamp: Date.now() })
+    if (args.enabled && settings?.portalBookingEnabled === false) await ctx.scheduler.runAfter(0, internal.waitlist.resume, { cursor: null })
+  },
+})
 
 export const getSettings = query({
   handler: async (ctx) => {

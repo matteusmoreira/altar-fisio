@@ -817,6 +817,8 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         daysOfWeek: params.daysOfWeek,
         startDate: params.startDate,
         weeksCount: params.weeksCount,
+        month: params.month,
+        serviceId: params.serviceId as any,
         notes: params.notes,
         enrolledPatientIds: params.enrolledPatientIds as any,
       })
@@ -986,6 +988,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       packagePricePerSession: serviceData.packagePricePerSession,
       description: serviceData.description,
       active: serviceData.active,
+      isEvaluation: serviceData.isEvaluation,
     })
     return id
   }
@@ -1007,6 +1010,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       packagePricePerSession: data.packagePricePerSession,
       description: data.description,
       active: data.active,
+      isEvaluation: data.isEvaluation,
     })
   }
 
@@ -1220,55 +1224,14 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     isReplacement?: boolean,
     replacementCreditId?: string
   ) => {
-    const schedule = schedules.find((s) => s.id === scheduleId)
-    const patient = patients.find((p) => p.id === patientId)
-    if (!schedule || !patient) return
-
-    const activeParticipants = schedule.participants.filter(
-      (p) => p.status !== "justified_absence"
-    )
-    if (activeParticipants.length >= schedule.maxCapacity) {
-      throw new Error("A capacidade máxima da sala já foi atingida!")
-    }
-
-    try {
-      await addParticipantMutation({
-        scheduleId: scheduleId as any,
-        patientId: patientId as any,
-        isReplacement: !!isReplacement,
-        replacementCreditId: replacementCreditId as any,
-      })
-    } catch (err: any) {
-      if (err?.message) throw err
-    }
-
-    const newParticipant: any = {
-      id: `part_${Date.now()}`,
-      patientId,
-      patientName: patient.name,
-      patientPhone: patient.phone,
-      status: isReplacement ? "replacement" : "scheduled",
-    }
-
-    setSchedules((prev) =>
-      prev.map((s) => {
-        if (s.id !== scheduleId) return s
-        return {
-          ...s,
-          participants: [...s.participants, newParticipant],
-        }
-      })
-    )
-
-    if (isReplacement) {
-      setReplacementCredits((prev) =>
-        prev.map((c) =>
-          (replacementCreditId ? c.id === replacementCreditId : (c.patientId === patientId && c.status === "available"))
-            ? { ...c, status: "used" }
-            : c
-        )
-      )
-    }
+    // O servidor valida a sessão, a capacidade e o crédito, inclusive antes
+    // de um horário recém-criado chegar à consulta reativa da agenda.
+    await addParticipantMutation({
+      scheduleId: scheduleId as any,
+      patientId: patientId as any,
+      isReplacement: !!isReplacement,
+      replacementCreditId: replacementCreditId as any,
+    })
   }
 
   const getClinicalRecord = (patientId: string) => clinicalRecords[patientId]

@@ -3,6 +3,7 @@ import { getFunctionName, type FunctionReference, type FunctionArgs, type Functi
 import { useAuth } from '@/contexts/AuthContext'
 import { accessPolicy } from '../../shared/accessPolicy'
 import { useCallback } from 'react'
+import { staffErrorMessage } from './staffErrors'
 
 type Args<F extends FunctionReference<any>> = Omit<FunctionArgs<F>, 'sessionToken'>
 export function useQuery<F extends FunctionReference<'query'>>(reference: F, args?: Args<F> | 'skip'): FunctionReturnType<F> | undefined {
@@ -16,7 +17,9 @@ export function useMutation<F extends FunctionReference<'mutation'>>(reference: 
   const call = mutation(reference)
   return useCallback((args?: Args<F>): Promise<FunctionReturnType<F>> => {
     if (!token) return Promise.reject(new Error('Entre novamente para continuar.'))
-    return call({ ...args, sessionToken: token } as any)
+    return call({ ...args, sessionToken: token } as any).catch((error: unknown) => {
+      throw new Error(staffErrorMessage(error), { cause: error })
+    })
   }, [call, token])
 }
 export function useAction<F extends FunctionReference<'action'>>(reference: F) {
@@ -24,6 +27,8 @@ export function useAction<F extends FunctionReference<'action'>>(reference: F) {
   const call = action(reference)
   return useCallback((args?: Args<F>): Promise<FunctionReturnType<F>> => {
     if (!token) return Promise.reject(new Error('Entre novamente para continuar.'))
-    return call({ ...args, sessionToken: token } as any)
+    return call({ ...args, sessionToken: token } as any).catch((error: unknown) => {
+      throw new Error(staffErrorMessage(error), { cause: error })
+    })
   }, [call, token])
 }

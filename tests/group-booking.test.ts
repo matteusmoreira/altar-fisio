@@ -1,3 +1,5 @@
+import { getPublicSlots } from '../convex/lib/bookingSlots'
+import { bookGroupSession } from '../convex/lib/bookGroupSession'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { convexTest } from 'convex-test'
 import schema from '../convex/schema'
@@ -40,9 +42,38 @@ async function fixture(requireApproval = false) {
   return { t, ...ids }
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>
-const query = (f: Fixture, extra = {}) => f.t.query(api.bookingBuilder.listPublicAvailableSlots, { date, serviceId: f.serviceId, ...extra })
-const reserve = (f: Fixture, index: number, extra = {}) => f.t.mutation(internal.bookingBuilder.persistPublicBooking, {
+const query = (f: Fixture, extra = {}) => f.t.run(ctx => getPublicSlots(ctx, { date, serviceId: f.serviceId, ...extra }))
+const publicReserve = (f: Fixture, index: number, extra = {}) => f.t.mutation(internal.bookingBuilder.persistPublicBooking, {
   name: `Paciente ${index}`, documentCpf: cpf(index), phone: '11987654321', birthDate: '1990-01-01', date, startTime: '08:00', endTime: '08:30', roomId: f.roomIds[0], professionalId: f.professionalIds[0], serviceId: f.serviceId, answers: [], credential: { salt: 'test', passwordHash: 'test' }, ...extra,
+})
+
+// Engine-level capacity tests remain valid independently of the public assessment channel.
+const reserve = async (f: Fixture, index: number, extra = {}) => f.t.run(async ctx => {
+  let patient = await ctx.db.query('patients').filter(q => q.eq(q.field('documentCpf'), cpf(index))).first()
+  if (!patient) {
+    const id = await ctx.db.insert('patients', { name: `Paciente ${index}`, documentCpf: cpf(index), phone: '', birthDate: '', active: true, createdAt: now })
+    patient = await ctx.db.get(id)
+  }
+  return bookGroupSession(ctx, { patientId: patient!._id, date, startTime: '08:00', endTime: '08:30', roomId: f.roomIds[0], professionalId: f.professionalIds[0], serviceId: f.serviceId, ...extra })
+})
+
+test.each([
+  [true, 'presencial', undefined, 0],
+  [true, 'pix', undefined, 0],
+  [true, 'presencial', 0, 0],
+  [true, 'pix', 60, 60],
+  [false, 'presencial', undefined, 100],
+  [false, 'pix', undefined, 80],
+] as const)('booking persists the correct price: insurance=%s method=%s configured=%s', async (hasHealthInsurance, selectedPaymentMethod, insurancePrice, expected) => {
+  const f = await fixture(true)
+  await f.t.run(ctx => ctx.db.patch(f.serviceId, { modality: 'individual', isEvaluation: true }))
+  const packageId = await f.t.run(ctx => ctx.db.insert('packages', {
+    name: 'Avaliação', serviceId: f.serviceId, sessionCount: 1, validityDays: 1,
+    price: 100, pricePix: 80, insurancePrice, active: true,
+  }))
+  const result = await publicReserve(f, 91, { packageId, hasHealthInsurance, selectedPaymentMethod, selectedPrice: 999 })
+  const booking = await f.t.run(ctx => ctx.db.get(result.bookingId))
+  expect(booking?.selectedPrice).toBe(expected)
 })
 
 async function portalFixture() {
@@ -72,44 +103,16 @@ test('zero break generates consecutive half-hour slots and preserves room/profes
   await expect(reserve(f, 1, { professionalId: f.professionalIds[1] })).rejects.toThrow(/indisponível/)
 })
 
-test('portal derives 30-minute slots from the weekly grid and keeps the contracted service', async () => {
+test('portal offers only materialized classes and rejects a virtual slot', async () => {
   const f = await portalFixture()
   const patient = await f.addPatient(1)
-  await f.t.run(async ctx => {
-    await ctx.db.patch(f.ruleIds[0], { endTime: '17:00' })
-    await ctx.db.patch(f.ruleIds[1], { isActive: false })
-    await ctx.db.insert('availabilityRules', { roomId: f.roomIds[0], professionalId: f.professionalIds[0], dayOfWeek: 5, specialty: 'fisioterapia', startTime: '08:00', endTime: '12:00', slotDurationMinutes: 30, breakMinutes: 0, isActive: true })
-  })
-
-  const monday = await f.t.query(api.patientPortal.listAvailabilitySlotsForPatientBooking, { portalToken: patient.portalToken, patientPackageId: patient.patientPackageId, date })
-  const friday = await f.t.query(api.patientPortal.listAvailabilitySlotsForPatientBooking, { portalToken: patient.portalToken, patientPackageId: patient.patientPackageId, date: '2026-09-18' })
-  expect(monday).toHaveLength(18)
-  expect(monday.slice(0, 3).map(slot => `${slot.startTime}-${slot.endTime}`)).toEqual(['08:00-08:30', '08:30-09:00', '09:00-09:30'])
-  expect(friday).toHaveLength(8)
-  expect(friday.at(-1)).toMatchObject({ startTime: '11:30', endTime: '12:00', maxCapacity: 8 })
-})
-
-test('portal materializes one group session on demand and never exceeds eight places', async () => {
-  const f = await portalFixture()
-  await f.t.run(ctx => ctx.db.patch(f.ruleIds[1], { isActive: false }))
-  const patients = await Promise.all(Array.from({ length: 9 }, (_, index) => f.addPatient(index + 1)))
-  const slot = (await f.t.query(api.patientPortal.listAvailabilitySlotsForPatientBooking, { portalToken: patients[0].portalToken, patientPackageId: patients[0].patientPackageId, date }))[0]
-  const results = await Promise.allSettled(patients.map(patient => f.t.mutation(api.patientPortal.bookAppointmentFromPortal, {
-    portalToken: patient.portalToken,
-    patientId: patient.patientId,
-    patientPackageId: patient.patientPackageId,
-    date,
-    startTime: slot.startTime,
-    endTime: slot.endTime,
-    roomId: slot.roomId,
-    professionalId: slot.professionalId,
-  })))
-
-  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(8)
-  expect(await f.t.run(ctx => ctx.db.query('schedules').collect())).toHaveLength(1)
-  const participants = await f.t.run(ctx => ctx.db.query('scheduleParticipants').collect())
-  expect(participants).toHaveLength(8)
-  expect(participants.every(participant => participant.patientPackageId)).toBe(true)
+  const args = { portalToken: patient.portalToken, patientPackageId: patient.patientPackageId, date }
+  expect(await f.t.query(api.patientPortal.listAvailabilitySlotsForPatientBooking, args)).toEqual([])
+  await expect(f.t.mutation(api.patientPortal.bookAppointmentFromPortal, { ...args, patientId: patient.patientId, startTime: '08:00', endTime: '08:30', roomId: f.roomIds[0], professionalId: f.professionalIds[0] })).rejects.toThrow(/Turma indisponível/)
+  await f.t.run(ctx => ctx.db.insert('schedules', { title: 'Turma fixa', type: 'turma', specialty: 'fisioterapia', serviceId: f.serviceId, roomId: f.roomIds[0], professionalId: f.professionalIds[0], date, startTime: '08:00', endTime: '08:30', maxCapacity: 8, status: 'scheduled' }))
+  const slots = await f.t.query(api.patientPortal.listAvailabilitySlotsForPatientBooking, args)
+  expect(slots).toHaveLength(1)
+  expect(slots[0]).toMatchObject({ title: 'Turma fixa', startTime: '08:00', endTime: '08:30' })
 })
 
 test('assigned package definitions cannot be deleted', async () => {
@@ -133,16 +136,17 @@ test('nine concurrent reservations accept eight, share one session, and leave th
   expect((await query(f))[0].totalAvailableSpots).toBe(7)
 })
 
-test('reception approvals join the same session, enforce capacity, and are idempotent', async () => {
+test('reception approvals reserve individual assessments, enforce capacity, and are idempotent', async () => {
   const f = await fixture(true)
+  await f.t.run(ctx => ctx.db.patch(f.serviceId, { modality: 'individual', isEvaluation: true }))
   const bookings = []
-  for (let i = 0; i < 9; i++) bookings.push(await reserve(f, i))
+  for (let i = 0; i < 9; i++) bookings.push(await publicReserve(f, i))
   const results = await Promise.allSettled(bookings.map(b => f.t.mutation(api.bookingBuilder.updatePublicBookingStatus, { sessionToken: 'staff', bookingId: b.bookingId, status: 'confirmed' })))
-  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(8)
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
   expect(await f.t.run(ctx => ctx.db.query('schedules').collect())).toHaveLength(1)
   const approved = await f.t.run(ctx => ctx.db.query('publicBookings').filter(q => q.eq(q.field('status'), 'confirmed')).first())
   await f.t.mutation(api.bookingBuilder.updatePublicBookingStatus, { sessionToken: 'staff', bookingId: approved!._id, status: 'confirmed' })
-  expect(await f.t.run(ctx => ctx.db.query('scheduleParticipants').collect())).toHaveLength(8)
+  expect(await f.t.run(ctx => ctx.db.query('scheduleParticipants').collect())).toHaveLength(1)
 })
 
 test.each(['absence', 'justified_absence'] as const)('status %s releases a place consistently for listing and confirmation', async status => {
@@ -199,8 +203,7 @@ test('RPG group uses configured modality and submitted specialty cannot override
   const f = await fixture()
   await f.t.run(async ctx => { await ctx.db.patch(f.serviceId, { specialty: 'rpg' }); await ctx.db.patch(f.ruleIds[0], { specialty: 'rpg' }) })
   const b = await reserve(f, 1, { specialty: 'pilates' })
-  const booking = await f.t.run(ctx => ctx.db.get(b.bookingId))
-  const schedule = await f.t.run(ctx => ctx.db.get(booking!.scheduleId!))
+  const schedule = await f.t.run(ctx => ctx.db.get(b.scheduleId))
   expect(schedule).toMatchObject({ specialty: 'rpg', type: 'turma', maxCapacity: 8 })
 })
 
@@ -244,6 +247,7 @@ test('invalid legacy durations cannot hang slot generation', () => {
 
 test.each(['inactive service', 'deleted service', 'inactive package', 'hidden package', 'deleted package'])('unavailable selection (%s) returns no slots and cannot be booked', async state => {
   const f = await fixture()
+  await f.t.run(ctx => ctx.db.patch(f.serviceId, { modality: "individual", isEvaluation: true }))
   const packageId = await f.t.run(ctx => ctx.db.insert('packages', { name: 'Plano', serviceId: f.serviceId, sessionCount: 1, validityDays: 30, price: 100, active: true }))
   expect(await f.t.query(api.bookingBuilder.listPublicPackages, {})).toHaveLength(1)
   expect((await query(f, { packageId })).length).toBeGreaterThan(0)

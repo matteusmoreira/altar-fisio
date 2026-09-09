@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values'
 import type { QueryCtx, MutationCtx, ActionCtx } from '../_generated/server'
 import type { Doc } from '../_generated/dataModel'
 import { internal } from '../_generated/api'
@@ -12,14 +13,14 @@ export async function sessionUser(ctx: QueryCtx | MutationCtx, token?: string): 
 }
 export async function requireStaff(ctx: QueryCtx | MutationCtx, token: string, roles: readonly StaffRole[]): Promise<Doc<'users'>> {
   const user = await sessionUser(ctx, token)
-  if (!user) throw new Error('Sessão inválida ou expirada. Entre novamente.')
-  if (!roles.includes(user.role)) throw new Error('Você não tem permissão para esta operação.')
+  if (!user) throw new ConvexError('Sessão inválida ou expirada. Entre novamente para continuar.')
+  if (!roles.includes(user.role)) throw new ConvexError('Você não tem permissão para esta operação. Solicite ajuda ao administrador.')
   return user
 }
 export async function requireStaffAction(ctx: ActionCtx, token: string, roles: readonly StaffRole[]): Promise<Doc<'users'>> {
   const user: Doc<'users'> | null = await ctx.runQuery(internal.security.getSessionUser, { token })
-  if (!user) throw new Error('Sessão inválida ou expirada. Entre novamente.')
-  if (!roles.includes(user.role)) throw new Error('Você não tem permissão para esta operação.')
+  if (!user) throw new ConvexError('Sessão inválida ou expirada. Entre novamente para continuar.')
+  if (!roles.includes(user.role)) throw new ConvexError('Você não tem permissão para esta operação. Solicite ajuda ao administrador.')
   return user
 }
 export async function hashToken(token: string): Promise<string> {

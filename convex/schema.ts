@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 export default defineSchema({
+  monthlyBookingReceipts: defineTable({ patientId: v.id('patients'), requestId: v.string(), createdCount: v.number() }).index('by_patient_request', ['patientId', 'requestId']),
   // Configurações Globais da Clínica Altar Fisio
   clinicSettings: defineTable({
     clinicName: v.string(),
@@ -13,6 +14,8 @@ export default defineSchema({
     logoStorageId: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
+    portalBookingEnabled: v.optional(v.boolean()),
+    portalBookingMessage: v.optional(v.array(v.object({ type: v.union(v.literal("paragraph"), v.literal("bullet")), runs: v.array(v.object({ text: v.string(), bold: v.optional(v.boolean()), italic: v.optional(v.boolean()), href: v.optional(v.string()) })) }))),
     healthInsuranceOptions: v.optional(v.array(v.string())),
     // Regras de agendamento & reposição
     cancellationNoticeHours: v.number(), // Ex: 2 (horas de antecedência mínima para gerar reposição)
@@ -94,6 +97,7 @@ export default defineSchema({
 
   // Serviços e Atendimentos Oferecidos
   services: defineTable({
+    isEvaluation: v.optional(v.boolean()),
     name: v.string(), // Ex: "Pilates em Grupo", "Fisioterapia Ortopédica", "Sessão de RPG"
     modality: v.union(v.literal("individual"), v.literal("turma")),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
@@ -140,6 +144,7 @@ export default defineSchema({
 
   // Agendamentos & Aulas
   schedules: defineTable({
+    serviceId: v.optional(v.id("services")),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
@@ -166,6 +171,7 @@ export default defineSchema({
 
   // Participantes / Alunos em cada Agendamento
   scheduleParticipants: defineTable({
+    packageDebited: v.optional(v.boolean()),
     scheduleId: v.id("schedules"),
     patientId: v.id("patients"),
     status: v.union(
@@ -543,6 +549,7 @@ export default defineSchema({
   // Configuração do Construtor de Agendamento Público e Triagem
   bookingFormConfig: defineTable({
     requireApproval: v.boolean(),
+    insurancePartners: v.optional(v.array(v.object({ id: v.string(), name: v.string(), logo: v.optional(v.string()) }))),
     steps: v.array(
       v.object({
         id: v.string(),

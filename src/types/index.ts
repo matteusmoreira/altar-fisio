@@ -126,7 +126,9 @@ export interface RecurringScheduleSeriesParams {
   maxCapacity: number
   daysOfWeek: number[] // 0: Dom, 1: Seg, 2: Ter, 3: Qua, 4: Qui, 5: Sex, 6: Sab
   startDate: string
-  weeksCount: number
+  weeksCount?: number
+  month?: string
+  serviceId?: string
   notes?: string
   enrolledPatientIds?: string[]
 }
@@ -307,6 +309,7 @@ export interface NotificationStats {
 }
 
 export interface ClinicService {
+  isEvaluation?: boolean
   id: string
   name: string
   modality: "individual" | "turma"

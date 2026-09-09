@@ -57,57 +57,7 @@ const SPECIALTY_LABELS: Record<BookingSpecialty, string> = {
   rpg: "RPG Souchard",
 }
 
-import unimedLogo from "@/assets/convenios/unimed.svg"
-import amilLogo from "@/assets/convenios/amil.svg"
-import petrobrasLogo from "@/assets/convenios/petrobras.svg"
-import bradescoLogo from "@/assets/convenios/bradesco.svg"
-import sulamericaLogo from "@/assets/convenios/sulamerica.svg"
-import brasegLogo from "@/assets/convenios/braseg.png"
-
-const HEALTH_INSURANCE_PARTNERS = [
-  {
-    id: "Unimed",
-    name: "Unimed",
-    logo: unimedLogo,
-    alt: "Unimed",
-    imgClass: "max-h-7 sm:max-h-8 max-w-[110px]",
-  },
-  {
-    id: "Amil",
-    name: "Amil",
-    logo: amilLogo,
-    alt: "Amil",
-    imgClass: "max-h-6 sm:max-h-7 max-w-[85px]",
-  },
-  {
-    id: "Saúde Petrobras",
-    name: "Saúde Petrobras",
-    logo: petrobrasLogo,
-    alt: "Saúde Petrobras",
-    imgClass: "max-h-5 sm:max-h-6 max-w-[125px]",
-  },
-  {
-    id: "Bradesco Saúde",
-    name: "Bradesco Saúde",
-    logo: bradescoLogo,
-    alt: "Bradesco Saúde",
-    imgClass: "max-h-5 sm:max-h-6 max-w-[110px]",
-  },
-  {
-    id: "SulAmérica",
-    name: "SulAmérica",
-    logo: sulamericaLogo,
-    alt: "SulAmérica Saúde",
-    imgClass: "max-h-6 sm:max-h-7 max-w-[115px]",
-  },
-  {
-    id: "BraSeg",
-    name: "BraSeg",
-    logo: brasegLogo,
-    alt: "BraSeg Assistência Familiar",
-    imgClass: "max-h-7 sm:max-h-8 max-w-[95px]",
-  },
-] as const
+import { DEFAULT_INSURANCE_PARTNERS } from "../../shared/bookingInsurance"
 
 const BOOKING_SPECIALTIES = Object.keys(SPECIALTY_LABELS) as BookingSpecialty[]
 const LEGACY_INSURANCE_FIELD_IDS = new Set([
@@ -128,13 +78,16 @@ export const PublicBookingPage: React.FC = () => {
   const initialSpecialty = (urlParams.get("especialidade") || urlParams.get("servico") || "pilates") as BookingSpecialty
 
   // Estado do Fluxo
-  const [currentStepIndex, setCurrentStepIndex] = useState(0)
+  const [requestedStepIndex, setCurrentStepIndex] = useState(0)
   const [answers, setAnswers] = useState<AnswerMap>({})
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
 
   // Estado da Tabela de Preços e Convênio
   const [patientBillingType, setPatientBillingType] = useState<"particular" | "convenio">("convenio")
-  const [selectedHealthInsurance, setSelectedHealthInsurance] = useState("Unimed")
+  const insurancePartners = config?.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS
+  const [insuranceChoice, setSelectedHealthInsurance] = useState<string | null>(null)
+  const selectedHealthInsurance = insuranceChoice === "Outro" || insurancePartners.some(p => p.name === insuranceChoice)
+    ? insuranceChoice! : insurancePartners[0]?.name ?? "Outro"
   const [customHealthInsurance, setCustomHealthInsurance] = useState("")
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
 
@@ -145,10 +98,10 @@ export const PublicBookingPage: React.FC = () => {
   // Helper para obter preços dinâmicos conforme perfil (Particular vs Convênio)
   const getPackagePricing = (pkg: any, isConvenio: boolean) => {
     const pixPrice = isConvenio
-      ? pkg.insurancePricePix ?? pkg.pricePix ?? pkg.price
+      ? pkg.insurancePricePix ?? pkg.insurancePrice ?? 0
       : pkg.pricePix ?? pkg.price
     const cardPrice = isConvenio
-      ? pkg.insurancePrice ?? pkg.price
+      ? pkg.insurancePrice ?? 0
       : pkg.price
     const cardInstallments = isConvenio
       ? pkg.insuranceCardInstallments ?? pkg.cardInstallments ?? 1
@@ -261,13 +214,14 @@ export const PublicBookingPage: React.FC = () => {
     return ordered
   }, [config])
 
+  const currentStepIndex = Math.min(requestedStepIndex, Math.max(0, steps.length - 1))
   const currentStep = steps[currentStepIndex]
 
   // Avaliação de Regra Condicional
   const isFieldVisible = (field: any): boolean => {
     if (!field.conditional) return true
     const parentAnswer = answers[field.conditional.dependsOnFieldId]
-    return parentAnswer === field.conditional.equalsValue
+    return parentAnswer === field.conditional.equalsValue || (config?.fields.find(f => f.id === field.conditional.dependsOnFieldId)?.type === "multiselect" && (parentAnswer || "").split(", ").includes(field.conditional.equalsValue))
   }
 
   const isPublicIntakeField = (field: any): boolean => !LEGACY_INSURANCE_FIELD_IDS.has(field.id)
@@ -388,7 +342,7 @@ export const PublicBookingPage: React.FC = () => {
   const handleNextStep = () => {
     if (!validateCurrentStep()) return
     if (currentStepIndex < steps.length - 1) {
-      setCurrentStepIndex((prev) => prev + 1)
+      setCurrentStepIndex(currentStepIndex + 1)
       window.scrollTo({ top: 0, behavior: "smooth" })
     } else {
       handleSubmitBooking()
@@ -398,7 +352,7 @@ export const PublicBookingPage: React.FC = () => {
   // Voltar Etapa
   const handlePrevStep = () => {
     if (currentStepIndex > 0) {
-      setCurrentStepIndex((prev) => prev - 1)
+      setCurrentStepIndex(currentStepIndex - 1)
       window.scrollTo({ top: 0, behavior: "smooth" })
     }
   }
@@ -457,7 +411,7 @@ export const PublicBookingPage: React.FC = () => {
         healthInsuranceName: effectiveInsuranceName,
         selectedPrice: pricing?.pixPrice ?? pricing?.cardPrice,
         selectedPaymentMethod: "presencial",
-        pricingDetails: pricing
+        pricingDetails: pricing && !isConvenio
           ? `Pix: R$ ${pricing.pixPrice.toFixed(2)} | Cartão: R$ ${pricing.cardPrice.toFixed(2)} (${pricing.cardInstallments}x)`
           : undefined,
         roomId: selectedSlot?.roomId as any,
@@ -637,7 +591,7 @@ export const PublicBookingPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {(bookingSuccessData.pixPrice || bookingSuccessData.cardPrice) && (
+                        {!bookingSuccessData.isConvenio && Boolean(bookingSuccessData.pixPrice || bookingSuccessData.cardPrice) && (
                           <div className="text-right sm:self-center shrink-0">
                             {bookingSuccessData.pixPrice && (
                               <div className="text-sm font-black text-emerald-600 dark:text-emerald-400">
@@ -967,6 +921,16 @@ export const PublicBookingPage: React.FC = () => {
                           </div>
                         )}
 
+                        {field.type === "multiselect" && <div className="space-y-2">
+                          {field.options?.map(option => <label key={option} className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={(answers[field.id] || "").split(", ").includes(option)} onChange={e => {
+                              const selected = (answers[field.id] || "").split(", ").filter(Boolean)
+                              setAnswers(prev => ({ ...prev, [field.id]: (e.target.checked ? [...selected, option] : selected.filter(value => value !== option)).join(", ") }))
+                              setFormErrors(prev => ({ ...prev, [field.id]: "" }))
+                            }} />{option}
+                          </label>)}
+                        </div>}
+
                         {/* Campo Tipo: Texto Curto */}
                         {field.type === "text" && (
                           <div className="pt-1">
@@ -1036,7 +1000,7 @@ export const PublicBookingPage: React.FC = () => {
                         <span>1. Escolha seu Plano ou Sessão</span>
                       </label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Valores transparentes com desconto no Pix e parcelamento no cartão.
+                        {patientBillingType === "particular" ? "Valores transparentes com desconto no Pix e parcelamento no cartão." : "Escolha seu convênio e a sessão desejada."}
                       </p>
                     </div>
 
@@ -1084,16 +1048,16 @@ export const PublicBookingPage: React.FC = () => {
                       </div>
 
                       {/* Grade de Logos dos Convênios do Site */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
-                        {HEALTH_INSURANCE_PARTNERS.map((partner) => {
-                          const isSelected = selectedHealthInsurance === partner.id
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        {insurancePartners.map((partner) => {
+                          const isSelected = selectedHealthInsurance === partner.name
 
                           return (
                             <button
                               key={partner.id}
                               type="button"
-                              onClick={() => setSelectedHealthInsurance(partner.id)}
-                              className={`relative group flex items-center justify-center h-14 sm:h-16 px-2 sm:px-3 py-2 rounded-2xl sm:rounded-full bg-white transition-all duration-200 border cursor-pointer select-none ${
+                              onClick={() => setSelectedHealthInsurance(partner.name)}
+                              className={`relative group min-w-0 flex items-center justify-center h-14 sm:h-16 px-2 sm:px-3 py-2 rounded-2xl sm:rounded-full bg-white transition-all duration-200 border cursor-pointer select-none ${
                                 isSelected
                                   ? "ring-2 ring-primary border-primary shadow-md bg-white -translate-y-0.5"
                                   : "border-emerald-950/10 hover:border-primary/40 hover:shadow-xs hover:-translate-y-0.5"
@@ -1101,12 +1065,12 @@ export const PublicBookingPage: React.FC = () => {
                               title={`Selecionar ${partner.name}`}
                               aria-label={`Selecionar convênio ${partner.name}`}
                             >
-                              <img
+                              {partner.logo ? <img
                                 src={partner.logo}
-                                alt={partner.alt}
-                                className={`${partner.imgClass} w-auto object-contain transition-transform duration-200 group-hover:scale-105`}
+                                alt={partner.name}
+                                className="block w-full min-w-0 max-w-full h-8 object-contain"
                                 loading="eager"
-                              />
+                              /> : <span className="text-xs font-bold text-slate-900 break-words">{partner.name}</span>}
 
                               {isSelected && (
                                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
@@ -1282,7 +1246,7 @@ export const PublicBookingPage: React.FC = () => {
                                   </span>
                                 ) : (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground/80 border border-border/60">
-                                    {pkg.modality === "turma" ? "👥 Turma em Grupo" : "👤 Individual"}
+                                    👤 Avaliação individual
                                   </span>
                                 )}
 
@@ -1293,6 +1257,7 @@ export const PublicBookingPage: React.FC = () => {
                             </div>
 
                             {/* Base: Caixa de Preços em Destaque */}
+                            {!isConvenio && (
                             <div className="mt-3.5 pt-3 border-t border-border/60 space-y-1">
                               <div className="flex items-baseline justify-between gap-1">
                                 <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400">
@@ -1323,6 +1288,7 @@ export const PublicBookingPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
+                            )}
                           </button>
                         )
                       })}

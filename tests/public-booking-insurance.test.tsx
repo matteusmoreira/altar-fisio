@@ -52,8 +52,26 @@ vi.mock('convex/react', () => ({
 import { PublicBookingPage } from '../src/pages/PublicBookingPage'
 
 afterEach(() => {
+  delete mocks.bookingConfig.insurancePartners
   cleanup()
   vi.clearAllMocks()
+})
+
+test.each([undefined, 0, 120])('only Particular displays prices, even with insurance price %s', (insurancePrice) => {
+  const original = mocks.publicPackages[0]
+  mocks.publicPackages[0] = { ...original, insurancePrice, insurancePricePix: insurancePrice }
+  try {
+    render(<PublicBookingPage />)
+    expect(screen.queryByText(/R\$/)).toBeNull()
+    expect(screen.queryByText(/Desconto Pix/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Particular$/i }))
+    expect(screen.getByText(/R\$ 135,00/)).toBeTruthy()
+    expect(screen.getByText(/R\$ 150,00/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Tenho Plano de Saúde/i }))
+    expect(screen.queryByText(/R\$/)).toBeNull()
+  } finally {
+    mocks.publicPackages[0] = original
+  }
 })
 
 test('public booking step 2 starts with Tenho Plano de Saúde pre-selected and displays all 6 logos', () => {
@@ -133,4 +151,20 @@ test('switching between Tenho Plano de Saúde and Particular toggles the logo se
   // Logos reaparecem
   expect(screen.getByText('Qual é o seu Plano de Saúde ou Convênio?')).toBeTruthy()
   expect(screen.getByRole('button', { name: /Selecionar convênio Unimed/i })).toBeTruthy()
+})
+
+
+test('renders configured plans without restoring deleted default logos', () => {
+  mocks.bookingConfig.insurancePartners = [{ id: 'new', name: 'Novo Plano' }]
+  render(<PublicBookingPage />)
+  expect(screen.queryByRole('button', { name: /Selecionar convênio Unimed/i })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Selecionar convênio Novo Plano' })).toBeTruthy()
+  expect(screen.getAllByText('Novo Plano').length).toBeGreaterThan(0)
+})
+
+test('an empty configured list leaves only the custom insurance option', () => {
+  mocks.bookingConfig.insurancePartners = []
+  render(<PublicBookingPage />)
+  expect(screen.queryByRole('button', { name: /Selecionar convênio Unimed/i })).toBeNull()
+  expect(screen.getByPlaceholderText(/Digite o nome do seu plano/i)).toBeTruthy()
 })

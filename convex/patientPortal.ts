@@ -1,8 +1,10 @@
+import { monthlyArgs, choiceValidator, monthlyOptions, reviewMonthly } from './lib/monthlyBooking'
+import { scheduleService } from './lib/scheduleService'
+import { assertPortalBookingOpen } from './lib/portalBooking'
+import { DEFAULT_PORTAL_MESSAGE } from '../shared/portalMessage'
 import { requirePatient } from './lib/security'
 import { bookCredit, cancelReplacement, processWaitlist } from './lib/waitlist'
 import { cancelParticipantJobs, clinicToday, occupiesSeat, prepareReminders } from './lib/appointmentJobs'
-import { bookGroupSession } from './lib/bookGroupSession'
-import { getPublicSlots } from './lib/bookingSlots'
 import { validDate } from './lib/validation'
 import { query, mutation } from "./_generated/server"
 import type { QueryCtx, MutationCtx } from './_generated/server'
@@ -210,6 +212,8 @@ export const getPatientPortalData = query({
       historySchedules: historyList.slice(0, 15),
       packages: enrichedPackages,
       replacementCredits: enrichedCredits,
+      portalBookingEnabled: settings?.portalBookingEnabled !== false,
+      portalBookingMessage: settings?.portalBookingMessage ?? DEFAULT_PORTAL_MESSAGE,
       policy: {
         cancellationNoticeHours: noticeHoursRequired,
         replacementExpiryDays: expiryDays,
@@ -337,6 +341,7 @@ export const rescheduleAppointmentByPatient = mutation({
     reason: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
+    await assertPortalBookingOpen(ctx)
     const { portalToken, ...args } = input
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
@@ -359,6 +364,9 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
     if (!targetSchedule) throw new Error("Novo horario selecionado nao encontrado.")
+    const originService = await scheduleService(ctx, currentSchedule), targetService = await scheduleService(ctx, targetSchedule)
+    if ((currentSchedule.serviceId || targetSchedule.serviceId) && (!originService || originService._id !== targetService?._id)) throw new Error('Escolha uma turma do mesmo tratamento.')
+    if (!(await ctx.db.get(targetSchedule.roomId))?.isActive || !(await ctx.db.get(targetSchedule.professionalId))?.active) throw new Error('Sala ou profissional indisponível.')
     await processWaitlist(ctx, normTargetScheduleId)
     const settings = await ctx.db.query('clinicSettings').first()
     if (currentSchedule.status === 'cancelled' || parseDateTimeToMs(currentSchedule.date, currentSchedule.startTime) - Date.now() < (settings?.cancellationNoticeHours ?? 2) * 3600000) throw new Error('Prazo para remarcação encerrado. Fale com a recepção.')
@@ -403,6 +411,7 @@ export const rescheduleAppointmentByPatient = mutation({
       patientId: normPatientId,
       status: "scheduled",
       patientPackageId: currentPart.patientPackageId,
+      packageDebited: currentPart.packageDebited,
       notes: `Remarcacao transferida da sessao de ${currentSchedule.date} as ${currentSchedule.startTime}`,
     })
     await cancelParticipantJobs(ctx, normParticipantId)
@@ -427,6 +436,7 @@ export const useReplacementCreditToBook = mutation({
     patientId: v.string(),
   },
   handler: async (ctx, input) => {
+    await assertPortalBookingOpen(ctx)
     const { portalToken, ...args } = input
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
@@ -578,24 +588,18 @@ export const listAvailabilitySlotsForPatientBooking = query({
         .map(participant => participant.scheduleId)
     )
 
-    const slots = await getPublicSlots(ctx, { date: args.date, serviceId: service._id })
-    return slots.flatMap(slot => slot.rooms.map(room => ({
-      slotKey: `${args.date}-${slot.startTime}-${slot.endTime}-${room.roomId}-${room.professionalId}`,
-      scheduleId: room.existingScheduleId,
-      title: service.name,
-      specialty: service.specialty,
-      type: room.modality,
-      date: args.date,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      roomId: room.roomId,
-      roomName: room.roomName,
-      professionalId: room.professionalId,
-      professionalName: slot.availableProfessionals.find(professional => professional.id === room.professionalId)?.name || 'Profissional',
-      vacanciesLeft: room.availableSpots,
-      maxCapacity: room.capacity,
-      isAlreadyEnrolled: room.existingScheduleId ? activeScheduleIds.has(room.existingScheduleId) : false,
-    })))
+    const schedules = await ctx.db.query('schedules').withIndex('by_date', q => q.eq('date', args.date)).collect()
+    const result = []
+    for (const schedule of schedules) {
+      if (schedule.type !== 'turma' || schedule.status !== 'scheduled' || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now() || (await scheduleService(ctx, schedule))?._id !== service._id) continue
+      const room = await ctx.db.get(schedule.roomId), professional = await ctx.db.get(schedule.professionalId)
+      if (!room?.isActive || !professional?.active) continue
+      const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', schedule._id)).collect()
+      const maxCapacity = Math.min(schedule.maxCapacity, room.capacity, service.maxCapacity ?? room.capacity)
+      const vacanciesLeft = Math.max(0, maxCapacity - participants.filter(occupiesSeat).length)
+      if (vacanciesLeft > 0) result.push({ slotKey: schedule._id, scheduleId: schedule._id, title: schedule.title, specialty: schedule.specialty, type: schedule.type, date: schedule.date, startTime: schedule.startTime, endTime: schedule.endTime, roomId: room._id, roomName: room.name, professionalId: professional._id, professionalName: professional.name, vacanciesLeft, maxCapacity, isAlreadyEnrolled: activeScheduleIds.has(schedule._id) })
+    }
+    return result.sort((a,b) => a.startTime.localeCompare(b.startTime))
   },
 })
 
@@ -615,6 +619,7 @@ export const bookAppointmentFromPortal = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
+    await assertPortalBookingOpen(ctx)
     const { portalToken, ...args } = input
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
@@ -682,22 +687,18 @@ export const bookAppointmentFromPortal = mutation({
       }
     }
 
-    // 3. Revalidar o slot e criar/reutilizar a turma de forma atômica.
-    const { scheduleId, participantId } = await bookGroupSession(ctx, {
-      patientId: normPatientId,
-      patientPackageId: normPackageId,
-      serviceId: service._id,
-      packageName: service.name,
-      date: args.date,
-      startTime: args.startTime,
-      endTime: args.endTime,
-      roomId: args.roomId,
-      professionalId: args.professionalId,
-      notes: args.notes || "Agendado pelo próprio aluno no Portal",
-    })
-
-    const schedule = await ctx.db.get(scheduleId)
-    if (!schedule) throw new Error('Não foi possível confirmar o horário selecionado.')
+    // Compatibility endpoint: reserve an existing class, never create virtual slots.
+    const daySchedules = await ctx.db.query('schedules').withIndex('by_date', q => q.eq('date', args.date)).collect()
+    const schedule = daySchedules.find(s => s.roomId === args.roomId && s.professionalId === args.professionalId && s.startTime === args.startTime && s.endTime === args.endTime && s.status === 'scheduled' && s.type === 'turma')
+    if (!schedule || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now() || (await scheduleService(ctx, schedule))?._id !== service._id) throw new Error('Turma indisponível. Escolha uma turma cadastrada pela clínica.')
+    const selectedRoom = await ctx.db.get(schedule.roomId), selectedProfessional = await ctx.db.get(schedule.professionalId)
+    if (!selectedRoom?.isActive || !selectedProfessional?.active) throw new Error('Sala ou profissional indisponível.')
+    await processWaitlist(ctx, schedule._id)
+    const members = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', schedule._id)).collect()
+    if (members.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, selectedRoom.capacity, service.maxCapacity ?? schedule.maxCapacity)) throw new Error('Turma lotada.')
+    const scheduleId = schedule._id
+    const participantId = await ctx.db.insert('scheduleParticipants', { scheduleId, patientId: normPatientId, patientPackageId: normPackageId, packageDebited: false, status: 'scheduled', notes: args.notes })
+    await prepareReminders(ctx, participantId)
 
     // 4. Notificações
     const room = await ctx.db.get(schedule.roomId)
@@ -736,5 +737,38 @@ export const bookAppointmentFromPortal = mutation({
       title: schedule.title,
       message: `Aula agendada com sucesso para ${schedule.date} às ${schedule.startTime}!`,
     }
+  },
+})
+
+
+// Matrícula nas turmas existentes, com conferência e gravação atômica.
+export const listMonthlyClasses = query({ args: monthlyArgs, handler: monthlyOptions })
+export const previewMonthlyBooking = query({ args: { ...monthlyArgs, choices: choiceValidator }, handler: reviewMonthly })
+export const bookMonthlyClasses = mutation({
+  args: { ...monthlyArgs, choices: choiceValidator, expectedScheduleIds: v.array(v.id('schedules')), requestId: v.string() },
+  handler: async (ctx, args) => {
+    const patient = await requirePatient(ctx, args.portalToken)
+    await assertPortalBookingOpen(ctx)
+    if (!args.requestId || args.requestId.length > 100) throw new Error('Identificador de reserva inválido.')
+    const receipt = await ctx.db.query('monthlyBookingReceipts').withIndex('by_patient_request', q => q.eq('patientId', patient._id).eq('requestId', args.requestId)).first()
+    if (receipt) return { createdCount: receipt.createdCount }
+    const preview = await reviewMonthly(ctx, args)
+    if (!preview.canConfirm || !preview.serviceId) throw new Error(preview.errors.join('; ') || 'Tratamento indisponível.')
+    const actual = preview.dates.map(d => d.scheduleId).sort().join(',')
+    if (actual !== [...args.expectedScheduleIds].sort().join(',')) throw new Error('As datas da turma mudaram. Confira a seleção novamente.')
+    for (const date of preview.dates.filter(d => !d.alreadyBooked)) {
+      await processWaitlist(ctx, date.scheduleId)
+      const schedule = await ctx.db.get(date.scheduleId)
+      if (!schedule) throw new Error('Turma removida.')
+      const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', date.scheduleId)).collect()
+      const room = await ctx.db.get(schedule.roomId)
+      const service = await ctx.db.get(preview.serviceId)
+      if (participants.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, room?.capacity ?? 0, service?.maxCapacity ?? schedule.maxCapacity)) throw new Error('Uma vaga foi preenchida. Confira as turmas novamente.')
+      if (!schedule.serviceId) await ctx.db.patch(schedule._id, { serviceId: preview.serviceId })
+      const id = await ctx.db.insert('scheduleParticipants', { scheduleId: date.scheduleId, patientId: patient._id, patientPackageId: args.patientPackageId, packageDebited: false, status: 'scheduled' })
+      await prepareReminders(ctx, id)
+    }
+    await ctx.db.insert('monthlyBookingReceipts', { patientId: patient._id, requestId: args.requestId, createdCount: preview.required })
+    return { createdCount: preview.required }
   },
 })

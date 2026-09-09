@@ -1,14 +1,27 @@
+import { assertPortalBookingOpen } from './lib/portalBooking'
 import { v } from 'convex/values'
 import { mutation, query, internalMutation } from './_generated/server'
 import { requirePatient, requireStaff } from './lib/security'
 import { creditBookingError, enterWaitlist, processWaitlist, WAITLIST_NOTICE_MS } from './lib/waitlist'
 import { occupiesSeat, sessionTime, clinicToday } from './lib/appointmentJobs'
 import { validDate } from './lib/validation'
+import { internal } from './_generated/api'
+
+export const resume = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    if ((await ctx.db.query('clinicSettings').first())?.portalBookingEnabled === false) return
+    const page = await ctx.db.query('waitlistEntries').paginate({ cursor: args.cursor, numItems: 50 })
+    for (const id of new Set(page.page.filter(e => e.status === 'waiting').map(e => e.scheduleId))) await processWaitlist(ctx, id)
+    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.waitlist.resume, { cursor: page.continueCursor })
+  },
+})
 
 export const join = mutation({
   args: { portalToken: v.string(), creditId: v.id('replacementCredits'), scheduleId: v.id('schedules') },
   handler: async (ctx, args) => {
     const patient = await requirePatient(ctx, args.portalToken)
+    await assertPortalBookingOpen(ctx)
     return enterWaitlist(ctx, patient._id, args.creditId, args.scheduleId)
   },
 })

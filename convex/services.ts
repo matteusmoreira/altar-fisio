@@ -63,6 +63,7 @@ export const createService = mutation({
     packagePricePerSession: v.optional(v.number()),
     description: v.optional(v.string()),
     active: v.boolean(),
+    isEvaluation: v.optional(v.boolean()),
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
@@ -90,6 +91,7 @@ export const createService = mutation({
       packagePricePerSession: args.packagePricePerSession,
       description: args.description?.trim() || undefined,
       active: args.active,
+      isEvaluation: args.isEvaluation === true && args.modality === "individual",
     })
   },
 })
@@ -107,6 +109,7 @@ export const updateService = mutation({
     packagePricePerSession: v.optional(v.union(v.number(), v.null())),
     description: v.optional(v.string()),
     active: v.optional(v.boolean()),
+    isEvaluation: v.optional(v.boolean()),
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
@@ -120,6 +123,7 @@ export const updateService = mutation({
 
     const patchData: Record<string, any> = {}
     const effectiveModality = data.modality ?? service.modality
+    if (data.isEvaluation !== undefined || effectiveModality !== "individual") patchData.isEvaluation = effectiveModality === "individual" && data.isEvaluation === true
     if (data.name !== undefined) {
       const trimmed = data.name.trim()
       if (!trimmed) throw new Error("O nome do serviço não pode ser vazio.")

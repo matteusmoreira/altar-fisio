@@ -1,7 +1,9 @@
+import { ConvexError } from 'convex/values'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import type { Doc, Id } from '../_generated/dataModel'
 import { internal } from '../_generated/api'
 import { isValidPhone } from '../../shared/patientIdentity'
+import { scheduleService } from './scheduleService'
 import { cancelParticipantJobs, clinicToday, occupiesSeat, prepareReminders, queueAppointmentJob, scheduleFingerprint, sessionTime } from './appointmentJobs'
 
 export const WAITLIST_NOTICE_MS = 90 * 60000
@@ -12,6 +14,9 @@ export async function creditBookingError(ctx: QueryCtx, patientId: Id<'patients'
   if (credit.expiryDate < s.date || credit.expiryDate < clinicToday()) return 'Crédito vencido para esta data.'
   const origin = await ctx.db.get(credit.originScheduleId)
   if (!origin || origin.specialty !== s.specialty) return 'Escolha a mesma especialidade da sessão original.'
+  const originService = await scheduleService(ctx, origin), targetService = await scheduleService(ctx, s)
+  if ((origin.serviceId || s.serviceId) && (!originService || originService._id !== targetService?._id)) return 'Escolha uma turma do mesmo tratamento.'
+  if (!(await ctx.db.get(s.roomId))?.isActive || !(await ctx.db.get(s.professionalId))?.active) return 'Sala ou profissional inativo.'
   if (s.status !== 'scheduled' || sessionTime(s) <= Date.now()) return 'Sessão indisponível.'
   const patient = await ctx.db.get(patientId)
   if (!patient?.active) return 'Paciente inativo.'
@@ -39,14 +44,17 @@ export async function closeScheduleQueue(ctx: MutationCtx, scheduleId: Id<'sched
 
 export async function bookCredit(ctx: MutationCtx, patientId: Id<'patients'>, creditId: Id<'replacementCredits'>, scheduleId: Id<'schedules'>, entryId?: Id<'waitlistEntries'>): Promise<Id<'scheduleParticipants'>> {
   const s = await ctx.db.get(scheduleId)
-  if (!s) throw new Error('Sessão não encontrada.')
+  if (!s) throw new ConvexError('Sessão não encontrada.')
   const error = await creditBookingError(ctx, patientId, creditId, s, !!entryId)
-  if (error) throw new Error(error)
+  if (error) throw new ConvexError(error)
   const parts = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', scheduleId)).collect()
-  if (parts.filter(occupiesSeat).length >= s.maxCapacity) throw new Error('Este horário está lotado.')
+  if (parts.filter(occupiesSeat).length >= s.maxCapacity) throw new ConvexError('Este horário está lotado.')
   await closeCreditQueue(ctx, creditId, 'Crédito utilizado em reposição.')
   await ctx.db.patch(creditId, { status: 'used', usedInScheduleId: scheduleId })
-  const participantId = await ctx.db.insert('scheduleParticipants', { patientId, scheduleId, status: 'replacement', replacementCreditId: creditId, waitlistEntryId: entryId, notes: entryId ? 'Reposição — encaixe pela fila' : 'Agendamento realizado via crédito de reposição' })
+  const credit = await ctx.db.get(creditId)
+  const originParts = credit ? await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', credit.originScheduleId)).collect() : []
+  const originPart = originParts.find(p => p.patientId === patientId)
+  const participantId = await ctx.db.insert('scheduleParticipants', { patientId, scheduleId, patientPackageId: originPart?.patientPackageId, packageDebited: originPart?.packageDebited, status: 'replacement', replacementCreditId: creditId, waitlistEntryId: entryId, notes: entryId ? 'Reposição — encaixe pela fila' : 'Agendamento realizado via crédito de reposição' })
   await prepareReminders(ctx, participantId)
   if (entryId) {
     await ctx.db.patch(entryId, { status: 'booked', participantId, reason: undefined })
@@ -56,6 +64,7 @@ export async function bookCredit(ctx: MutationCtx, patientId: Id<'patients'>, cr
 }
 
 export async function processWaitlist(ctx: MutationCtx, scheduleId: Id<'schedules'>) {
+  if ((await ctx.db.query('clinicSettings').first())?.portalBookingEnabled === false) return
   const s = await ctx.db.get(scheduleId)
   if (!s || s.status !== 'scheduled') return
   if (sessionTime(s) - Date.now() < WAITLIST_NOTICE_MS) {
@@ -77,15 +86,15 @@ export async function processWaitlist(ctx: MutationCtx, scheduleId: Id<'schedule
 
 export async function enterWaitlist(ctx: MutationCtx, patientId: Id<'patients'>, creditId: Id<'replacementCredits'>, scheduleId: Id<'schedules'>) {
   const s = await ctx.db.get(scheduleId)
-  if (!s) throw new Error('Sessão não encontrada.')
+  if (!s) throw new ConvexError('Sessão não encontrada.')
   const error = await creditBookingError(ctx, patientId, creditId, s, true)
-  if (error) throw new Error(error)
+  if (error) throw new ConvexError(error)
   const cutoffAt = sessionTime(s) - WAITLIST_NOTICE_MS
-  if (Date.now() > cutoffAt) throw new Error('A fila encerra 90 minutos antes da sessão.')
+  if (Date.now() > cutoffAt) throw new ConvexError('A fila encerra 90 minutos antes da sessão.')
   const existing = await ctx.db.query('waitlistEntries').withIndex('by_credit_status', q => q.eq('creditId', creditId).eq('status', 'waiting')).first()
   if (existing?.scheduleId === scheduleId) return existing._id
   const sameSession = await ctx.db.query('waitlistEntries').withIndex('by_schedule_status', q => q.eq('scheduleId', scheduleId).eq('status', 'waiting')).collect()
-  if (sameSession.some(e => e.patientId === patientId)) throw new Error('Você já está nesta fila com outro crédito.')
+  if (sameSession.some(e => e.patientId === patientId)) throw new ConvexError('Você já está nesta fila com outro crédito.')
   if (existing) await ctx.db.patch(existing._id, { status: 'cancelled', reason: 'Paciente trocou o horário.' })
   const id = await ctx.db.insert('waitlistEntries', { patientId, creditId, scheduleId, cutoffAt, joinedAt: Date.now(), status: 'waiting' })
   // O instante exato de 90 minutos ainda é elegível.
@@ -95,10 +104,10 @@ export async function enterWaitlist(ctx: MutationCtx, patientId: Id<'patients'>,
 }
 
 export async function cancelReplacement(ctx: MutationCtx, p: Doc<'scheduleParticipants'>, grantCredit: boolean, reason?: string) {
-  if (!p.replacementCreditId) throw new Error('Reposição sem crédito vinculado.')
-  if (!['scheduled', 'replacement'].includes(p.status)) throw new Error('Este agendamento já foi processado.')
+  if (!p.replacementCreditId) throw new ConvexError('Reposição sem crédito vinculado.')
+  if (!['scheduled', 'replacement'].includes(p.status)) throw new ConvexError('Este agendamento já foi processado.')
   const credit = await ctx.db.get(p.replacementCreditId)
-  if (!credit || credit.patientId !== p.patientId || credit.usedInScheduleId !== p.scheduleId || credit.status !== 'used') throw new Error('Crédito de reposição inconsistente. Fale com a recepção.')
+  if (!credit || credit.patientId !== p.patientId || credit.usedInScheduleId !== p.scheduleId || credit.status !== 'used') throw new ConvexError('Crédito de reposição inconsistente. Fale com a recepção.')
   const restored = grantCredit && credit.expiryDate >= clinicToday()
   if (grantCredit) await ctx.db.patch(credit._id, { status: restored ? 'available' : 'expired', usedInScheduleId: undefined })
   await ctx.db.patch(p._id, { status: grantCredit ? 'justified_absence' : 'absence', notes: reason || 'Reposição desmarcada.' })

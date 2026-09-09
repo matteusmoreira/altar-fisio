@@ -1,3 +1,6 @@
+import { useEffect } from 'react'
+import { useQuery } from '@/lib/staffConvex'
+import { api } from '@convex/_generated/api'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
 import React, { useState } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
@@ -154,7 +157,15 @@ export const ClassesPage: React.FC = () => {
   const [recEndTime, setRecEndTime] = useState("08:55")
   const [recDaysOfWeek, setRecDaysOfWeek] = useState<number[]>([1, 3])
   const [recStartDate, setRecStartDate] = useState(getTodayDateString())
-  const [recWeeksCount, setRecWeeksCount] = useState<number>(4)
+  const [recServiceId, setRecServiceId] = useState('')
+  const [recCapacity, setRecCapacity] = useState(4)
+  const recServices = useQuery(api.services.listServices)
+  const recPreview = useQuery(api.schedules.previewRecurringMonth, isRecurringModalOpen && recRoomId && recProfId && recDaysOfWeek.length && recStartTime < recEndTime ? { month: recStartDate.slice(0,7), startDate: recStartDate, daysOfWeek: recDaysOfWeek, roomId: recRoomId as any, professionalId: recProfId as any, startTime: recStartTime, endTime: recEndTime, maxCapacity: recCapacity } : 'skip')
+  useEffect(() => {
+    if (!isRecurringModalOpen) return
+    if (!rooms.some(r => r.id === recRoomId && r.isActive)) setRecRoomId(rooms.find(r => r.isActive)?.id ?? '')
+    if (!professionals.some(p => p.id === recProfId && p.active)) setRecProfId(professionals.find(p => p.active)?.id ?? '')
+  }, [isRecurringModalOpen, rooms, professionals, recRoomId, recProfId])
   const [recEnrolledPatients, setRecEnrolledPatients] = useState<string[]>([])
   const [recError, setRecError] = useState<string | null>(null)
   const [isSubmittingRec, setIsSubmittingRec] = useState(false)
@@ -302,6 +313,7 @@ export const ClassesPage: React.FC = () => {
     }
 
     try {
+      if (!recServiceId || !recPreview?.length || recPreview.some(d => d.error)) { setRecError('Selecione o tratamento e resolva os impedimentos da prévia.'); return }
       const res = await addRecurringScheduleSeries({
         title: recTitle || `Turma de ${recSpecialty.toUpperCase()} (${room.name})`,
         type: "turma",
@@ -310,10 +322,11 @@ export const ClassesPage: React.FC = () => {
         professionalId: recProfId,
         startTime: recStartTime,
         endTime: recEndTime,
-        maxCapacity: room.capacity,
+        maxCapacity: recCapacity,
         daysOfWeek: recDaysOfWeek,
         startDate: recStartDate,
-        weeksCount: recWeeksCount,
+        month: recStartDate.slice(0,7),
+        serviceId: recServiceId,
         enrolledPatientIds: recEnrolledPatients,
       })
 
@@ -604,7 +617,7 @@ export const ClassesPage: React.FC = () => {
                     onChange={(e) => setSelectedRoomFilter(e.target.value)}
                   >
                     <option value="all">Todas as Salas</option>
-                    {rooms.map((r) => (
+                    {rooms.filter(r => r.isActive).map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
@@ -1154,10 +1167,10 @@ export const ClassesPage: React.FC = () => {
             <DialogHeader className="space-y-1">
               <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 <Repeat className="h-5 w-5 text-primary" />
-                <span>Criar Turma Recorrente Semanal</span>
+                <span>Criar Turma Recorrente Mensal</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Gere a grade semanal contínua de aulas (ex: Pilates Seg/Qua) com prevenção automática de conflitos.
+                Gere os encontros do mês para disponibilizar vagas aos pacientes no portal.
               </DialogDescription>
             </DialogHeader>
 
@@ -1198,7 +1211,7 @@ export const ClassesPage: React.FC = () => {
                     value={recRoomId}
                     onChange={(e) => setRecRoomId(e.target.value)}
                   >
-                    {rooms.map((r) => (
+                    {rooms.filter(r => r.isActive).map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name} (Cap: {r.capacity})
                       </option>
@@ -1213,7 +1226,7 @@ export const ClassesPage: React.FC = () => {
                   value={recProfId}
                   onChange={(e) => setRecProfId(e.target.value)}
                 >
-                  {professionals.map((p) => (
+                  {professionals.filter(p => p.active).map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.crefito})
                     </option>
@@ -1240,6 +1253,9 @@ export const ClassesPage: React.FC = () => {
                 </div>
               </div>
 
+              <label className="block text-sm font-medium">Tratamento contratado<Select value={recServiceId} onChange={e => { setRecServiceId(e.target.value); const svc = recServices?.find(s => s._id === e.target.value); if (svc) setRecSpecialty(svc.specialty) }}><option value="">Selecione o serviço</option>{recServices?.filter(s => s.active && s.modality === 'turma').map(s => <option key={s._id} value={s._id}>{s.name}</option>)}</Select></label>
+              <label className="block text-sm">Vagas por encontro<Input type="number" min={1} value={recCapacity} onChange={e => setRecCapacity(Number(e.target.value))} /></label>
+              <div className="rounded-lg bg-muted p-3 text-xs space-y-1"><strong>Prévia: {recPreview?.length ?? 0} encontros</strong>{recPreview?.map(d => <p key={d.date} className={d.error ? 'text-destructive' : ''}>{formatDateBR(d.date)} · {recStartTime}–{recEndTime}{d.error ? ` · ${d.error}` : ''}</p>)}</div>
               {/* Dias da Semana */}
               <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-2.5">
                 <span className="font-semibold text-foreground block text-xs">
@@ -1283,18 +1299,7 @@ export const ClassesPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Duração da Série</label>
-                  <Select
-                    value={recWeeksCount}
-                    onChange={(e) => setRecWeeksCount(Number(e.target.value))}
-                  >
-                    <option value={4}>4 semanas (1 mês)</option>
-                    <option value={8}>8 semanas (2 meses)</option>
-                    <option value={12}>12 semanas (3 meses)</option>
-                    <option value={24}>24 semanas (6 meses)</option>
-                  </Select>
-                </div>
+                <div><label className="block text-xs font-semibold">Mês das turmas</label><Input type="month" value={recStartDate.slice(0,7)} onChange={e => { if (e.target.value) setRecStartDate(`${e.target.value}-01`) }} /></div>
               </div>
             </div>
 
@@ -1339,7 +1344,7 @@ export const ClassesPage: React.FC = () => {
                     value={editRoomId}
                     onChange={(e) => setEditRoomId(e.target.value)}
                   >
-                    {rooms.map((r) => (
+                    {rooms.filter(r => r.isActive).map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
@@ -1353,7 +1358,7 @@ export const ClassesPage: React.FC = () => {
                     value={editProfId}
                     onChange={(e) => setEditProfId(e.target.value)}
                   >
-                    {professionals.map((p) => (
+                    {professionals.filter(p => p.active).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
