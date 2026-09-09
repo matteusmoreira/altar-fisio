@@ -1,3 +1,4 @@
+import { effectiveScheduleCapacity } from './lib/scheduleService'
 import { monthDates } from '../shared/monthlySchedule'
 
 export const unlinkedClassSeries = query({
@@ -135,7 +136,7 @@ export async function enrichSchedule(ctx: any, schedule: any) {
     professionalName: professional?.name || "Profissional",
     participants: enrichedParticipants,
     activeCount,
-    vacanciesLeft: Math.max(0, schedule.maxCapacity - activeCount),
+    vacanciesLeft: Math.max(0, await effectiveScheduleCapacity(ctx, schedule) - activeCount),
   }
 }
 
@@ -447,7 +448,7 @@ export const addParticipantToSchedule = mutation({
     )
 
     if (activeParticipants.some(p => p.patientId === args.patientId)) throw new ConvexError('Este paciente já está agendado nesta sessão. Confira a lista de participantes.')
-    if (activeParticipants.length >= schedule.maxCapacity) {
+    if (activeParticipants.length >= await effectiveScheduleCapacity(ctx, schedule)) {
       throw new ConvexError('Esta turma está lotada. Selecione outro horário com vaga disponível.')
     }
     const participantId = await ctx.db.insert("scheduleParticipants", {
@@ -485,7 +486,7 @@ export const checkInParticipant = mutation({
       if (!schedule || schedule.status === 'cancelled') throw new ConvexError('Sessão indisponível.')
       await processWaitlist(ctx, participant.scheduleId)
       const active = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', participant.scheduleId)).collect()
-      if (active.filter(occupiesSeat).length >= schedule.maxCapacity) throw new ConvexError('A vaga foi ocupada. Não é possível reativar este participante.')
+      if (active.filter(occupiesSeat).length >= await effectiveScheduleCapacity(ctx, schedule)) throw new ConvexError('A vaga foi ocupada. Não é possível reativar este participante.')
       if (participant.replacementCreditId) throw new ConvexError('Agende novamente usando o crédito de reposição disponível.')
     }
 
@@ -910,7 +911,7 @@ export const listAvailableTurmasForReplacement = query({
           .collect()
 
         const activeCount = participants.filter(occupiesSeat).length
-        const vacancies = s.maxCapacity - activeCount
+        const vacancies = await effectiveScheduleCapacity(ctx, s) - activeCount
 
         if (vacancies <= 0) return null
 

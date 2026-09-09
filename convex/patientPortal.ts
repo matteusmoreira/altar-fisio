@@ -1,5 +1,6 @@
 import { monthlyArgs, choiceValidator, monthlyOptions, reviewMonthly } from './lib/monthlyBooking'
-import { scheduleService } from './lib/scheduleService'
+import { scheduleService, effectiveScheduleCapacity } from './lib/scheduleService'
+import { getPackageBookingBalance } from './lib/packageBookingBalance'
 import { assertPortalBookingOpen } from './lib/portalBooking'
 import { DEFAULT_PORTAL_MESSAGE } from '../shared/portalMessage'
 import { requirePatient } from './lib/security'
@@ -148,16 +149,7 @@ export const getPatientPortalData = query({
         const isExpired = pkg.status !== "active" || pkg.expiryDate < todayStr
         const actualStatus = isExpired ? "expired" : pkg.status
 
-        // Quantidade de aulas futuras já agendadas consumindo este pacote
-        const bookedFutureSessionsCount = upcomingList.filter(
-          (u) => u.patientPackageId === pkg._id
-        ).length
-
-        // Saldo real livre para novos agendamentos no futuro
-        const bookableSessionsCount = Math.max(
-          0,
-          pkg.remainingSessions - bookedFutureSessionsCount
-        )
+        const { bookedCount: bookedFutureSessionsCount, freeBalance: bookableSessionsCount } = await getPackageBookingBalance(ctx, pkg, participations)
 
         const usagePercentage =
           pkg.totalSessions > 0
@@ -401,7 +393,7 @@ export const rescheduleAppointmentByPatient = mutation({
       .collect()
 
     const activeParts = existingParts.filter(occupiesSeat)
-    if (activeParts.length >= targetSchedule.maxCapacity) {
+    if (activeParts.length >= await effectiveScheduleCapacity(ctx, targetSchedule)) {
       throw new ConvexError("O novo horário selecionado já preencheu todas as vagas disponíveis.")
     }
 
@@ -560,7 +552,7 @@ export const listAvailableSlotsForBooking = query({
 
         const activeParts = parts.filter(occupiesSeat)
         const activeCount = activeParts.length
-        const maxCap = Math.min(s.maxCapacity, room?.capacity ?? s.maxCapacity)
+        const maxCap = await effectiveScheduleCapacity(ctx, s)
         const vacancies = Math.max(0, maxCap - activeCount)
 
         const isAlreadyEnrolled = activeParts.some((p) => p.patientId === normPatientId)
@@ -579,7 +571,7 @@ export const listAvailableSlotsForBooking = query({
           roomName: room?.name || "Sala",
           professionalName: prof?.name || "Profissional",
           vacanciesLeft: vacancies,
-          maxCapacity: s.maxCapacity,
+          maxCapacity: maxCap,
           isAlreadyEnrolled,
           hasConflict,
           canSelect: vacancies > 0 && !isAlreadyEnrolled && !hasConflict,
@@ -632,7 +624,7 @@ export const listAvailabilitySlotsForPatientBooking = query({
       const room = await ctx.db.get(schedule.roomId), professional = await ctx.db.get(schedule.professionalId)
       if (!room?.isActive || !professional?.active) continue
       const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', schedule._id)).collect()
-      const maxCapacity = Math.min(schedule.maxCapacity, room.capacity, service.maxCapacity ?? room.capacity)
+      const maxCapacity = await effectiveScheduleCapacity(ctx, schedule)
       const vacanciesLeft = Math.max(0, maxCapacity - participants.filter(occupiesSeat).length)
       if (vacanciesLeft > 0) result.push({ slotKey: schedule._id, scheduleId: schedule._id, title: schedule.title, specialty: schedule.specialty, type: schedule.type, date: schedule.date, startTime: schedule.startTime, endTime: schedule.endTime, roomId: room._id, roomName: room.name, professionalId: professional._id, professionalName: professional.name, vacanciesLeft, maxCapacity, isAlreadyEnrolled: activeScheduleIds.has(schedule._id) })
     }
@@ -688,24 +680,9 @@ export const bookAppointmentFromPortal = mutation({
       .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
       .collect()
 
-    const futureBookings: any[] = []
-    for (const part of participations) {
-      if (
-        part.patientPackageId === normPackageId &&
-        part.status !== "justified_absence" &&
-        part.status !== "absence"
-      ) {
-        const sch = await ctx.db.get(part.scheduleId)
-        if (sch && sch.status !== "cancelled" && sch.date >= todayStr) {
-          futureBookings.push(part)
-        }
-      }
-    }
-
-    if (futureBookings.length >= pkg.remainingSessions) {
-      throw new ConvexError(
-        `Você já possui ${futureBookings.length} aula(s) futura(s) agendada(s) para este plano, atingindo seu saldo de ${pkg.remainingSessions} sessão(ões) disponível(is).`
-      )
+    const balance = await getPackageBookingBalance(ctx, pkg, participations)
+    if (balance.freeBalance < 1) {
+      throw new ConvexError('Saldo livre insuficiente: suas reservas futuras e créditos de reposição já comprometem as sessões deste plano.')
     }
 
     const { service } = await resolvePatientPackageService(ctx, pkg)
@@ -732,7 +709,7 @@ export const bookAppointmentFromPortal = mutation({
     if (!selectedRoom?.isActive || !selectedProfessional?.active) throw new ConvexError('Sala ou profissional indisponível.')
     await processWaitlist(ctx, schedule._id)
     const members = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', schedule._id)).collect()
-    if (members.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, selectedRoom.capacity, service.maxCapacity ?? schedule.maxCapacity)) throw new ConvexError('Turma lotada.')
+    if (members.filter(occupiesSeat).length >= await effectiveScheduleCapacity(ctx, schedule)) throw new ConvexError('Turma lotada.')
     const scheduleId = schedule._id
     const participantId = await ctx.db.insert('scheduleParticipants', { scheduleId, patientId: normPatientId, patientPackageId: normPackageId, packageDebited: false, status: 'scheduled', notes: args.notes })
     await prepareReminders(ctx, participantId)
@@ -798,9 +775,7 @@ export const bookMonthlyClasses = mutation({
       const schedule = await ctx.db.get(date.scheduleId)
       if (!schedule) throw new ConvexError('Turma removida.')
       const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', date.scheduleId)).collect()
-      const room = await ctx.db.get(schedule.roomId)
-      const service = await ctx.db.get(preview.serviceId)
-      if (participants.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, room?.capacity ?? 0, service?.maxCapacity ?? schedule.maxCapacity)) throw new ConvexError('Uma vaga foi preenchida. Confira as turmas novamente.')
+      if (participants.filter(occupiesSeat).length >= await effectiveScheduleCapacity(ctx, schedule)) throw new ConvexError('Uma vaga foi preenchida. Confira as turmas novamente.')
       if (!schedule.serviceId) await ctx.db.patch(schedule._id, { serviceId: preview.serviceId })
       const id = await ctx.db.insert('scheduleParticipants', { scheduleId: date.scheduleId, patientId: patient._id, patientPackageId: args.patientPackageId, packageDebited: false, status: 'scheduled' })
       await prepareReminders(ctx, id)

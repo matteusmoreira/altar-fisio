@@ -1,3 +1,4 @@
+import { effectiveScheduleCapacity } from './lib/scheduleService'
 import { assertPortalBookingOpen } from './lib/portalBooking'
 import { v } from 'convex/values'
 import { mutation, query, internalMutation } from './_generated/server'
@@ -58,7 +59,7 @@ export const slots = query({
     for (const s of schedules) {
       if (await creditBookingError(ctx, p._id, args.creditId, s)) continue
       const parts = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', s._id)).collect()
-      const vacanciesLeft = Math.max(0, s.maxCapacity - parts.filter(occupiesSeat).length)
+      const vacanciesLeft = Math.max(0, await effectiveScheduleCapacity(ctx, s) - parts.filter(occupiesSeat).length)
       const canWait = sessionTime(s) - Date.now() >= WAITLIST_NOTICE_MS
       if (!vacanciesLeft && !canWait) continue
       slots.push({ scheduleId: s._id, title: s.title, date: s.date, startTime: s.startTime, endTime: s.endTime, vacanciesLeft, canWait, professionalName: (await ctx.db.get(s.professionalId))?.name, roomName: (await ctx.db.get(s.roomId))?.name })

@@ -338,7 +338,7 @@ export function MonthlyBookingDialog({
 
         {/* Resumo e Conferência de Datas */}
         {preview && (
-          <section className="space-y-3 rounded-2xl bg-gradient-to-b from-primary/[0.04] to-transparent border border-primary/20 p-4 sm:p-5">
+          <section aria-label="Confira suas datas" className="space-y-3 rounded-2xl bg-gradient-to-b from-primary/[0.04] to-transparent border border-primary/20 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
@@ -368,11 +368,16 @@ export function MonthlyBookingDialog({
               {preview.dates.map(d => (
                 <li
                   key={d.scheduleId}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border/70 text-xs shadow-2xs hover:border-primary/30 transition-colors"
+                  className="flex flex-col gap-2 min-w-0 p-2.5 rounded-xl bg-card border border-border/70 text-xs shadow-2xs hover:border-primary/30 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 text-primary/70 shrink-0" />
                     <span className="font-semibold text-foreground">{formatDateBR(d.date)}</span>
+                  </div>
+                  <div className="space-y-1 text-muted-foreground break-words">
+                    <p className="font-semibold text-foreground">{d.startTime}–{d.endTime}</p>
+                    <p>Profissional: {d.professionalName}</p>
+                    <p>Sala: {d.roomName}</p>
                   </div>
                   <div>
                     {d.alreadyBooked && (

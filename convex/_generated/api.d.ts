@@ -23,6 +23,7 @@ import type * as lib_appointmentJobs from "../lib/appointmentJobs.js";
 import type * as lib_bookGroupSession from "../lib/bookGroupSession.js";
 import type * as lib_bookingSlots from "../lib/bookingSlots.js";
 import type * as lib_monthlyBooking from "../lib/monthlyBooking.js";
+import type * as lib_packageBookingBalance from "../lib/packageBookingBalance.js";
 import type * as lib_password from "../lib/password.js";
 import type * as lib_patientCredentials from "../lib/patientCredentials.js";
 import type * as lib_portalBooking from "../lib/portalBooking.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   "lib/bookGroupSession": typeof lib_bookGroupSession;
   "lib/bookingSlots": typeof lib_bookingSlots;
   "lib/monthlyBooking": typeof lib_monthlyBooking;
+  "lib/packageBookingBalance": typeof lib_packageBookingBalance;
   "lib/password": typeof lib_password;
   "lib/patientCredentials": typeof lib_patientCredentials;
   "lib/portalBooking": typeof lib_portalBooking;

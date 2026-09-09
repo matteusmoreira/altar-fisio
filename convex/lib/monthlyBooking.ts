@@ -1,8 +1,9 @@
 import { ConvexError, v } from 'convex/values'
 import type { QueryCtx } from '../_generated/server'
 import { requirePatient } from './security'
-import { scheduleService } from './scheduleService'
-import { occupiesSeat, sessionTime, clinicToday } from './appointmentJobs'
+import { scheduleService, effectiveScheduleCapacity } from './scheduleService'
+import { getPackageBookingBalance } from './packageBookingBalance'
+import { occupiesSeat, sessionTime } from './appointmentJobs'
 import { monthDates } from '../../shared/monthlySchedule'
 
 export const monthlyArgs = { portalToken: v.string(), patientPackageId: v.id('patientPackages'), month: v.string() }
@@ -20,17 +21,8 @@ export async function monthlyOptions(ctx: QueryCtx, args: MonthlyArgs) {
   if (!service?.active || service.modality !== 'turma') return { patientId: patient._id, serviceId: null, freeBalance: 0, groups: [], bookingEnabled, issue: 'Este plano precisa de um serviço de tratamento em grupo ativo. Fale com a recepção.' }
   const schedules = await ctx.db.query('schedules').withIndex('by_date', q => q.gte('date', `${args.month}-01`).lte('date', `${args.month}-31`)).collect()
   const own = await ctx.db.query('scheduleParticipants').withIndex('by_patient', q => q.eq('patientId', patient._id)).collect()
-  const commitments = []
-  for (const p of own.filter(occupiesSeat)) {
-    const s = await ctx.db.get(p.scheduleId)
-    if (s && s.status !== 'cancelled' && sessionTime(s) > Date.now()) commitments.push({ ...s, participant: p })
-  }
-  // A cancelled session with an available replacement credit remains committed.
-  const credits = await ctx.db.query('replacementCredits').withIndex('by_patient_status', q => q.eq('patientId', patient._id).eq('status', 'available')).collect()
-  const creditCommitments = credits.filter(c => c.expiryDate >= clinicToday() && own.some(p => p.scheduleId === c.originScheduleId && p.patientPackageId === pkg._id)).length
-  const booked = commitments.filter(s => s.participant.patientPackageId === pkg._id).length
-  const freeBalance = Math.max(0, pkg.remainingSessions - booked - creditCommitments)
-  const groups = new Map<string, { key: string; recurringGroupId: string; dayOfWeek: number; title: string; startTime: string; endTime: string; professionalName: string; roomName: string; dates: { scheduleId: typeof schedules[number]['_id']; date: string; alreadyBooked: boolean; vacancies: number; error: string | null }[] }>()
+  const { commitments, freeBalance } = await getPackageBookingBalance(ctx, pkg, own)
+  const groups = new Map<string, { key: string; recurringGroupId: string; dayOfWeek: number; title: string; startTime: string; endTime: string; professionalName: string; roomName: string; dates: { scheduleId: typeof schedules[number]['_id']; date: string; startTime: string; endTime: string; professionalName: string; roomName: string; alreadyBooked: boolean; vacancies: number; error: string | null }[] }>()
   for (const s of schedules) {
     if (!s.recurringGroupId || s.type !== 'turma' || sessionTime(s) <= Date.now()) continue
     if ((await scheduleService(ctx, s))?._id !== service._id) continue
@@ -40,10 +32,10 @@ export async function monthlyOptions(ctx: QueryCtx, args: MonthlyArgs) {
     const group = groups.get(key) ?? { key, recurringGroupId: s.recurringGroupId, dayOfWeek, title: s.title, startTime: s.startTime, endTime: s.endTime, roomName: room?.name ?? 'Sala indisponível', professionalName: professional?.name ?? 'Profissional indisponível', dates: [] }
     const parts = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', s._id)).collect()
     const alreadyBooked = commitments.some(c => c._id === s._id && c.participant.patientPackageId === pkg._id)
-    const vacancies = Math.max(0, Math.min(s.maxCapacity, room?.capacity ?? 0, service.maxCapacity ?? s.maxCapacity) - parts.filter(occupiesSeat).length)
+    const vacancies = Math.max(0, await effectiveScheduleCapacity(ctx, s) - parts.filter(occupiesSeat).length)
     const conflict = commitments.some(c => c._id !== s._id && c.date === s.date && c.startTime < s.endTime && s.startTime < c.endTime)
     const error = s.status !== 'scheduled' || !room?.isActive || !professional?.active ? 'Turma indisponível' : pkg.status !== 'active' || s.date < pkg.startDate || s.date > pkg.expiryDate ? 'Fora da validade do plano' : conflict ? 'Conflito com outro agendamento' : !alreadyBooked && parts.some(p => p.patientId === patient._id && occupiesSeat(p)) ? 'Já reservado com outro plano' : !alreadyBooked && vacancies === 0 ? 'Turma lotada' : null
-    group.dates.push({ scheduleId: s._id, date: s.date, alreadyBooked, vacancies, error })
+    group.dates.push({ scheduleId: s._id, date: s.date, startTime: s.startTime, endTime: s.endTime, professionalName: professional?.name ?? 'Profissional indisponível', roomName: room?.name ?? 'Sala indisponível', alreadyBooked, vacancies, error })
     groups.set(key, group)
   }
   return { patientId: patient._id, serviceId: service._id, freeBalance, bookingEnabled, issue: null, groups: [...groups.values()].sort((a,b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime)) }

@@ -3,7 +3,7 @@ import type { MutationCtx, QueryCtx } from '../_generated/server'
 import type { Doc, Id } from '../_generated/dataModel'
 import { internal } from '../_generated/api'
 import { isValidPhone } from '../../shared/patientIdentity'
-import { scheduleService } from './scheduleService'
+import { scheduleService, effectiveScheduleCapacity } from './scheduleService'
 import { cancelParticipantJobs, clinicToday, occupiesSeat, prepareReminders, queueAppointmentJob, scheduleFingerprint, sessionTime } from './appointmentJobs'
 
 export const WAITLIST_NOTICE_MS = 90 * 60000
@@ -48,7 +48,7 @@ export async function bookCredit(ctx: MutationCtx, patientId: Id<'patients'>, cr
   const error = await creditBookingError(ctx, patientId, creditId, s, !!entryId)
   if (error) throw new ConvexError(error)
   const parts = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', scheduleId)).collect()
-  if (parts.filter(occupiesSeat).length >= s.maxCapacity) throw new ConvexError('Este horário está lotado.')
+  if (parts.filter(occupiesSeat).length >= await effectiveScheduleCapacity(ctx, s)) throw new ConvexError('Este horário está lotado.')
   await closeCreditQueue(ctx, creditId, 'Crédito utilizado em reposição.')
   await ctx.db.patch(creditId, { status: 'used', usedInScheduleId: scheduleId })
   const credit = await ctx.db.get(creditId)
@@ -79,7 +79,7 @@ export async function processWaitlist(ctx: MutationCtx, scheduleId: Id<'schedule
       continue
     }
     const parts = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', scheduleId)).collect()
-    if (parts.filter(occupiesSeat).length >= s.maxCapacity) break
+    if (parts.filter(occupiesSeat).length >= await effectiveScheduleCapacity(ctx, s)) break
     await bookCredit(ctx, e.patientId, e.creditId, scheduleId, e._id)
   }
 }

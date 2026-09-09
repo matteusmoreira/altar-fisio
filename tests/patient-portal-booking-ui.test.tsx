@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { getFunctionName } from 'convex/server'
 
-const mocks = vi.hoisted(() => ({ mutation: vi.fn(), action: vi.fn(), closed: false }))
+const mocks = vi.hoisted(() => ({ mutation: vi.fn(), action: vi.fn(), closed: false, preview: undefined as unknown }))
 const portalData = {
   patient: { _id: 'patient', name: 'Paciente Teste' },
   upcomingSchedules: [],
@@ -39,6 +39,7 @@ vi.mock('convex/react', () => ({
     if (name === 'patientPortal:getPatientPortalData') return { ...portalData, portalBookingEnabled: !mocks.closed, portalBookingMessage: [{ type: 'paragraph', runs: [{ text: 'Agende com nossa equipe', bold: true }] }] }
     if (name === 'patientPortal:listMonthlyClasses') return { freeBalance: 8, groups: slots.map((s, i) => ({ key: s.slotKey, recurringGroupId: s.slotKey, dayOfWeek: i + 1, title: s.title, startTime: s.startTime, endTime: s.endTime, professionalName: s.professionalName, roomName: s.roomName, dates: [{ scheduleId: s.slotKey, date: s.date, alreadyBooked: false, vacancies: 8, error: null }] })) }
     if (name === 'patientPortal:listAvailabilitySlotsForPatientBooking') return slots
+    if (name === 'patientPortal:previewMonthlyBooking') return mocks.preview
     return []
   },
   useMutation: () => mocks.mutation,
@@ -49,7 +50,7 @@ vi.mock('@/components/patients/PatientWaitlist', () => ({ PatientWaitlist: () =>
 
 import { PatientPortalPage } from '../src/pages/PatientPortalPage'
 
-beforeEach(() => { mocks.closed = false; sessionStorage.setItem('altar_patient_portal_token_v2', 'a'.repeat(64)) })
+beforeEach(() => { mocks.closed = false; mocks.preview = undefined; sessionStorage.setItem('altar_patient_portal_token_v2', 'a'.repeat(64)) })
 afterEach(() => {
   cleanup()
   sessionStorage.clear()
@@ -73,6 +74,24 @@ test('closure replaces booking controls and closes an already open form', () => 
   expect(screen.getByText('Agende com nossa equipe')).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Agendar Aula' })).toBeNull()
   expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+test('confirmation displays the actual time and resources of each occurrence', () => {
+  mocks.preview = { required: 2, canConfirm: true, errors: [], dates: [
+    { scheduleId: 'first', date: '2026-09-07', startTime: '08:00', endTime: '08:30', professionalName: 'Dani', roomName: 'Studio Pilates e RPG', alreadyBooked: false, error: null },
+    { scheduleId: 'second', date: '2026-09-14', startTime: '10:00', endTime: '10:30', professionalName: 'Substituta', roomName: 'Sala alternativa', alreadyBooked: false, error: null },
+  ] }
+  render(<PatientPortalPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Agendar Aula' }))
+  fireEvent.click(screen.getByRole('button', { name: '1×' }))
+  fireEvent.click(screen.getByText('Segunda · 08:00–08:30').closest('button')!)
+  const review = within(screen.getByRole('region', { name: 'Confira suas datas' }))
+  const meetings = review.getAllByRole('listitem')
+  expect(within(meetings[0]).getByText('08:00–08:30')).toBeTruthy()
+  expect(within(meetings[0]).getByText('Profissional: Dani')).toBeTruthy()
+  expect(within(meetings[1]).getByText('10:00–10:30')).toBeTruthy()
+  expect(within(meetings[1]).getByText('Profissional: Substituta')).toBeTruthy()
+  expect(within(meetings[1]).getByText('Sala: Sala alternativa')).toBeTruthy()
 })
 
 test('monthly booking dialog toggles class selections and displays elegant status indicators', () => {

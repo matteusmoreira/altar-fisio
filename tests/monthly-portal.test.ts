@@ -105,3 +105,61 @@ test('reception cannot close the portal; blank and unsafe messages are rejected'
   await expect(admin.t.mutation(api.clinic.updatePortalBooking, { sessionToken: 'staff', enabled: false, message: [] })).rejects.toThrow(/mensagem/)
   expect(() => validatePortalMessage([{ type: 'paragraph', runs: [{ text: 'Abrir', href: 'javascript:alert(1)' }] }])).toThrow(/Link/)
 })
+
+test('legacy and monthly bookings both reserve balance for valid replacement credits', async () => {
+  const f = await fixture()
+  const { target, creditId } = await f.t.run(async ctx => {
+    await ctx.db.patch(f.patientPackageId, { remainingSessions: 1, totalSessions: 1 })
+    const sessions = await ctx.db.query('schedules').collect()
+    const origin = sessions.find(s => s.date === '2026-09-01')!
+    const target = sessions.find(s => s.date === '2026-09-02')!
+    await ctx.db.insert('scheduleParticipants', { patientId: f.patientId, scheduleId: origin._id, patientPackageId: f.patientPackageId, packageDebited: false, status: 'justified_absence' })
+    const creditId = await ctx.db.insert('replacementCredits', { patientId: f.patientId, originScheduleId: origin._id, generatedAt: now, expiryDate: '2026-09-30', status: 'available' })
+    return { target, creditId }
+  })
+  const booking = { portalToken: f.portalToken, patientId: f.patientId, patientPackageId: f.patientPackageId, date: target.date, startTime: target.startTime, endTime: target.endTime, roomId: target.roomId, professionalId: target.professionalId }
+  expect((await f.t.query(api.patientPortal.listMonthlyClasses, f.args)).freeBalance).toBe(0)
+  expect((await f.t.query(api.patientPortal.getPatientPortalData, { portalToken: f.portalToken, patientId: f.patientId }))?.packages[0].bookableSessionsCount).toBe(0)
+  await expect(f.t.mutation(api.patientPortal.bookAppointmentFromPortal, booking)).rejects.toThrow(/saldo/i)
+  expect(await f.t.run(ctx => ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', target._id)).collect())).toHaveLength(0)
+  await f.t.run(ctx => ctx.db.patch(creditId, { expiryDate: '2026-08-31' }))
+  expect((await f.t.query(api.patientPortal.listMonthlyClasses, f.args)).freeBalance).toBe(1)
+  await expect(f.t.mutation(api.patientPortal.bookAppointmentFromPortal, booking)).resolves.toMatchObject({ success: true })
+})
+
+test.each(['room', 'service'] as const)('replacement and waitlist obey a reduced %s capacity', async limit => {
+  const f = await fixture()
+  const { target, creditId, otherParticipant } = await f.t.run(async ctx => {
+    if (limit === 'room') await ctx.db.patch(f.roomId, { capacity: 1 })
+    else await ctx.db.patch(f.serviceId, { maxCapacity: 1 })
+    const sessions = await ctx.db.query('schedules').collect()
+    const target = sessions.find(s => s.date === '2026-09-02')!
+    const other = await ctx.db.insert('patients', { name: 'Outro', documentCpf: '', phone: '', birthDate: '', active: true, createdAt: now })
+    const otherParticipant = await ctx.db.insert('scheduleParticipants', { patientId: other, scheduleId: target._id, status: 'scheduled' })
+    const creditId = await ctx.db.insert('replacementCredits', { patientId: f.patientId, originScheduleId: sessions[0]._id, generatedAt: now, expiryDate: '2026-09-30', status: 'available' })
+    return { target, creditId, otherParticipant }
+  })
+  const slots = await f.t.query(api.waitlist.slots, { portalToken: f.portalToken, creditId, date: target.date })
+  expect(slots.find(s => s.scheduleId === target._id)?.vacanciesLeft).toBe(0)
+  await expect(f.t.mutation(api.patientPortal.useReplacementCreditToBook, { portalToken: f.portalToken, patientId: f.patientId, creditId, targetScheduleId: target._id })).rejects.toThrow(/lotado/)
+  const entryId = await f.t.mutation(api.waitlist.join, { portalToken: f.portalToken, creditId, scheduleId: target._id })
+  expect((await f.t.run(ctx => ctx.db.get(entryId)))?.status).toBe('waiting')
+  expect((await f.t.run(ctx => ctx.db.get(creditId)))?.status).toBe('available')
+  await f.t.run(ctx => ctx.db.patch(otherParticipant, { status: 'absence' }))
+  await f.t.mutation(internal.waitlist.expire, { scheduleId: target._id })
+  expect((await f.t.run(ctx => ctx.db.get(entryId)))?.status).toBe('booked')
+})
+
+test('monthly review exposes actual time, professional and room of every meeting', async () => {
+  const f = await fixture()
+  const changedId = await f.t.run(async ctx => {
+    const session = (await ctx.db.query('schedules').collect()).find(s => s.date === '2026-09-14')!
+    const professionalId = await ctx.db.insert('professionals', { name: 'Substituta', email: '', phone: '', crefito: '', specialties: ['pilates'], commissionType: 'fixed', commissionValue: 0, active: true })
+    const roomId = await ctx.db.insert('rooms', { name: 'Sala alternativa', type: 'pilates_solo', capacity: 2, color: '', isActive: true })
+    await ctx.db.patch(session._id, { startTime: '10:00', endTime: '10:30', professionalId, roomId })
+    return session._id
+  })
+  const preview = await f.t.query(api.patientPortal.previewMonthlyBooking, { ...f.args, choices: [{ recurringGroupId: f.series.recurringGroupId, dayOfWeek: 1 }] })
+  expect(preview.dates.find(d => d.scheduleId === changedId)).toMatchObject({ date: '2026-09-14', startTime: '10:00', endTime: '10:30', professionalName: 'Substituta', roomName: 'Sala alternativa' })
+  expect(preview.dates[0]).toMatchObject({ startTime: '08:00', endTime: '08:30', professionalName: 'Dani', roomName: 'Pilates e RPG' })
+})
