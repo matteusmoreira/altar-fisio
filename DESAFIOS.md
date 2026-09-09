@@ -1,5 +1,15 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-09] Construtor divergente da agenda pública
+- Manter um mock manual da agenda dentro do construtor fez a prévia ficar desatualizada quando a página pública ganhou planos, preços e logos de convênios.
+- O construtor agora incorpora a própria rota `/agendar?preview=builder`, com visualizações de celular e desktop. O parâmetro de prévia bloqueia a mutação final, evitando reservas acidentais durante a simulação.
+- O navegador isolado de validação local encerrou WebSockets do Vite e Convex com código 1006. Nessa condição, validar estrutura e segurança com testes/build e confirmar as queries públicas de produção via HTTP; a conferência visual completa com dados reativos deve usar um navegador comum ou a versão publicada.
+
+### [2026-09-09] Agendamento público: pré-seleção de convênio e logos interativas
+- A etapa 2 (Sessão & Horário) da agenda pública agora inicia por padrão com `Tenho Plano de Saúde` (`patientBillingType: "convenio"`), garantindo visibilidade imediata das opções de reembolso e valores conveniados.
+- Os 6 parceiros de convênio do site (`Unimed`, `Amil`, `Saúde Petrobras`, `Bradesco Saúde`, `SulAmérica`, `BraSeg`) foram copiados para `src/assets/convenios/` e `public/assets/convenios/`, com cards no formato pílula/cápsula branca idênticos ao design original do site Dr. Marcelo, suporte à opção "Outro Plano" para operadoras não listadas, e regressão unitária em `tests/public-booking-insurance.test.tsx`.
+
+
 ### [2026-09-09] Portal do paciente mostrava uma sessão de expediente inteiro
 - A grade semanal e as sessões operacionais são conceitos diferentes: uma regra `08:00–17:00` com duração 30 gera slots virtuais, enquanto uma turma manual `08:00–17:00` ocupa sala e profissional por nove horas. O Portal de novo agendamento deve consultar a grade via motor compartilhado e materializar/reutilizar somente o slot escolhido.
 - O plano atribuído ao paciente agora guarda `serviceId` como snapshot, restringindo horários ao serviço contratado mesmo após mudanças no catálogo. Definições comerciais com planos já atribuídos não podem ser excluídas; devem ser desativadas.

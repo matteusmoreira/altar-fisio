@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select-native"
 import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
+import { getPackageModalityLabel } from "@/lib/packageDisplay"
 import {
   Dialog,
   DialogContent,
@@ -595,7 +596,7 @@ export const PackagesPage: React.FC = () => {
                 <CardHeader className="p-4 pb-2">
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                      {pkg.modality === "turma" ? "Turma até 4" : "Individual"}
+                      {getPackageModalityLabel(pkg, services)}
                     </span>
                     <div className="flex items-center gap-1">
                       <Badge variant="outline" className="text-[10px]">

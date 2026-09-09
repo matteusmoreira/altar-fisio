@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
-import { useTheme } from "@/contexts/ThemeContext"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,37 +23,13 @@ import {
   Trash2,
   Edit2,
   RotateCcw,
-  CheckCircle2,
-  Clock,
-  User,
-  Phone,
-  ShieldCheck,
-  AlertCircle,
-  HelpCircle,
-  Check,
-  X,
   Settings2,
   Layers,
   ArrowUp,
   ArrowDown,
   Smartphone,
   Monitor,
-  HeartPulse,
-  Calendar,
-  ChevronRight,
-  ChevronLeft,
-  Share2,
-  Info,
-  CalendarCheck,
 } from "lucide-react"
-
-interface BookingStep {
-  id: string
-  title: string
-  description: string
-  order: number
-  type: "intake_form" | "slot_picker" | "patient_info"
-}
 
 interface BookingField {
   id: string
@@ -73,9 +48,7 @@ interface BookingField {
 }
 
 export const BookingBuilderPage: React.FC = () => {
-  const { theme } = useTheme()
   const config = useQuery(api.bookingBuilder.getBookingConfig)
-  const clinicSettings = useQuery(api.clinic.getSettings)
   const updateConfig = useMutation(api.bookingBuilder.updateBookingConfig)
   const resetConfig = useMutation(api.bookingBuilder.resetBookingConfigToDefault)
 
@@ -93,12 +66,8 @@ export const BookingBuilderPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState("")
   const [isSavingGeneral, setIsSavingGeneral] = useState(false)
 
-  // Viewport do Live Preview: "mobile" | "desktop"
+  // Viewport da página pública real: "mobile" | "desktop"
   const [previewDevice, setPreviewDevice] = useState<"mobile" | "desktop">("mobile")
-  const [previewStepIndex, setPreviewStepIndex] = useState(0)
-  const [previewAnswers, setPreviewAnswers] = useState<Record<string, string>>({})
-  const [previewService, setPreviewService] = useState("pilates")
-  const [previewSlot, setPreviewSlot] = useState("09:00")
 
   // Modal de Edição de Etapa
   const [editingStep, setEditingStep] = useState<{
@@ -365,21 +334,6 @@ export const BookingBuilderPage: React.FC = () => {
     }
   }
 
-  // Etapas ordenadas para o Live Preview
-  const orderedSteps = useMemo(() => {
-    if (!config?.steps) return []
-    return [...config.steps].sort((a, b) => a.order - b.order)
-  }, [config?.steps])
-
-  const activePreviewStep = orderedSteps[previewStepIndex] || orderedSteps[0]
-
-  // Avaliação de visibilidade condicional dentro do Live Preview
-  const isFieldVisibleInPreview = (field: BookingField): boolean => {
-    if (!field.conditional) return true
-    const parentAnswer = previewAnswers[field.conditional.dependsOnFieldId]
-    return parentAnswer === field.conditional.equalsValue
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
       {/* Toast Feedback */}
@@ -437,7 +391,7 @@ export const BookingBuilderPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid Principal: Split Screen (Controles à Esquerda e Live Preview à Direita) */}
+      {/* Grid Principal: controles à esquerda e página pública real à direita */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* ========================================================================= */}
         {/* COLUNA ESQUERDA: CONTROLES & CONFIGURAÇÕES (xl:col-span-7)               */}
@@ -842,7 +796,7 @@ export const BookingBuilderPage: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <span className="text-xs font-bold text-foreground">Live Preview Interativo</span>
+              <span className="text-xs font-bold text-foreground">Prévia Pública Real</span>
             </div>
 
             <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60">
@@ -876,400 +830,37 @@ export const BookingBuilderPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Container do Simulador */}
+          {/* A própria página pública é a fonte da prévia: sem mock duplicado e desatualizado. */}
           <div className="flex justify-center w-full">
-            {previewDevice === "mobile" ? (
-              /* ================= MOCKUP SMARTPHONE ================= */
-              <div className="w-[360px] max-w-full rounded-[38px] border-[7px] border-border/80 bg-background shadow-2xl overflow-hidden flex flex-col transition-all">
-                {/* Smartphone Notch / Header bar */}
-                <div className="h-6 bg-card flex items-center justify-center relative border-b border-border/40">
-                  <div className="w-20 h-3.5 bg-muted/80 rounded-full"></div>
+            <div
+              className={`w-full overflow-hidden bg-background shadow-2xl transition-all ${
+                previewDevice === "mobile"
+                  ? "max-w-[390px] rounded-[38px] border-[7px] border-border/80"
+                  : "rounded-2xl border border-border/80"
+              }`}
+            >
+              <div className="h-9 bg-muted/40 border-b border-border/60 px-3 flex items-center gap-2">
+                <div className="flex items-center gap-1.5" aria-hidden="true">
+                  <div className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
                 </div>
-
-                {/* Tela do Celular com Conteúdo */}
-                <div className="p-4 max-h-[640px] overflow-y-auto space-y-4 text-xs">
-                  {/* Topo da Clínica */}
-                  <div className="text-center space-y-1.5 pb-3 border-b border-border/50">
-                    <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-2xs">
-                      <HeartPulse className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-bold text-sm text-foreground leading-tight">
-                      {welcomeTitle || "Agende sua Consulta"}
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      {welcomeMessage}
-                    </p>
-                  </div>
-
-                  {/* Indicador de Etapas */}
-                  <div className="flex items-center justify-between gap-1 pt-1">
-                    {orderedSteps.map((step, idx) => (
-                      <button
-                        key={step.id}
-                        type="button"
-                        onClick={() => setPreviewStepIndex(idx)}
-                        className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
-                          idx === previewStepIndex
-                            ? "bg-primary text-primary-foreground shadow-2xs"
-                            : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {idx + 1}. {step.title.split(" ")[0]}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Detalhes da Etapa Atual */}
-                  {activePreviewStep && (
-                    <div className="p-2.5 rounded-xl bg-muted/20 border border-border/50">
-                      <div className="font-bold text-[11px] text-foreground">
-                        {activePreviewStep.title}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        {activePreviewStep.description}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Conteúdo Dinâmico por Tipo de Etapa */}
-                  {activePreviewStep?.type === "intake_form" && (
-                    <div className="space-y-3">
-                      {config?.fields?.map((field) => {
-                        const isVisible = isFieldVisibleInPreview(field)
-                        if (!isVisible) return null
-
-                        return (
-                          <div key={field.id} className="space-y-1 animate-fade-in">
-                            <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
-                              <span>{field.label}</span>
-                              {field.required && (
-                                <span className="text-[9px] text-destructive font-bold">*</span>
-                              )}
-                            </label>
-
-                            {field.type === "yes_no" ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                {["Sim", "Não"].map((opt) => {
-                                  const isSelected = previewAnswers[field.id] === opt
-                                  return (
-                                    <button
-                                      key={opt}
-                                      type="button"
-                                      onClick={() =>
-                                        setPreviewAnswers((prev) => ({
-                                          ...prev,
-                                          [field.id]: opt,
-                                        }))
-                                      }
-                                      className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                                        isSelected
-                                          ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                                          : "bg-card border-border hover:bg-muted/50 text-foreground"
-                                      }`}
-                                    >
-                                      {opt}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            ) : field.type === "select" ? (
-                              <Select
-                                value={previewAnswers[field.id] || ""}
-                                onChange={(e) =>
-                                  setPreviewAnswers((prev) => ({
-                                    ...prev,
-                                    [field.id]: e.target.value,
-                                  }))
-                                }
-                                className="h-8 text-xs rounded-lg"
-                              >
-                                <option value="">{field.placeholder || "Selecione..."}</option>
-                                {field.options?.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </Select>
-                            ) : field.type === "textarea" ? (
-                              <textarea
-                                rows={2}
-                                value={previewAnswers[field.id] || ""}
-                                onChange={(e) =>
-                                  setPreviewAnswers((prev) => ({
-                                    ...prev,
-                                    [field.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder={field.placeholder || "Digite aqui..."}
-                                className="w-full p-2 rounded-lg border border-input bg-card text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-none"
-                              />
-                            ) : (
-                              <Input
-                                value={previewAnswers[field.id] || ""}
-                                onChange={(e) =>
-                                  setPreviewAnswers((prev) => ({
-                                    ...prev,
-                                    [field.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder={field.placeholder || "Preencha..."}
-                                className="h-8 text-xs rounded-lg"
-                              />
-                            )}
-
-                            {field.helpText && (
-                              <p className="text-[9px] text-muted-foreground">{field.helpText}</p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {activePreviewStep?.type === "slot_picker" && (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-semibold text-foreground">Especialidade:</span>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            { id: "pilates", label: "Pilates" },
-                            { id: "fisioterapia", label: "Fisioterapia" },
-                            { id: "rpg", label: "RPG" },
-                          ].map((serv) => (
-                            <button
-                              key={serv.id}
-                              type="button"
-                              onClick={() => setPreviewService(serv.id)}
-                              className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border truncate transition-all ${
-                                previewService === serv.id
-                                  ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                                  : "bg-card border-border text-foreground hover:bg-muted"
-                              }`}
-                            >
-                              {serv.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-semibold text-foreground">Horários Disponíveis:</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {["08:00", "09:00", "14:00", "16:00"].map((time) => (
-                            <button
-                              key={time}
-                              type="button"
-                              onClick={() => setPreviewSlot(time)}
-                              className={`py-2 px-2 rounded-xl text-center border text-xs font-bold transition-all ${
-                                previewSlot === time
-                                  ? "bg-primary text-primary-foreground border-primary shadow-2xs"
-                                  : "bg-card border-border text-foreground hover:bg-muted/50"
-                              }`}
-                            >
-                              {time}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activePreviewStep?.type === "patient_info" && (
-                    <div className="space-y-2.5">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-foreground">Nome Completo</label>
-                        <Input placeholder="Ex: Maria Silva" className="h-8 text-xs rounded-lg" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-foreground">WhatsApp Celular</label>
-                        <Input placeholder="(11) 98765-4321" className="h-8 text-xs rounded-lg" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-foreground">CPF do Paciente</label>
-                        <Input placeholder="000.000.000-00" className="h-8 text-xs rounded-lg" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Botões de Navegação da Simulação */}
-                  <div className="pt-2 flex items-center justify-between border-t border-border/50">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={previewStepIndex === 0}
-                      onClick={() => setPreviewStepIndex((p) => Math.max(0, p - 1))}
-                      className="h-8 text-xs rounded-lg gap-1"
-                    >
-                      <ChevronLeft className="h-3 w-3" />
-                      <span>Voltar</span>
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (previewStepIndex < orderedSteps.length - 1) {
-                          setPreviewStepIndex((p) => p + 1)
-                        } else {
-                          alert(successMessage || "Agendamento simulado com sucesso!")
-                        }
-                      }}
-                      className="h-8 text-xs rounded-lg font-bold gap-1 shadow-2xs"
-                    >
-                      <span>
-                        {previewStepIndex === orderedSteps.length - 1 ? "Concluir" : "Avançar"}
-                      </span>
-                      <ChevronRight className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Smartphone Home Indicator */}
-                <div className="h-4 bg-card flex items-center justify-center">
-                  <div className="w-28 h-1 bg-muted-foreground/30 rounded-full"></div>
+                <div className="flex-1 bg-background/80 px-3 py-0.5 rounded-md border border-border/50 text-[10px] text-muted-foreground font-mono truncate text-center">
+                  /agendar · prévia segura
                 </div>
               </div>
-            ) : (
-              /* ================= MOCKUP DESKTOP ================= */
-              <div className="w-full rounded-2xl border border-border/80 bg-background shadow-2xl overflow-hidden flex flex-col transition-all">
-                {/* Browser Titlebar */}
-                <div className="h-9 bg-muted/40 border-b border-border/60 px-3 flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full bg-rose-500/80"></div>
-                    <div className="h-2.5 w-2.5 rounded-full bg-amber-500/80"></div>
-                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/80"></div>
-                  </div>
-                  <div className="flex-1 max-w-sm mx-auto bg-background/80 px-3 py-0.5 rounded-md border border-border/50 text-[10px] text-muted-foreground font-mono truncate text-center">
-                    altarfisio.com.br/agendar
-                  </div>
-                </div>
 
-                {/* Conteúdo Desktop */}
-                <div className="p-5 max-h-[640px] overflow-y-auto space-y-4 text-xs">
-                  <div className="text-center space-y-1.5 pb-3 border-b border-border/50">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                      <HeartPulse className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-bold text-base text-foreground">{welcomeTitle}</h3>
-                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                      {welcomeMessage}
-                    </p>
-                  </div>
-
-                  {/* Abas de Etapas Desktop */}
-                  <div className="flex items-center justify-center gap-2">
-                    {orderedSteps.map((step, idx) => (
-                      <button
-                        key={step.id}
-                        type="button"
-                        onClick={() => setPreviewStepIndex(idx)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                          idx === previewStepIndex
-                            ? "bg-primary text-primary-foreground shadow-2xs"
-                            : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        Etapa {idx + 1}: {step.title}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Campos simulados na etapa atual */}
-                  {activePreviewStep?.type === "intake_form" && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                      {config?.fields?.map((field) => {
-                        if (!isFieldVisibleInPreview(field)) return null
-                        return (
-                          <div key={field.id} className="space-y-1">
-                            <label className="text-xs font-semibold text-foreground">
-                              {field.label} {field.required && <span className="text-destructive">*</span>}
-                            </label>
-                            {field.type === "yes_no" ? (
-                              <div className="grid grid-cols-2 gap-2">
-                                {["Sim", "Não"].map((opt) => (
-                                  <button
-                                    key={opt}
-                                    type="button"
-                                    onClick={() =>
-                                      setPreviewAnswers((prev) => ({
-                                        ...prev,
-                                        [field.id]: opt,
-                                      }))
-                                    }
-                                    className={`py-1.5 rounded-lg border text-xs font-semibold ${
-                                      previewAnswers[field.id] === opt
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "bg-card border-border hover:bg-muted/50"
-                                    }`}
-                                  >
-                                    {opt}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : field.type === "select" ? (
-                              <Select
-                                value={previewAnswers[field.id] || ""}
-                                onChange={(e) =>
-                                  setPreviewAnswers((prev) => ({
-                                    ...prev,
-                                    [field.id]: e.target.value,
-                                  }))
-                                }
-                                className="h-9 text-xs"
-                              >
-                                <option value="">{field.placeholder || "Selecione..."}</option>
-                                {field.options?.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </Select>
-                            ) : (
-                              <Input
-                                value={previewAnswers[field.id] || ""}
-                                onChange={(e) =>
-                                  setPreviewAnswers((prev) => ({
-                                    ...prev,
-                                    [field.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder={field.placeholder || "Preencha..."}
-                                className="h-9 text-xs"
-                              />
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {activePreviewStep?.type === "slot_picker" && (
-                    <div className="space-y-3 pt-2">
-                      <div className="text-xs font-bold text-foreground">Escolha de Vaga & Serviço</div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {["Studio Pilates", "Fisioterapia Geral", "Reeducação Postural (RPG)"].map((s) => (
-                          <div key={s} className="p-3 rounded-xl border border-border bg-card text-center font-bold text-xs hover:border-primary cursor-pointer">
-                            {s}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activePreviewStep?.type === "patient_info" && (
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold">Nome Completo</label>
-                        <Input placeholder="Ex: Lucas Ferreira" className="h-9 text-xs" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold">WhatsApp Celular</label>
-                        <Input placeholder="(11) 98765-4321" className="h-9 text-xs" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              <iframe
+                title={`Prévia real do agendamento público em ${
+                  previewDevice === "mobile" ? "celular" : "desktop"
+                }`}
+                src={`${publicUrl}?preview=builder`}
+                sandbox="allow-scripts allow-same-origin"
+                className={`block w-full bg-background ${
+                  previewDevice === "mobile" ? "h-[680px]" : "h-[760px]"
+                }`}
+              />
+            </div>
           </div>
         </div>
       </div>

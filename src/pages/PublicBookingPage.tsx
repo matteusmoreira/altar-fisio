@@ -57,6 +57,58 @@ const SPECIALTY_LABELS: Record<BookingSpecialty, string> = {
   rpg: "RPG Souchard",
 }
 
+import unimedLogo from "@/assets/convenios/unimed.svg"
+import amilLogo from "@/assets/convenios/amil.svg"
+import petrobrasLogo from "@/assets/convenios/petrobras.svg"
+import bradescoLogo from "@/assets/convenios/bradesco.svg"
+import sulamericaLogo from "@/assets/convenios/sulamerica.svg"
+import brasegLogo from "@/assets/convenios/braseg.png"
+
+const HEALTH_INSURANCE_PARTNERS = [
+  {
+    id: "Unimed",
+    name: "Unimed",
+    logo: unimedLogo,
+    alt: "Unimed",
+    imgClass: "max-h-7 sm:max-h-8 max-w-[110px]",
+  },
+  {
+    id: "Amil",
+    name: "Amil",
+    logo: amilLogo,
+    alt: "Amil",
+    imgClass: "max-h-6 sm:max-h-7 max-w-[85px]",
+  },
+  {
+    id: "Saúde Petrobras",
+    name: "Saúde Petrobras",
+    logo: petrobrasLogo,
+    alt: "Saúde Petrobras",
+    imgClass: "max-h-5 sm:max-h-6 max-w-[125px]",
+  },
+  {
+    id: "Bradesco Saúde",
+    name: "Bradesco Saúde",
+    logo: bradescoLogo,
+    alt: "Bradesco Saúde",
+    imgClass: "max-h-5 sm:max-h-6 max-w-[110px]",
+  },
+  {
+    id: "SulAmérica",
+    name: "SulAmérica",
+    logo: sulamericaLogo,
+    alt: "SulAmérica Saúde",
+    imgClass: "max-h-6 sm:max-h-7 max-w-[115px]",
+  },
+  {
+    id: "BraSeg",
+    name: "BraSeg",
+    logo: brasegLogo,
+    alt: "BraSeg Assistência Familiar",
+    imgClass: "max-h-7 sm:max-h-8 max-w-[95px]",
+  },
+] as const
+
 const BOOKING_SPECIALTIES = Object.keys(SPECIALTY_LABELS) as BookingSpecialty[]
 const LEGACY_INSURANCE_FIELD_IDS = new Set([
   "field_has_insurance",
@@ -72,6 +124,7 @@ export const PublicBookingPage: React.FC = () => {
 
   // Rastreia especialidade da URL se houver (ex: ?servico=pilates)
   const urlParams = new URLSearchParams(window.location.search)
+  const isBuilderPreview = urlParams.get("preview") === "builder"
   const initialSpecialty = (urlParams.get("especialidade") || urlParams.get("servico") || "pilates") as BookingSpecialty
 
   // Estado do Fluxo
@@ -80,7 +133,7 @@ export const PublicBookingPage: React.FC = () => {
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({})
 
   // Estado da Tabela de Preços e Convênio
-  const [patientBillingType, setPatientBillingType] = useState<"particular" | "convenio">("particular")
+  const [patientBillingType, setPatientBillingType] = useState<"particular" | "convenio">("convenio")
   const [selectedHealthInsurance, setSelectedHealthInsurance] = useState("Unimed")
   const [customHealthInsurance, setCustomHealthInsurance] = useState("")
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
@@ -352,6 +405,13 @@ export const PublicBookingPage: React.FC = () => {
 
   // Submissão Final
   const handleSubmitBooking = async () => {
+    if (isBuilderPreview) {
+      setFormErrors({
+        submit: "Prévia segura: nenhum agendamento real será criado pelo construtor.",
+      })
+      return
+    }
+
     if (!isValidCpf(patientCpf) || !isValidPhone(patientPhone) || !patientName.trim() || !patientBirthDate) {
       setFormErrors({ cpf: !isValidCpf(patientCpf) ? 'Informe um CPF válido.' : '', phone: !isValidPhone(patientPhone) ? 'Informe um telefone válido com DDD.' : '', submit: 'Confira seus dados para concluir o agendamento.' })
       const index = steps.findIndex(step => step.type === 'patient_info')
@@ -685,6 +745,11 @@ export const PublicBookingPage: React.FC = () => {
   // ================= RENDER PRINCIPAL DO FLUXO =================
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/40 via-background to-muted/20 text-foreground selection:bg-primary/20 pb-16">
+      {isBuilderPreview ? (
+        <div className="sticky top-0 z-50 border-b border-amber-500/30 bg-amber-50/95 px-4 py-2 text-center text-[11px] font-bold text-amber-900 backdrop-blur dark:bg-amber-950/95 dark:text-amber-100">
+          Prévia do construtor — navegue à vontade; nenhuma reserva real será criada.
+        </div>
+      ) : null}
       {/* Navbar Premium com Identidade da Clínica */}
       <header className="border-b border-border/70 bg-card/90 backdrop-blur-md sticky top-0 z-40 transition-all shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
@@ -1005,50 +1070,108 @@ export const PublicBookingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Seção Expansível: Seleção de Convênio */}
+                  {/* Seção Expansível: Seleção de Convênio com Logos Oficiais */}
                   {patientBillingType === "convenio" && (
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-card border border-sky-500/25 space-y-3 animate-fade-in">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                            <HeartPulse className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                            <span>Qual é o seu Plano de Saúde ou Convênio?</span>
-                          </span>
-                          <p className="text-[11px] text-muted-foreground">
-                            Emitimos recibo oficial detalhado para você solicitar o reembolso integral ou parcial no seu plano.
-                          </p>
-                        </div>
-
-                        <div className="w-full sm:w-64 shrink-0">
-                          <Select
-                            value={selectedHealthInsurance}
-                            onChange={(e) => setSelectedHealthInsurance(e.target.value)}
-                            className="h-10 text-xs bg-card border-border rounded-xl"
-                          >
-                            <option value="Unimed">Unimed</option>
-                            <option value="Bradesco Saúde">Bradesco Saúde</option>
-                            <option value="SulAmérica">SulAmérica</option>
-                            <option value="Amil">Amil</option>
-                            <option value="NotreDame Intermédica">NotreDame Intermédica</option>
-                            <option value="Porto Seguro Saúde">Porto Seguro Saúde</option>
-                            <option value="Omint">Omint</option>
-                            <option value="Cassi">Cassi</option>
-                            <option value="Allianz Saúde">Allianz Saúde</option>
-                            <option value="Outro">Outro Convênio...</option>
-                          </Select>
-                        </div>
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-card border border-emerald-500/25 space-y-3.5 animate-fade-in shadow-xs">
+                      <div className="space-y-1">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <HeartPulse className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>Qual é o seu Plano de Saúde ou Convênio?</span>
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                          Atendemos os principais planos com autorização ágil e fornecemos documentação completa para reembolso rápido em qualquer operadora.
+                        </p>
                       </div>
 
+                      {/* Grade de Logos dos Convênios do Site */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
+                        {HEALTH_INSURANCE_PARTNERS.map((partner) => {
+                          const isSelected = selectedHealthInsurance === partner.id
+
+                          return (
+                            <button
+                              key={partner.id}
+                              type="button"
+                              onClick={() => setSelectedHealthInsurance(partner.id)}
+                              className={`relative group flex items-center justify-center h-14 sm:h-16 px-2 sm:px-3 py-2 rounded-2xl sm:rounded-full bg-white transition-all duration-200 border cursor-pointer select-none ${
+                                isSelected
+                                  ? "ring-2 ring-primary border-primary shadow-md bg-white -translate-y-0.5"
+                                  : "border-emerald-950/10 hover:border-primary/40 hover:shadow-xs hover:-translate-y-0.5"
+                              }`}
+                              title={`Selecionar ${partner.name}`}
+                              aria-label={`Selecionar convênio ${partner.name}`}
+                            >
+                              <img
+                                src={partner.logo}
+                                alt={partner.alt}
+                                className={`${partner.imgClass} w-auto object-contain transition-transform duration-200 group-hover:scale-105`}
+                                loading="eager"
+                              />
+
+                              {isSelected && (
+                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                                  <Check className="h-3 w-3 stroke-[3]" />
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+
+                        {/* Opção para Outro Plano de Saúde */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedHealthInsurance("Outro")}
+                          className={`relative group flex flex-col items-center justify-center h-14 sm:h-16 px-2 sm:px-3 py-2 rounded-2xl sm:rounded-full transition-all duration-200 border cursor-pointer select-none text-center ${
+                            selectedHealthInsurance === "Outro"
+                              ? "bg-primary/10 ring-2 ring-primary border-primary shadow-md text-primary -translate-y-0.5"
+                              : "bg-white dark:bg-card border-emerald-950/10 hover:border-primary/40 hover:shadow-xs hover:-translate-y-0.5 text-muted-foreground hover:text-foreground"
+                          }`}
+                          title="Selecionar outro plano ou seguro saúde"
+                          aria-label="Selecionar outro convênio"
+                        >
+                          <span className="text-xs font-black tracking-tight text-foreground leading-tight">
+                            Outro Plano
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-medium">
+                            Reembolso
+                          </span>
+
+                          {selectedHealthInsurance === "Outro" && (
+                            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                              <Check className="h-3 w-3 stroke-[3]" />
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Campo Adicional quando 'Outro' for selecionado */}
                       {selectedHealthInsurance === "Outro" && (
-                        <div className="pt-1">
+                        <div className="pt-2 border-t border-border/60 space-y-1.5 animate-fade-in">
+                          <label className="text-xs font-semibold text-foreground block">
+                            Nome do seu plano de saúde:
+                          </label>
                           <Input
-                            placeholder="Digite o nome do seu plano de saúde..."
+                            placeholder="Digite o nome do seu plano (ex: NotreDame, Porto Seguro, Omint, Cassi...)"
                             value={customHealthInsurance}
                             onChange={(e) => setCustomHealthInsurance(e.target.value)}
                             className="h-10 text-xs bg-card border-border rounded-xl"
+                            autoFocus
                           />
                         </div>
                       )}
+
+                      {/* Resumo da Seleção Ativa */}
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5 px-0.5">
+                        <span className="flex items-center gap-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>
+                            Plano selecionado: <strong className="text-foreground font-semibold">{selectedHealthInsurance === "Outro" ? (customHealthInsurance.trim() || "Outro plano") : selectedHealthInsurance}</strong>
+                          </span>
+                        </span>
+                        <span className="hidden sm:inline text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                          ✓ Documentação para reembolso inclusa
+                        </span>
+                      </div>
                     </div>
                   )}
 
