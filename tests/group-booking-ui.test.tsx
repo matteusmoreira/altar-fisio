@@ -4,7 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, test, vi } from 'vitest'
 import { getFunctionName } from 'convex/server'
 
-const mocks = vi.hoisted(() => ({ save: vi.fn().mockResolvedValue('rule') }))
+const mocks = vi.hoisted(() => ({
+  save: vi.fn().mockResolvedValue('rule'),
+  bookingConfig: { steps: [{ id: 'slots', type: 'slot_picker', title: 'Horários', order: 0 }], fields: [] } as any,
+  publicPackages: [] as any[],
+}))
 const rule = { _id: 'rule', professionalId: 'prof', roomId: 'room', professionalName: 'Profissional', roomName: 'Sala', specialty: 'fisioterapia', dayOfWeek: 1, startTime: '08:00', endTime: '10:00', slotDurationMinutes: 30, breakMinutes: 0, isActive: true }
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { role: 'admin' }, isAdmin: true, isProfessional: false }) }))
 vi.mock('@/lib/staffConvex', () => ({
@@ -29,16 +33,21 @@ const publicSlots = [{ startTime: '08:00', endTime: '08:30', isAvailable: true, 
 vi.mock('convex/react', () => ({
   useQuery: (ref: any) => {
     const name = getFunctionName(ref)
-    if (name === 'bookingBuilder:getBookingConfig') return { steps: [{ id: 'slots', type: 'slot_picker', title: 'Horários', order: 0 }], fields: [] }
+    if (name === 'bookingBuilder:getBookingConfig') return mocks.bookingConfig
     if (name === 'bookingBuilder:listPublicAvailableSlots') return publicSlots
-    if (name === 'bookingBuilder:listPublicPackages') return []
+    if (name === 'bookingBuilder:listPublicPackages') return mocks.publicPackages
     return { clinicName: 'Clínica teste' }
   },
   useAction: () => mocks.save,
 }))
 import { PublicBookingPage } from '../src/pages/PublicBookingPage'
 
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+  mocks.bookingConfig = { steps: [{ id: 'slots', type: 'slot_picker', title: 'Horários', order: 0 }], fields: [] }
+  mocks.publicPackages = []
+})
 test('editing and saving a zero-minute break preserves zero and explains consecutive sessions', async () => {
   render(<AvailabilityManagerModal isOpen onClose={() => {}} />)
   expect(screen.getByText('0 min')).toBeTruthy()
@@ -60,4 +69,41 @@ test('public cards show eight places per room and selecting one does not select 
   fireEvent.click(roomB)
   expect(roomB.className).toContain('ring-2')
   expect(roomA.className).not.toContain('ring-2')
+})
+
+test('public intake keeps insurance selection only in the session step', () => {
+  mocks.bookingConfig = {
+    steps: [{ id: 'step_triagem', type: 'intake_form', title: 'Triagem & Convênio', description: 'Informações sobre plano de saúde e histórico para personalizarmos seu atendimento', order: 0 }],
+    fields: [
+      { id: 'field_has_insurance', stepId: 'step_triagem', label: 'Você possui plano ou convênio de saúde?', type: 'yes_no', required: true, order: 1 },
+      { id: 'field_insurance_name', stepId: 'step_triagem', label: 'Qual é o seu plano de saúde / convênio?', type: 'select', required: true, order: 2 },
+      { id: 'field_chief_complaint', stepId: 'step_triagem', label: 'Qual é a sua queixa principal?', type: 'textarea', required: true, order: 3 },
+    ],
+  }
+
+  render(<PublicBookingPage />)
+
+  expect(screen.getAllByText('Triagem Inicial').length).toBeGreaterThan(0)
+  expect(screen.getByText('Qual é a sua queixa principal?')).toBeTruthy()
+  expect(screen.queryByText('Você possui plano ou convênio de saúde?')).toBeNull()
+  expect(screen.queryByText('Qual é o seu plano de saúde / convênio?')).toBeNull()
+})
+
+test('public modalities come from registered packages and empty results stop showing loading', () => {
+  const { rerender } = render(<PublicBookingPage />)
+  expect(screen.queryByText('Carregando opções de planos e pacotes da clínica...')).toBeNull()
+
+  mocks.publicPackages = [{
+    _id: 'pilates-package',
+    name: 'Pilates avulso',
+    specialty: 'pilates',
+    sessionCount: 1,
+    price: 100,
+    pricePix: 90,
+    active: true,
+  }]
+  rerender(<PublicBookingPage />)
+
+  expect(screen.getByRole('button', { name: 'Studio Pilates' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'RPG Souchard' })).toBeNull()
 })

@@ -12,8 +12,8 @@ import { bookGroupSession } from './lib/bookGroupSession'
 export const DEFAULT_BOOKING_STEPS = [
   {
     id: "step_triagem",
-    title: "Triagem & Convênio",
-    description: "Informações sobre plano de saúde e histórico para personalizarmos seu atendimento",
+    title: "Triagem Inicial",
+    description: "Conte sobre seu objetivo e histórico para personalizarmos seu atendimento",
     order: 1,
     type: "intake_form" as const,
   },
@@ -33,54 +33,7 @@ export const DEFAULT_BOOKING_STEPS = [
   },
 ]
 
-export const DEFAULT_BOOKING_FIELDS = [
-  {
-    id: "field_has_insurance",
-    stepId: "step_triagem",
-    label: "Você possui plano ou convênio de saúde?",
-    type: "yes_no" as const,
-    required: true,
-    order: 1,
-    helpText: "Atendemos particular e emitimos documentação completa para reembolso de todos os planos",
-  },
-  {
-    id: "field_insurance_name",
-    stepId: "step_triagem",
-    label: "Qual é o seu plano de saúde / convênio?",
-    type: "select" as const,
-    options: [
-      "Unimed",
-      "Bradesco Saúde",
-      "SulAmérica",
-      "Amil",
-      "NotreDame Intermédica",
-      "Porto Seguro Saúde",
-      "Omint",
-      "Cassi",
-      "Outro Convênio",
-      "Particular (Sem convênio)",
-    ],
-    required: true,
-    order: 2,
-    placeholder: "Selecione o seu plano...",
-    conditional: {
-      dependsOnFieldId: "field_has_insurance",
-      equalsValue: "Sim",
-    },
-  },
-  {
-    id: "field_insurance_card",
-    stepId: "step_triagem",
-    label: "Número da carteirinha ou matrícula (opcional)",
-    type: "text" as const,
-    required: false,
-    order: 3,
-    placeholder: "Ex: 0054.1234.9876-00",
-    conditional: {
-      dependsOnFieldId: "field_has_insurance",
-      equalsValue: "Sim",
-    },
-  },
+export const DEFAULT_BOOKING_FIELDS: Doc<"bookingFormConfig">["fields"] = [
   {
     id: "field_chief_complaint",
     stepId: "step_triagem",

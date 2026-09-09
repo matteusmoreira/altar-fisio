@@ -49,6 +49,21 @@ const MONTHS_SHORT = [
   "JUL", "AGO", "SET", "OUT", "NOV", "DEZ",
 ]
 
+type BookingSpecialty = "pilates" | "fisioterapia" | "rpg"
+
+const SPECIALTY_LABELS: Record<BookingSpecialty, string> = {
+  pilates: "Studio Pilates",
+  fisioterapia: "Fisioterapia",
+  rpg: "RPG Souchard",
+}
+
+const BOOKING_SPECIALTIES = Object.keys(SPECIALTY_LABELS) as BookingSpecialty[]
+const LEGACY_INSURANCE_FIELD_IDS = new Set([
+  "field_has_insurance",
+  "field_insurance_name",
+  "field_insurance_card",
+])
+
 export const PublicBookingPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
   const clinicSettings = useQuery(api.clinic.getSettings)
@@ -57,10 +72,7 @@ export const PublicBookingPage: React.FC = () => {
 
   // Rastreia especialidade da URL se houver (ex: ?servico=pilates)
   const urlParams = new URLSearchParams(window.location.search)
-  const initialSpecialty = (urlParams.get("especialidade") || urlParams.get("servico") || "pilates") as
-    | "pilates"
-    | "fisioterapia"
-    | "rpg"
+  const initialSpecialty = (urlParams.get("especialidade") || urlParams.get("servico") || "pilates") as BookingSpecialty
 
   // Estado do Fluxo
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
@@ -74,9 +86,8 @@ export const PublicBookingPage: React.FC = () => {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
 
   // Estado da Escolha da Sessão
-  const [selectedSpecialty, setSelectedSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">(
-    initialSpecialty
-  )
+  const [selectedSpecialty, setSelectedSpecialty] = useState<BookingSpecialty>(initialSpecialty)
+  const [specialtyFilter, setSpecialtyFilter] = useState<"all" | BookingSpecialty>(initialSpecialty)
 
   // Helper para obter preços dinâmicos conforme perfil (Particular vs Convênio)
   const getPackagePricing = (pkg: any, isConvenio: boolean) => {
@@ -103,9 +114,27 @@ export const PublicBookingPage: React.FC = () => {
   useEffect(() => {
     if (publicPackages && publicPackages.length > 0 && !selectedPackageId) {
       const match = publicPackages.find((p) => p.specialty === selectedSpecialty) || publicPackages[0]
-      if (match) setSelectedPackageId(match._id)
+      if (match) {
+        setSelectedPackageId(match._id)
+        setSelectedSpecialty(match.specialty as BookingSpecialty)
+        if (specialtyFilter !== "all" && !publicPackages.some((pkg) => pkg.specialty === specialtyFilter)) {
+          setSpecialtyFilter(match.specialty as BookingSpecialty)
+        }
+      }
     }
-  }, [publicPackages, selectedPackageId, selectedSpecialty])
+  }, [publicPackages, selectedPackageId, selectedSpecialty, specialtyFilter])
+
+  const availableSpecialties = useMemo(() => {
+    if (!publicPackages) return []
+    const registered = new Set(publicPackages.map((pkg) => pkg.specialty))
+    return BOOKING_SPECIALTIES.filter((specialty) => registered.has(specialty))
+  }, [publicPackages])
+
+  const filteredPublicPackages = useMemo(() => {
+    if (!publicPackages) return []
+    if (specialtyFilter === "all") return publicPackages
+    return publicPackages.filter((pkg) => pkg.specialty === specialtyFilter)
+  }, [publicPackages, specialtyFilter])
 
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = getTodayDateString()
@@ -165,7 +194,16 @@ export const PublicBookingPage: React.FC = () => {
   // Lista de etapas ordenadas
   const steps = useMemo(() => {
     if (!config?.steps) return []
-    const ordered = [...config.steps].sort((a, b) => a.order - b.order)
+    const ordered = [...config.steps].sort((a, b) => a.order - b.order).map((step) => {
+      if (step.id !== "step_triagem") return step
+      return {
+        ...step,
+        title: step.title === "Triagem & Convênio" ? "Triagem Inicial" : step.title,
+        description: step.description === "Informações sobre plano de saúde e histórico para personalizarmos seu atendimento"
+          ? "Conte sobre seu objetivo e histórico para personalizarmos seu atendimento"
+          : step.description,
+      }
+    })
     if (!ordered.some(step => step.type === 'patient_info')) ordered.push({ id: 'required_patient_info', title: 'Seus dados', description: 'Dados obrigatórios para agendar', type: 'patient_info', order: ordered.length })
     return ordered
   }, [config])
@@ -178,6 +216,8 @@ export const PublicBookingPage: React.FC = () => {
     const parentAnswer = answers[field.conditional.dependsOnFieldId]
     return parentAnswer === field.conditional.equalsValue
   }
+
+  const isPublicIntakeField = (field: any): boolean => !LEGACY_INSURANCE_FIELD_IDS.has(field.id)
 
   // Próximos dias para seleção no carrossel de calendário
   const dateOptions = useMemo(() => {
@@ -258,7 +298,7 @@ export const PublicBookingPage: React.FC = () => {
     if (!currentStep) return true
 
     if (currentStep.type === "intake_form") {
-      const stepFields = config?.fields?.filter((f) => f.stepId === currentStep.id) || []
+      const stepFields = config?.fields?.filter((f) => f.stepId === currentStep.id && isPublicIntakeField(f)) || []
       stepFields.forEach((field) => {
         if (isFieldVisible(field) && field.required) {
           const val = answers[field.id]?.trim()
@@ -772,7 +812,7 @@ export const PublicBookingPage: React.FC = () => {
             {currentStep?.type === "intake_form" && (
               <div className="space-y-6">
                 {config?.fields
-                  ?.filter((f) => f.stepId === currentStep.id)
+                  ?.filter((f) => f.stepId === currentStep.id && isPublicIntakeField(f))
                   .sort((a, b) => a.order - b.order)
                   .map((field) => {
                     if (!isFieldVisible(field)) return null
@@ -1013,47 +1053,48 @@ export const PublicBookingPage: React.FC = () => {
                   )}
 
                   {/* Filtro de Especialidade das Opções */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                    {[
-                      { id: "all", label: "Todas as Modalidades" },
-                      { id: "pilates", label: "Studio Pilates" },
-                      { id: "fisioterapia", label: "Fisioterapia" },
-                      { id: "rpg", label: "RPG Souchard" },
-                    ].map((tab) => {
-                      const isActive =
-                        tab.id === "all"
-                          ? !["pilates", "fisioterapia", "rpg"].includes(selectedSpecialty)
-                          : selectedSpecialty === tab.id
+                  {availableSpecialties.length > 0 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                      {[
+                        { id: "all" as const, label: "Todas as Modalidades" },
+                        ...availableSpecialties.map((specialty) => ({ id: specialty, label: SPECIALTY_LABELS[specialty] })),
+                      ].map((tab) => {
+                        const isActive = specialtyFilter === tab.id
 
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => {
-                            if (tab.id !== "all") {
-                              setSelectedSpecialty(tab.id as any)
-                              setSelectedSlot(null)
-                              // Seleciona o primeiro pacote correspondente se houver
-                              const match = publicPackages?.find((p) => p.specialty === tab.id)
-                              if (match) setSelectedPackageId(match._id)
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                            isActive
-                              ? "bg-primary/15 text-primary border border-primary/30 shadow-xs"
-                              : "bg-muted/40 hover:bg-muted text-muted-foreground border border-transparent"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      )
-                    })}
-                  </div>
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => {
+                              setSpecialtyFilter(tab.id)
+                              if (tab.id !== "all") {
+                                setSelectedSpecialty(tab.id)
+                                setSelectedSlot(null)
+                                const match = publicPackages?.find((p) => p.specialty === tab.id)
+                                if (match) setSelectedPackageId(match._id)
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                              isActive
+                                ? "bg-primary/15 text-primary border border-primary/30 shadow-xs"
+                                : "bg-muted/40 hover:bg-muted text-muted-foreground border border-transparent"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   {/* Grade de Pacotes & Turmas com Valores Dinâmicos */}
-                  {publicPackages && publicPackages.length > 0 ? (
+                  {publicPackages === undefined ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      Carregando opções de planos e pacotes da clínica...
+                    </div>
+                  ) : filteredPublicPackages.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                      {publicPackages.map((pkg) => {
+                      {filteredPublicPackages.map((pkg) => {
                         const isConvenio = patientBillingType === "convenio"
                         const pricing = getPackagePricing(pkg, isConvenio)
                         const isSelected = selectedPackageId === pkg._id
@@ -1163,12 +1204,7 @@ export const PublicBookingPage: React.FC = () => {
                         )
                       })}
                     </div>
-                  ) : (
-                    /* Fallback caso os pacotes ainda estejam carregando */
-                    <div className="py-8 text-center text-xs text-muted-foreground">
-                      Carregando opções de planos e pacotes da clínica...
-                    </div>
-                  )}
+                  ) : null}
 
                   {/* Banner de Feedback do Pacote Selecionado */}
                   {selectedPackageId && (
