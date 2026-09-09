@@ -6,6 +6,7 @@
 - Fechamento do portal pelo administrador com editor visual rico (`PortalBookingSettings`), sanitização estrita no servidor (somente parágrafos/listas, negrito/itálico e links https/tel/mailto seguros) e persistência em `clinicSettings`. Quando fechado, todas as escritas no backend são bloqueadas por `assertPortalBookingOpen` e na interface os controles de novas reservas, remarcações e reposições são substituídos pelo aviso em destaque, interrompendo janelas abertas imediatamente.
 - Ambiente Node 25 em testes com jsdom: o global experimental `localStorage` do Node moderno exige stub com `vi.stubGlobal('localStorage', ...)` para evitar `TypeError: localStorage.getItem is not a function`.
 - Validação: Todos os 26 arquivos de teste (170 testes Vitest + 3 testes de service worker), typecheck TypeScript (`tsc --noEmit`), build de produção com Vite e verificação com oxlint passaram 100%.
+- Publicação: Commit `3f156bb` enviado para a branch `main` no GitHub (`origin/main`). Deploy Convex de produção concluído com sucesso no deployment `exuberant-guanaco-180` (`https://exuberant-guanaco-180.convex.cloud`), com validação de schema e novo índice `monthlyBookingReceipts.by_patient_request`.
 
 ### [2026-09-09] Convênio sem preço no agendamento público
 - Valores ausentes de convênio não devem usar a tabela particular como fallback. Página e persistência agora usam zero; preços públicos aparecem somente em Particular, inclusive na confirmação.
