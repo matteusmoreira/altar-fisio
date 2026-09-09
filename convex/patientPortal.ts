@@ -10,7 +10,7 @@ import { query, mutation } from "./_generated/server"
 import type { QueryCtx, MutationCtx } from './_generated/server'
 import type { Doc } from './_generated/dataModel'
 import { api, internal } from "./_generated/api"
-import { v } from "convex/values"
+import { v, ConvexError } from "convex/values"
 import { parseDateTimeToMs, checkTimeOverlap } from "./schedules"
 
 // Limpa caracteres especiais de CPF e Telefones
@@ -69,6 +69,7 @@ export const getPatientPortalData = query({
 
       const room = await ctx.db.get(schedule.roomId)
       const professional = await ctx.db.get(schedule.professionalId)
+      const schedService = await scheduleService(ctx, schedule)
 
       // Calculo de antecedencia em horas para cancelamento
       const sessionMs = parseDateTimeToMs(schedule.date, schedule.startTime)
@@ -78,6 +79,7 @@ export const getPatientPortalData = query({
       const item = {
         participantId: part._id,
         scheduleId: schedule._id,
+        serviceId: schedule.serviceId ?? schedService?._id,
         patientPackageId: part.patientPackageId,
         replacementCreditId: part.replacementCreditId,
         title: schedule.title,
@@ -237,19 +239,19 @@ export const cancelAppointmentByPatient = mutation({
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
     const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
-    if (!normParticipantId) throw new Error("Agendamento nao encontrado.")
+    if (!normParticipantId) throw new ConvexError("Agendamento não encontrado.")
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
-    if (!normPatientId) throw new Error("Paciente nao encontrado.")
+    if (!normPatientId) throw new ConvexError("Paciente não encontrado.")
 
     const participant = await ctx.db.get(normParticipantId)
-    if (!participant) throw new Error("Agendamento nao encontrado.")
+    if (!participant) throw new ConvexError("Agendamento não encontrado.")
     if (participant.patientId !== normPatientId) {
-      throw new Error("Acesso nao autorizado para este agendamento.")
+      throw new ConvexError("Acesso não autorizado para este agendamento.")
     }
 
-    if (!['scheduled', 'replacement'].includes(participant.status)) throw new Error('Este agendamento já foi processado.')
+    if (!['scheduled', 'replacement'].includes(participant.status)) throw new ConvexError('Este agendamento já foi processado.')
     const schedule = await ctx.db.get(participant.scheduleId)
-    if (!schedule || schedule.status === 'cancelled') throw new Error("Sessao nao encontrada.")
+    if (!schedule || schedule.status === 'cancelled') throw new ConvexError("Sessão não encontrada.")
 
     const settings = await ctx.db.query("clinicSettings").first()
     const noticeHoursRequired = settings?.cancellationNoticeHours ?? 2
@@ -260,7 +262,7 @@ export const cancelAppointmentByPatient = mutation({
     const hoursNotice = (sessionMs - now) / (1000 * 60 * 60)
     const isWithinPolicy = hoursNotice >= noticeHoursRequired
 
-    if (sessionMs <= now) throw new Error('Não é possível desmarcar uma sessão já iniciada.')
+    if (sessionMs <= now) throw new ConvexError('Não é possível desmarcar uma sessão já iniciada.')
     if (participant.replacementCreditId) return { ...await cancelReplacement(ctx, participant, isWithinPolicy, args.reason), hoursNotice }
 
     if (isWithinPolicy) {
@@ -346,46 +348,50 @@ export const rescheduleAppointmentByPatient = mutation({
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
     const normParticipantId = ctx.db.normalizeId("scheduleParticipants", args.participantId)
-    if (!normParticipantId) throw new Error("Agendamento atual nao encontrado.")
+    if (!normParticipantId) throw new ConvexError("Agendamento atual não encontrado.")
     const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
-    if (!normTargetScheduleId) throw new Error("Novo horario selecionado nao encontrado.")
+    if (!normTargetScheduleId) throw new ConvexError("Novo horário selecionado não encontrado.")
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
-    if (!normPatientId) throw new Error("Paciente nao autorizado.")
+    if (!normPatientId) throw new ConvexError("Paciente não autorizado.")
 
     const currentPart = await ctx.db.get(normParticipantId)
-    if (!currentPart) throw new Error("Agendamento atual nao encontrado.")
-    if (!['scheduled', 'replacement'].includes(currentPart.status)) throw new Error('Este agendamento já foi processado.')
+    if (!currentPart) throw new ConvexError("Agendamento atual não encontrado.")
+    if (!['scheduled', 'replacement'].includes(currentPart.status)) throw new ConvexError('Este agendamento já foi processado.')
     if (currentPart.patientId !== normPatientId) {
-      throw new Error("Nao autorizado.")
+      throw new ConvexError("Acesso não autorizado.")
     }
 
     const currentSchedule = await ctx.db.get(currentPart.scheduleId)
-    if (!currentSchedule) throw new Error("Sessao atual nao encontrada.")
+    if (!currentSchedule) throw new ConvexError("Sessão atual não encontrada.")
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
-    if (!targetSchedule) throw new Error("Novo horario selecionado nao encontrado.")
+    if (!targetSchedule) throw new ConvexError("Novo horário selecionado não encontrado.")
     const originService = await scheduleService(ctx, currentSchedule), targetService = await scheduleService(ctx, targetSchedule)
-    if ((currentSchedule.serviceId || targetSchedule.serviceId) && (!originService || originService._id !== targetService?._id)) throw new Error('Escolha uma turma do mesmo tratamento.')
-    if (!(await ctx.db.get(targetSchedule.roomId))?.isActive || !(await ctx.db.get(targetSchedule.professionalId))?.active) throw new Error('Sala ou profissional indisponível.')
+    if ((currentSchedule.serviceId || targetSchedule.serviceId) && (!originService || originService._id !== targetService?._id)) throw new ConvexError('Escolha uma turma do mesmo tratamento.')
+    if (!(await ctx.db.get(targetSchedule.roomId))?.isActive || !(await ctx.db.get(targetSchedule.professionalId))?.active) throw new ConvexError('Sala ou profissional indisponível no novo horário.')
     await processWaitlist(ctx, normTargetScheduleId)
     const settings = await ctx.db.query('clinicSettings').first()
-    if (currentSchedule.status === 'cancelled' || parseDateTimeToMs(currentSchedule.date, currentSchedule.startTime) - Date.now() < (settings?.cancellationNoticeHours ?? 2) * 3600000) throw new Error('Prazo para remarcação encerrado. Fale com a recepção.')
-    if (targetSchedule.status !== 'scheduled' || targetSchedule.specialty !== currentSchedule.specialty || parseDateTimeToMs(targetSchedule.date, targetSchedule.startTime) <= Date.now()) throw new Error('Horário de destino inválido.')
+    if (currentSchedule.status === 'cancelled' || parseDateTimeToMs(currentSchedule.date, currentSchedule.startTime) - Date.now() < (settings?.cancellationNoticeHours ?? 2) * 3600000) throw new ConvexError('Prazo para remarcação encerrado. Fale com a recepção.')
+    if (targetSchedule.status !== 'scheduled' || targetSchedule.specialty !== currentSchedule.specialty || parseDateTimeToMs(targetSchedule.date, targetSchedule.startTime) <= Date.now()) throw new ConvexError('Horário de destino inválido.')
     if (currentPart.replacementCreditId) {
-      if (currentSchedule._id === targetSchedule._id) throw new Error('Escolha outro horário.')
+      if (currentSchedule._id === targetSchedule._id) throw new ConvexError('Escolha outro horário diferente do atual.')
       await cancelReplacement(ctx, currentPart, true, 'Reposição transferida para outro horário.')
       const newParticipantId = await bookCredit(ctx, normPatientId, currentPart.replacementCreditId, normTargetScheduleId)
       return { success: true, newParticipantId, newDate: targetSchedule.date, newStartTime: targetSchedule.startTime, message: 'Reposição remarcada com o mesmo crédito, sem alterar sua validade.' }
     }
     if (currentPart.patientPackageId) {
       const pkg = await ctx.db.get(currentPart.patientPackageId)
-      if (!pkg || pkg.patientId !== normPatientId || pkg.status !== 'active' || pkg.remainingSessions < 1 || pkg.expiryDate < targetSchedule.date) throw new Error('Plano indisponível para a data selecionada.')
+      if (!pkg || pkg.patientId !== normPatientId || pkg.status !== 'active' || pkg.expiryDate < targetSchedule.date || pkg.startDate > targetSchedule.date) {
+        throw new ConvexError('Plano indisponível para a data selecionada. Verifique o período de validade do seu pacote.')
+      }
     }
     const ownParts = await ctx.db.query('scheduleParticipants').withIndex('by_patient', q => q.eq('patientId', normPatientId)).collect()
     for (const part of ownParts) {
       if (part._id === currentPart._id || ['absence', 'justified_absence'].includes(part.status)) continue
       const existing = await ctx.db.get(part.scheduleId)
-      if (existing && existing.status !== 'cancelled' && existing.date === targetSchedule.date && checkTimeOverlap(existing.startTime, existing.endTime, targetSchedule.startTime, targetSchedule.endTime)) throw new Error('Você já possui agendamento neste horário.')
+      if (existing && existing.status !== 'cancelled' && existing.date === targetSchedule.date && checkTimeOverlap(existing.startTime, existing.endTime, targetSchedule.startTime, targetSchedule.endTime)) {
+        throw new ConvexError(`Você já possui um agendamento conflitante das ${existing.startTime} às ${existing.endTime} no dia ${targetSchedule.date}.`)
+      }
     }
 
     // Checar capacidade no novo horario
@@ -396,7 +402,7 @@ export const rescheduleAppointmentByPatient = mutation({
 
     const activeParts = existingParts.filter(occupiesSeat)
     if (activeParts.length >= targetSchedule.maxCapacity) {
-      throw new Error("O novo horario selecionado ja preencheu todas as vagas!")
+      throw new ConvexError("O novo horário selecionado já preencheu todas as vagas disponíveis.")
     }
 
     // 1. Libera o horario antigo
@@ -423,7 +429,7 @@ export const rescheduleAppointmentByPatient = mutation({
       newParticipantId: newPartId,
       newDate: targetSchedule.date,
       newStartTime: targetSchedule.startTime,
-      message: `Remarcacao concluida com sucesso para ${targetSchedule.date} as ${targetSchedule.startTime}!`,
+      message: `Remarcação concluída com sucesso para ${targetSchedule.date} às ${targetSchedule.startTime}!`,
     }
   },
 })
@@ -441,28 +447,28 @@ export const useReplacementCreditToBook = mutation({
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
     const normCreditId = ctx.db.normalizeId("replacementCredits", args.creditId)
-    if (!normCreditId) throw new Error("Credito de reposicao invalido.")
+    if (!normCreditId) throw new ConvexError("Crédito de reposição inválido.")
     const normTargetScheduleId = ctx.db.normalizeId("schedules", args.targetScheduleId)
-    if (!normTargetScheduleId) throw new Error("Horario nao encontrado.")
+    if (!normTargetScheduleId) throw new ConvexError("Horário não encontrado.")
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
-    if (!normPatientId) throw new Error("Paciente nao encontrado.")
+    if (!normPatientId) throw new ConvexError("Paciente não encontrado.")
 
     const credit = await ctx.db.get(normCreditId)
     if (!credit || credit.status !== "available") {
-      throw new Error("Credito de reposicao invalido ou ja utilizado.")
+      throw new ConvexError("Crédito de reposição inválido ou já utilizado.")
     }
     if (credit.patientId !== normPatientId) {
-      throw new Error("Credito pertence a outro paciente.")
+      throw new ConvexError("Crédito pertence a outro paciente.")
     }
 
     const todayStr = clinicToday()
     if (credit.expiryDate < todayStr) {
       await ctx.db.patch(normCreditId, { status: "expired" })
-      throw new Error("Este credito de reposicao expirou em " + credit.expiryDate)
+      throw new ConvexError("Este crédito de reposição expirou em " + credit.expiryDate)
     }
 
     const targetSchedule = await ctx.db.get(normTargetScheduleId)
-    if (!targetSchedule) throw new Error("Horario nao encontrado.")
+    if (!targetSchedule) throw new ConvexError("Horário não encontrado.")
     await processWaitlist(ctx, normTargetScheduleId)
     const partId = await bookCredit(ctx, normPatientId, normCreditId, normTargetScheduleId)
 
@@ -478,22 +484,45 @@ export const useReplacementCreditToBook = mutation({
 
 // 6. Listagem de Vagas Livres para Agendamento, Remarcacao e Reposicao
 export const listAvailableSlotsForBooking = query({
-  args: { portalToken: v.string(),
+  args: {
+    portalToken: v.string(),
     specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
     startDate: v.string(), // YYYY-MM-DD
     daysCount: v.optional(v.number()), // Padrao: 14 dias
     patientId: v.optional(v.string()),
+    serviceId: v.optional(v.string()),
+    excludeParticipantId: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
-    const { portalToken, ...args } = input
+    const { portalToken, serviceId, excludeParticipantId, ...args } = input
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
     const days = args.daysCount ?? 14
-    if (!Number.isInteger(days) || days < 1 || days > 31) throw new Error('Período inválido.')
+    if (!Number.isInteger(days) || days < 1 || days > 31) throw new ConvexError('Período inválido.')
     const result: any[] = []
 
     const startObj = new Date(`${args.startDate}T12:00:00Z`)
     const normPatientId = portalPatient._id
+    const normExcludePartId = excludeParticipantId ? ctx.db.normalizeId("scheduleParticipants", excludeParticipantId) : null
+    const normServiceId = serviceId ? ctx.db.normalizeId("services", serviceId) : null
+
+    // Buscar agendamentos do paciente para cálculo de conflito de horário
+    const ownParts = await ctx.db
+      .query("scheduleParticipants")
+      .withIndex("by_patient", (q) => q.eq("patientId", normPatientId))
+      .collect()
+
+    const activeOwnSchedules: Doc<'schedules'>[] = []
+    for (const p of ownParts) {
+      if (normExcludePartId && p._id === normExcludePartId) continue
+      if (p.status === 'absence' || p.status === 'justified_absence') continue
+      const sch = await ctx.db.get(p.scheduleId)
+      if (sch && sch.status !== 'cancelled') {
+        activeOwnSchedules.push(sch)
+      }
+    }
+
+    const now = Date.now()
 
     for (let i = 0; i < days; i++) {
       const d = new Date(startObj)
@@ -509,44 +538,52 @@ export const listAvailableSlotsForBooking = query({
         .collect()
 
       const matching = daySchedules.filter(
-        (s) => s.specialty === args.specialty && s.status !== "cancelled"
+        (s) => s.specialty === args.specialty && s.status !== "cancelled" && parseDateTimeToMs(s.date, s.startTime) > now
       )
 
       for (const s of matching) {
+        // Se informado serviceId, restringir a turmas do mesmo serviço
+        if (normServiceId) {
+          const sService = await scheduleService(ctx, s)
+          const resolvedServiceId = s.serviceId ?? sService?._id
+          if (resolvedServiceId && resolvedServiceId !== normServiceId) continue
+        }
+
+        const room = await ctx.db.get(s.roomId)
+        const prof = await ctx.db.get(s.professionalId)
+        if (!room?.isActive || !prof?.active) continue
+
         const parts = await ctx.db
           .query("scheduleParticipants")
           .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
           .collect()
 
-        const activeParts = parts.filter(
-          (p) => p.status !== "justified_absence" && p.status !== "absence"
-        )
+        const activeParts = parts.filter(occupiesSeat)
         const activeCount = activeParts.length
-        const vacancies = Math.max(0, s.maxCapacity - activeCount)
+        const maxCap = Math.min(s.maxCapacity, room?.capacity ?? s.maxCapacity)
+        const vacancies = Math.max(0, maxCap - activeCount)
 
-        const isAlreadyEnrolled = normPatientId
-          ? activeParts.some((p) => p.patientId === normPatientId)
-          : false
+        const isAlreadyEnrolled = activeParts.some((p) => p.patientId === normPatientId)
+        const hasConflict = activeOwnSchedules.some(
+          (own) => own.date === s.date && checkTimeOverlap(own.startTime, own.endTime, s.startTime, s.endTime)
+        )
 
-        if (vacancies > 0 || isAlreadyEnrolled) {
-          const room = await ctx.db.get(s.roomId)
-          const prof = await ctx.db.get(s.professionalId)
-
-          result.push({
-            scheduleId: s._id,
-            title: s.title,
-            specialty: s.specialty,
-            type: s.type,
-            date: s.date,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            roomName: room?.name || "Sala",
-            professionalName: prof?.name || "Profissional",
-            vacanciesLeft: vacancies,
-            maxCapacity: s.maxCapacity,
-            isAlreadyEnrolled,
-          })
-        }
+        result.push({
+          scheduleId: s._id,
+          title: s.title,
+          specialty: s.specialty,
+          type: s.type,
+          date: s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          roomName: room?.name || "Sala",
+          professionalName: prof?.name || "Profissional",
+          vacanciesLeft: vacancies,
+          maxCapacity: s.maxCapacity,
+          isAlreadyEnrolled,
+          hasConflict,
+          canSelect: vacancies > 0 && !isAlreadyEnrolled && !hasConflict,
+        })
       }
     }
 
@@ -570,13 +607,13 @@ export const listAvailabilitySlotsForPatientBooking = query({
     validDate(args.date)
 
     const patientPackageId = ctx.db.normalizeId('patientPackages', args.patientPackageId)
-    if (!patientPackageId) throw new Error('Plano/Pacote não encontrado.')
+    if (!patientPackageId) throw new ConvexError('Plano/Pacote não encontrado.')
     const patientPackage = await ctx.db.get(patientPackageId)
-    if (!patientPackage || patientPackage.patientId !== patient._id) throw new Error('Este plano pertence a outro paciente.')
+    if (!patientPackage || patientPackage.patientId !== patient._id) throw new ConvexError('Este plano pertence a outro paciente.')
     if (patientPackage.status !== 'active' || patientPackage.remainingSessions < 1 || patientPackage.expiryDate < args.date) return []
 
     const { service } = await resolvePatientPackageService(ctx, patientPackage)
-    if (!service) throw new Error('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
+    if (!service) throw new ConvexError('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
 
     const patientParticipations = await ctx.db
       .query('scheduleParticipants')
@@ -624,25 +661,25 @@ export const bookAppointmentFromPortal = mutation({
     const portalPatient = await requirePatient(ctx, portalToken, args.patientId);
 
     const normPatientId = ctx.db.normalizeId("patients", args.patientId)
-    if (!normPatientId) throw new Error("Paciente não encontrado.")
+    if (!normPatientId) throw new ConvexError("Paciente não encontrado.")
 
     const normPackageId = ctx.db.normalizeId("patientPackages", args.patientPackageId)
-    if (!normPackageId) throw new Error("Plano/Pacote não encontrado.")
+    if (!normPackageId) throw new ConvexError("Plano/Pacote não encontrado.")
 
     const patient = await ctx.db.get(normPatientId)
-    if (!patient) throw new Error("Paciente não encontrado.")
+    if (!patient) throw new ConvexError("Paciente não encontrado.")
 
     const pkg = await ctx.db.get(normPackageId)
-    if (!pkg) throw new Error("Plano/Pacote não encontrado.")
-    if (pkg.patientId !== normPatientId) throw new Error("Este plano pertence a outro aluno.")
+    if (!pkg) throw new ConvexError("Plano/Pacote não encontrado.")
+    if (pkg.patientId !== normPatientId) throw new ConvexError("Este plano pertence a outro aluno.")
 
     const todayStr = new Date().toISOString().split("T")[0]
     if (pkg.status !== "active" || pkg.expiryDate < args.date || pkg.startDate > args.date) {
-      throw new Error("Este plano está inativo ou expirado. Renove seu pacote na recepção.")
+      throw new ConvexError("Este plano está inativo ou expirado. Renove seu pacote na recepção.")
     }
 
     if (pkg.remainingSessions <= 0) {
-      throw new Error("Você não possui saldo restante de sessões neste plano.")
+      throw new ConvexError("Você não possui saldo restante de sessões neste plano.")
     }
 
     // 1. Validar Smart Allocation (sessões futuras já agendadas com este pacote)
@@ -666,13 +703,13 @@ export const bookAppointmentFromPortal = mutation({
     }
 
     if (futureBookings.length >= pkg.remainingSessions) {
-      throw new Error(
+      throw new ConvexError(
         `Você já possui ${futureBookings.length} aula(s) futura(s) agendada(s) para este plano, atingindo seu saldo de ${pkg.remainingSessions} sessão(ões) disponível(is).`
       )
     }
 
     const { service } = await resolvePatientPackageService(ctx, pkg)
-    if (!service) throw new Error('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
+    if (!service) throw new ConvexError('Este plano não está vinculado a um serviço ativo. Fale com a recepção.')
 
     // 2. Validar anti-conflito de horário do paciente no mesmo dia
     for (const p of participations) {
@@ -681,7 +718,7 @@ export const bookAppointmentFromPortal = mutation({
       if (!s || s.status === "cancelled" || s.date !== args.date) continue
 
       if (checkTimeOverlap(s.startTime, s.endTime, args.startTime, args.endTime)) {
-        throw new Error(
+        throw new ConvexError(
           `Você já possui um atendimento conflitante das ${s.startTime} às ${s.endTime} no dia ${args.date}.`
         )
       }
@@ -690,12 +727,12 @@ export const bookAppointmentFromPortal = mutation({
     // Compatibility endpoint: reserve an existing class, never create virtual slots.
     const daySchedules = await ctx.db.query('schedules').withIndex('by_date', q => q.eq('date', args.date)).collect()
     const schedule = daySchedules.find(s => s.roomId === args.roomId && s.professionalId === args.professionalId && s.startTime === args.startTime && s.endTime === args.endTime && s.status === 'scheduled' && s.type === 'turma')
-    if (!schedule || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now() || (await scheduleService(ctx, schedule))?._id !== service._id) throw new Error('Turma indisponível. Escolha uma turma cadastrada pela clínica.')
+    if (!schedule || parseDateTimeToMs(schedule.date, schedule.startTime) <= Date.now() || (await scheduleService(ctx, schedule))?._id !== service._id) throw new ConvexError('Turma indisponível. Escolha uma turma cadastrada pela clínica.')
     const selectedRoom = await ctx.db.get(schedule.roomId), selectedProfessional = await ctx.db.get(schedule.professionalId)
-    if (!selectedRoom?.isActive || !selectedProfessional?.active) throw new Error('Sala ou profissional indisponível.')
+    if (!selectedRoom?.isActive || !selectedProfessional?.active) throw new ConvexError('Sala ou profissional indisponível.')
     await processWaitlist(ctx, schedule._id)
     const members = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', schedule._id)).collect()
-    if (members.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, selectedRoom.capacity, service.maxCapacity ?? schedule.maxCapacity)) throw new Error('Turma lotada.')
+    if (members.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, selectedRoom.capacity, service.maxCapacity ?? schedule.maxCapacity)) throw new ConvexError('Turma lotada.')
     const scheduleId = schedule._id
     const participantId = await ctx.db.insert('scheduleParticipants', { scheduleId, patientId: normPatientId, patientPackageId: normPackageId, packageDebited: false, status: 'scheduled', notes: args.notes })
     await prepareReminders(ctx, participantId)
@@ -749,21 +786,21 @@ export const bookMonthlyClasses = mutation({
   handler: async (ctx, args) => {
     const patient = await requirePatient(ctx, args.portalToken)
     await assertPortalBookingOpen(ctx)
-    if (!args.requestId || args.requestId.length > 100) throw new Error('Identificador de reserva inválido.')
+    if (!args.requestId || args.requestId.length > 100) throw new ConvexError('Identificador de reserva inválido.')
     const receipt = await ctx.db.query('monthlyBookingReceipts').withIndex('by_patient_request', q => q.eq('patientId', patient._id).eq('requestId', args.requestId)).first()
     if (receipt) return { createdCount: receipt.createdCount }
     const preview = await reviewMonthly(ctx, args)
-    if (!preview.canConfirm || !preview.serviceId) throw new Error(preview.errors.join('; ') || 'Tratamento indisponível.')
+    if (!preview.canConfirm || !preview.serviceId) throw new ConvexError(preview.errors.join('; ') || 'Tratamento indisponível.')
     const actual = preview.dates.map(d => d.scheduleId).sort().join(',')
-    if (actual !== [...args.expectedScheduleIds].sort().join(',')) throw new Error('As datas da turma mudaram. Confira a seleção novamente.')
+    if (actual !== [...args.expectedScheduleIds].sort().join(',')) throw new ConvexError('As datas da turma mudaram. Confira a seleção novamente.')
     for (const date of preview.dates.filter(d => !d.alreadyBooked)) {
       await processWaitlist(ctx, date.scheduleId)
       const schedule = await ctx.db.get(date.scheduleId)
-      if (!schedule) throw new Error('Turma removida.')
+      if (!schedule) throw new ConvexError('Turma removida.')
       const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', date.scheduleId)).collect()
       const room = await ctx.db.get(schedule.roomId)
       const service = await ctx.db.get(preview.serviceId)
-      if (participants.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, room?.capacity ?? 0, service?.maxCapacity ?? schedule.maxCapacity)) throw new Error('Uma vaga foi preenchida. Confira as turmas novamente.')
+      if (participants.filter(occupiesSeat).length >= Math.min(schedule.maxCapacity, room?.capacity ?? 0, service?.maxCapacity ?? schedule.maxCapacity)) throw new ConvexError('Uma vaga foi preenchida. Confira as turmas novamente.')
       if (!schedule.serviceId) await ctx.db.patch(schedule._id, { serviceId: preview.serviceId })
       const id = await ctx.db.insert('scheduleParticipants', { scheduleId: date.scheduleId, patientId: patient._id, patientPackageId: args.patientPackageId, packageDebited: false, status: 'scheduled' })
       await prepareReminders(ctx, id)

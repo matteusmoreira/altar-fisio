@@ -49,3 +49,30 @@ export const listAuditLogs = query({
       .take(limit)
   },
 })
+
+export const clearAuditLogs = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin"])
+
+    const logs = await ctx.db.query("auditLogs").collect()
+    for (const log of logs) {
+      await ctx.db.delete(log._id)
+    }
+
+    return { deletedCount: logs.length }
+  },
+})
+
+export const deleteAuditLog = mutation({
+  args: {
+    sessionToken: v.string(),
+    id: v.id("auditLogs"),
+  },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin"])
+    await ctx.db.delete(input.id)
+    return { success: true }
+  },
+})
+

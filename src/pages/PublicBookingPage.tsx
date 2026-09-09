@@ -698,17 +698,18 @@ export const PublicBookingPage: React.FC = () => {
 
   // ================= RENDER PRINCIPAL DO FLUXO =================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/40 via-background to-muted/20 text-foreground selection:bg-primary/20 pb-16">
+    <div className="min-h-screen bg-gradient-to-b from-muted/40 via-background to-muted/20 text-foreground selection:bg-primary/20 pb-16 scrollbar-none">
       {isBuilderPreview ? (
-        <div className="sticky top-0 z-50 border-b border-amber-500/30 bg-amber-50/95 px-4 py-2 text-center text-[11px] font-bold text-amber-900 backdrop-blur dark:bg-amber-950/95 dark:text-amber-100">
-          Prévia do construtor — navegue à vontade; nenhuma reserva real será criada.
+        <div className="sticky top-0 z-50 border-b border-amber-500/25 bg-amber-500/10 dark:bg-amber-950/50 backdrop-blur-md px-3 py-1.5 text-center text-[10px] sm:text-[11px] font-semibold text-amber-900 dark:text-amber-200 flex items-center justify-center gap-1.5 select-none shadow-2xs">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          <span>Prévia interativa do construtor &bull; Nenhuma reserva real será criada</span>
         </div>
       ) : null}
       {/* Navbar Premium com Identidade da Clínica */}
       <header className="border-b border-border/70 bg-card/90 backdrop-blur-md sticky top-0 z-40 transition-all shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent text-primary flex items-center justify-center shadow-inner border border-primary/20 overflow-hidden">
+        <div className="max-w-4xl mx-auto px-3.5 sm:px-4 py-3 sm:py-3.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent text-primary flex items-center justify-center shadow-inner border border-primary/20 overflow-hidden shrink-0">
               {clinicSettings?.logoUrl ? (
                 <img
                   src={clinicSettings.logoUrl}
@@ -716,33 +717,33 @@ export const PublicBookingPage: React.FC = () => {
                   className="h-full w-full object-contain p-1"
                 />
               ) : (
-                <HeartPulse className="h-6 w-6 text-primary animate-pulse" />
+                <HeartPulse className="h-5 w-5 sm:h-6 sm:w-6 text-primary animate-pulse" />
               )}
             </div>
-            <div>
-              <div className="font-extrabold text-base tracking-tight text-foreground flex items-center gap-2">
-                <span>{clinicSettings?.clinicName || "Altar Fisio"}</span>
-                <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 border border-border/60">
+            <div className="min-w-0">
+              <div className="font-extrabold text-sm sm:text-base tracking-tight text-foreground flex items-center gap-2">
+                <span className="truncate">{clinicSettings?.clinicName || "Altar Fisio"}</span>
+                <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 border border-border/60 shrink-0">
                   <Award className="h-3 w-3 text-primary" />
                   {clinicSettings?.clinicSubtitle || "Dr. Marcelo"}
                 </span>
               </div>
               <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                 <MapPin className="h-3.5 w-3.5 text-primary/80 shrink-0" />
-                <span className="truncate max-w-[220px] sm:max-w-none">
+                <span className="truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none">
                   {clinicSettings?.address || "Av. Paulista, 1000 - Bela Vista, São Paulo - SP"}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-300/60 dark:border-emerald-700/60 shadow-sm">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-emerald-500/10 border border-emerald-300/60 dark:border-emerald-700/60 shadow-xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+              <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
                 Online 24h
               </span>
             </div>

@@ -24,12 +24,15 @@ import {
   Trash2,
   Edit2,
   RotateCcw,
+  RotateCw,
   Settings2,
   Layers,
   ArrowUp,
   ArrowDown,
   Smartphone,
   Monitor,
+  Lock,
+  Wifi,
 } from "lucide-react"
 
 interface BookingField {
@@ -69,6 +72,8 @@ export const BookingBuilderPage: React.FC = () => {
 
   // Viewport da página pública real: "mobile" | "desktop"
   const [previewDevice, setPreviewDevice] = useState<"mobile" | "desktop">("mobile")
+  const [previewKey, setPreviewKey] = useState(0)
+  const handleReloadPreview = () => setPreviewKey((prev) => prev + 1)
 
   // Modal de Edição de Etapa
   const [editingStep, setEditingStep] = useState<{
@@ -808,77 +813,186 @@ export const BookingBuilderPage: React.FC = () => {
         {/* ========================================================================= */}
         <div className="xl:col-span-5 sticky top-20 space-y-4">
           {/* Barra de Controle do Simulador */}
-          <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-sm flex items-center justify-between">
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-card border border-border/80 shadow-sm flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <span className="text-xs font-bold text-foreground">Prévia Pública Real</span>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-foreground">Prévia Pública Real</span>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {previewDevice === "mobile" ? "iPhone Pro · 390 × 844 px" : "Desktop HD · 1280 px"}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60">
-              <button
-                type="button"
-                onClick={() => setPreviewDevice("mobile")}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  previewDevice === "mobile"
-                    ? "bg-background text-foreground shadow-2xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Visualização Mobile"
-              >
-                <Smartphone className="h-3.5 w-3.5" />
-                <span>Mobile</span>
-              </button>
+            <div className="flex items-center gap-1.5">
+              {/* Seletor de dispositivo */}
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice("mobile")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    previewDevice === "mobile"
+                      ? "bg-background text-foreground shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Visualização Smartphone"
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  <span>Mobile</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPreviewDevice("desktop")}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  previewDevice === "desktop"
-                    ? "bg-background text-foreground shadow-2xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Visualização Desktop"
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice("desktop")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    previewDevice === "desktop"
+                      ? "bg-background text-foreground shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Visualização Desktop"
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                  <span>Desktop</span>
+                </button>
+              </div>
+
+              {/* Botão de recarregar prévia */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReloadPreview}
+                className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-foreground"
+                title="Recarregar Prévia"
               >
-                <Monitor className="h-3.5 w-3.5" />
-                <span>Desktop</span>
-              </button>
+                <RotateCw className="h-3.5 w-3.5" />
+              </Button>
+
+              {/* Botão de abrir em nova aba */}
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-foreground"
+                title="Abrir página pública em tela cheia"
+              >
+                <a href={`${publicUrl}?preview=builder`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
             </div>
           </div>
 
-          {/* A própria página pública é a fonte da prévia: sem mock duplicado e desatualizado. */}
+          {/* Renderização do Mockup */}
           <div className="flex justify-center w-full">
-            <div
-              className={`w-full overflow-hidden bg-background shadow-2xl transition-all ${
-                previewDevice === "mobile"
-                  ? "max-w-[390px] rounded-[38px] border-[7px] border-border/80"
-                  : "rounded-2xl border border-border/80"
-              }`}
-            >
-              <div className="h-9 bg-muted/40 border-b border-border/60 px-3 flex items-center gap-2">
-                <div className="flex items-center gap-1.5" aria-hidden="true">
-                  <div className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
-                </div>
-                <div className="flex-1 bg-background/80 px-3 py-0.5 rounded-md border border-border/50 text-[10px] text-muted-foreground font-mono truncate text-center">
-                  /agendar · prévia segura
+            {previewDevice === "mobile" ? (
+              /* ======================================================= */
+              /* MOCKUP DE CELULAR REALISTA (SMARTPHONE TITANIUM COM DYNAMIC ISLAND) */
+              /* ======================================================= */
+              <div className="relative mx-auto w-full max-w-[390px] transition-all duration-300">
+                {/* Chassi externo com efeito titânio e botões laterais */}
+                <div className="relative rounded-[54px] p-[10px] bg-gradient-to-b from-slate-700 via-slate-900 to-black shadow-[0_25px_60px_-15px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.15)_inset] border border-slate-700/60 select-none">
+                  {/* Botões físicos laterais (Action, Vol+, Vol-, Power) */}
+                  <div className="absolute -left-[13px] top-24 w-[3.5px] h-7 bg-slate-600 rounded-l-[3px] shadow-xs" />
+                  <div className="absolute -left-[13px] top-36 w-[3.5px] h-12 bg-slate-600 rounded-l-[3px] shadow-xs" />
+                  <div className="absolute -left-[13px] top-52 w-[3.5px] h-12 bg-slate-600 rounded-l-[3px] shadow-xs" />
+                  <div className="absolute -right-[13px] top-40 w-[3.5px] h-16 bg-slate-600 rounded-r-[3px] shadow-xs" />
+
+                  {/* Alto-falante de chamada estéreo no topo do frame */}
+                  <div className="absolute top-[5px] left-1/2 -translate-x-1/2 w-14 h-1 bg-slate-800/90 rounded-full z-40" />
+
+                  {/* Tela interna do Smartphone */}
+                  <div className="relative overflow-hidden rounded-[44px] bg-background border border-black/50 flex flex-col shadow-inner">
+                    {/* Barra de Status com Horário, Dynamic Island e Conectividade */}
+                    <div className="relative z-30 h-11 bg-background/95 backdrop-blur-md px-6 flex items-center justify-between select-none border-b border-border/30">
+                      {/* Horário */}
+                      <span className="text-[12px] font-bold tracking-tight text-foreground font-mono">
+                        09:41
+                      </span>
+
+                      {/* Dynamic Island com lente de câmera frontal e sensor */}
+                      <div className="h-6 w-28 bg-black rounded-full flex items-center justify-between px-3 shadow-md ring-1 ring-white/10">
+                        {/* Lente com anel de vidro e reflexo sutil */}
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#0a0f1d] ring-1 ring-slate-800 flex items-center justify-center">
+                          <div className="w-1 h-1 rounded-full bg-blue-950/90" />
+                        </div>
+                        {/* Sensor infravermelho */}
+                        <div className="w-2 h-2 rounded-full bg-[#121216]" />
+                      </div>
+
+                      {/* Ícones de Conectividade (Sinal, Wi-Fi, Bateria) */}
+                      <div className="flex items-center gap-1.5 text-foreground/85">
+                        <div className="flex items-end gap-[1.5px] h-2.5" title="Sinal 5G">
+                          <span className="w-[2.5px] h-1 bg-foreground/80 rounded-2xs" />
+                          <span className="w-[2.5px] h-1.5 bg-foreground/80 rounded-2xs" />
+                          <span className="w-[2.5px] h-2 bg-foreground/80 rounded-2xs" />
+                          <span className="w-[2.5px] h-2.5 bg-foreground/80 rounded-2xs" />
+                        </div>
+
+                        <Wifi className="h-3 w-3 text-foreground/80" />
+
+                        <div className="flex items-center" title="Bateria 100%">
+                          <div className="w-5 h-2.5 rounded-[3px] border border-foreground/60 p-[1px] flex items-center">
+                            <div className="h-full w-full bg-emerald-500 rounded-[1.5px]" />
+                          </div>
+                          <div className="w-[1.5px] h-1 bg-foreground/50 rounded-r-xs -ml-[0.5px]" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Iframe da Página Pública Real com scrollbar oculta */}
+                    <iframe
+                      key={`mobile-${previewKey}`}
+                      title="Prévia real do agendamento público em celular"
+                      src={`${publicUrl}?preview=builder`}
+                      sandbox="allow-scripts allow-same-origin"
+                      className="block w-full h-[690px] border-none bg-background scrollbar-none"
+                    />
+
+                    {/* Rodapé com Home Indicator estilo iOS */}
+                    <div className="relative z-30 h-6 bg-background/95 backdrop-blur-md flex items-center justify-center border-t border-border/20 select-none">
+                      <div className="w-32 h-1 bg-foreground/30 hover:bg-foreground/50 rounded-full transition-colors" />
+                    </div>
+                  </div>
                 </div>
               </div>
+            ) : (
+              /* ======================================================= */
+              /* MOCKUP DE DESKTOP (BROWSER WINDOW MODERNO COM macOS DOTS) */
+              /* ======================================================= */
+              <div className="w-full overflow-hidden bg-background shadow-2xl transition-all rounded-2xl border border-border/80">
+                {/* Barra do Navegador */}
+                <div className="h-10 bg-muted/50 border-b border-border/60 px-4 flex items-center justify-between gap-3 select-none">
+                  {/* Botões macOS */}
+                  <div className="flex items-center gap-1.5" aria-hidden="true">
+                    <div className="h-3 w-3 rounded-full bg-rose-500/90 border border-rose-600/30 hover:brightness-90" />
+                    <div className="h-3 w-3 rounded-full bg-amber-500/90 border border-amber-600/30 hover:brightness-90" />
+                    <div className="h-3 w-3 rounded-full bg-emerald-500/90 border border-emerald-600/30 hover:brightness-90" />
+                  </div>
 
-              <iframe
-                title={`Prévia real do agendamento público em ${
-                  previewDevice === "mobile" ? "celular" : "desktop"
-                }`}
-                src={`${publicUrl}?preview=builder`}
-                sandbox="allow-scripts allow-same-origin"
-                className={`block w-full bg-background ${
-                  previewDevice === "mobile" ? "h-[680px]" : "h-[760px]"
-                }`}
-              />
-            </div>
+                  {/* Barra de Endereço do Navegador */}
+                  <div className="flex-1 max-w-sm mx-auto bg-background/90 px-3 py-1 rounded-lg border border-border/60 flex items-center justify-center gap-1.5 text-xs text-muted-foreground font-mono truncate shadow-2xs">
+                    <Lock className="h-3 w-3 text-emerald-500 shrink-0" />
+                    <span className="truncate">altarfisio.com.br/agendar</span>
+                    <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">· prévia</span>
+                  </div>
+
+                  <div className="text-[10px] font-mono text-muted-foreground/70 hidden sm:block">
+                    1280 px
+                  </div>
+                </div>
+
+                <iframe
+                  key={`desktop-${previewKey}`}
+                  title="Prévia real do agendamento público em desktop"
+                  src={`${publicUrl}?preview=builder`}
+                  sandbox="allow-scripts allow-same-origin"
+                  className="block w-full bg-background h-[760px] border-none"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

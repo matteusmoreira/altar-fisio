@@ -114,6 +114,20 @@
   background: hsl(var(--muted-foreground) / 0.4);
 }
 
+/* Utilitários para ocultar barras de rolagem mantendo toque e scroll nativos */
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* Isolamento nativo de impressão A4 vetorial para documentos clínicos */
 @media print {
   body {

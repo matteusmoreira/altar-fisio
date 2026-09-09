@@ -28,13 +28,13 @@ export async function hashToken(token: string): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 export async function requirePatient(ctx: QueryCtx | MutationCtx, token: string, patientId?: string) {
-  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Acesso ao portal inválido ou expirado.')
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new ConvexError('Acesso ao portal inválido ou expirado.')
   const digest = await hashToken(token)
   const session = await ctx.db.query('patientSessions').withIndex('by_tokenHash', q => q.eq('tokenHash', digest)).first()
   if (!session || session.authVersion !== 2 || session.expiresAt <= Date.now() || (patientId && patientId !== session.patientId)) {
-    throw new Error('Acesso ao portal inválido ou expirado.')
+    throw new ConvexError('Acesso ao portal inválido ou expirado.')
   }
   const patient = await ctx.db.get(session.patientId)
-  if (!patient?.active) throw new Error('Acesso ao portal inválido ou expirado.')
+  if (!patient?.active) throw new ConvexError('Acesso ao portal inválido ou expirado.')
   return patient
 }

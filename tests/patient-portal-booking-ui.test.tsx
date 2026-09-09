@@ -74,3 +74,28 @@ test('closure replaces booking controls and closes an already open form', () => 
   expect(screen.queryByRole('button', { name: 'Agendar Aula' })).toBeNull()
   expect(screen.queryByRole('dialog')).toBeNull()
 })
+
+test('monthly booking dialog toggles class selections and displays elegant status indicators', () => {
+  render(<PatientPortalPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Agendar Aula' }))
+
+  // Verifica elementos de cabeçalho e formulário
+  expect(screen.getByText('Agendar minhas turmas do mês')).toBeTruthy()
+  expect(screen.getByLabelText('Plano')).toBeTruthy()
+  expect(screen.getByLabelText('Mês')).toBeTruthy()
+  expect(screen.getByText(/Saldo livre:/)).toBeTruthy()
+
+  // Verifica turma disponível
+  const classCard = screen.getByText('Segunda · 08:00–08:30').closest('button')
+  expect(classCard).toBeTruthy()
+  expect(classCard?.getAttribute('aria-pressed')).toBe('false')
+
+  // Clica na turma para selecionar
+  fireEvent.click(classCard!)
+  expect(classCard?.getAttribute('aria-pressed')).toBe('true')
+
+  // Botão de cancelar fecha ou está presente
+  expect(screen.getByRole('button', { name: 'Cancelar' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /Confirmar todas as reservas/ })).toBeTruthy()
+})
+

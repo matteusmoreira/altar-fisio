@@ -42,6 +42,7 @@ export const SettingsPage: React.FC = () => {
   const updateSettingsMutation = useMutation(api.clinic.updateSettings)
   const generateUploadUrlMutation = useMutation(api.clinic.generateUploadUrl)
   const removeLogoMutation = useMutation(api.clinic.removeLogo)
+  const clearAuditLogsMutation = useMutation(api.audit.clearAuditLogs)
 
   const [clinicName, setClinicName] = useState(theme.clinicName)
   const [clinicSubtitle, setClinicSubtitle] = useState(theme.clinicSubtitle)
@@ -233,6 +234,16 @@ export const SettingsPage: React.FC = () => {
       showToast("Teste de E-mail executado com sucesso! Verifique a caixa de entrada.")
     } else {
       showToast("Aviso no teste Resend: " + (res.errorMessage || "Verifique a API Key"))
+    }
+  }
+
+  const handleClearAuditLogs = async () => {
+    try {
+      const result = await clearAuditLogsMutation({})
+      const count = result?.deletedCount ?? 0
+      showToast(`Trilha de auditoria excluída com sucesso! (${count} ${count === 1 ? "registro removido" : "registros removidos"})`)
+    } catch (err: any) {
+      showToast("Erro ao excluir trilha de auditoria: " + (err?.message || "Tente novamente"))
     }
   }
 
@@ -764,7 +775,7 @@ export const SettingsPage: React.FC = () => {
         </Card>
 
         {/* Trilha de Auditoria LGPD e COFFITO */}
-        <AuditTrailViewer logs={auditLogs} />
+        <AuditTrailViewer logs={auditLogs} onClearLogs={handleClearAuditLogs} />
 
         {/* Botão de Salvar Geral */}
 

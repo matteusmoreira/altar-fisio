@@ -3,6 +3,7 @@ import { MonthlyBookingDialog } from '@/components/patients/MonthlyBookingDialog
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { PatientWaitlist } from '@/components/patients/PatientWaitlist'
 import { isValidPhone } from '../../shared/patientIdentity'
+import { portalErrorMessage } from '@/lib/portalErrors'
 import React, { useState, useMemo, useEffect } from "react"
 import { useQuery, useMutation, useAction } from "convex/react"
 import { PortalLoginForm } from '@/components/patients/PortalLoginForm'
@@ -158,12 +159,14 @@ const PatientPortalContent: React.FC = () => {
   // Vagas Livres para o Modal de Remarcação
   const availableSlotsReschedule = useQuery(
     api.patientPortal.listAvailableSlotsForBooking,
-    rescheduleItem
+    rescheduleItem && portalToken
       ? {
-          portalToken: portalToken!,
+          portalToken,
           specialty: rescheduleItem.specialty || "pilates",
           startDate: rescheduleDate,
           daysCount: 1,
+          serviceId: rescheduleItem.serviceId,
+          excludeParticipantId: rescheduleItem.participantId,
         }
       : "skip"
   )
@@ -199,7 +202,7 @@ const PatientPortalContent: React.FC = () => {
       setCancelReason("")
       if (res.generatedCredit) setActiveTab("replacements")
     } catch (err: any) {
-      showToast(err?.message || "Erro ao desmarcar sessão.", "error")
+      showToast(portalErrorMessage(err, "Erro ao desmarcar sessão."), "error")
     } finally {
       setIsCancelling(false)
     }
@@ -219,7 +222,7 @@ const PatientPortalContent: React.FC = () => {
       setRescheduleItem(null)
       setRescheduleTargetSlot(null)
     } catch (err: any) {
-      showToast(err?.message || "Erro ao remarcar.", "error")
+      showToast(portalErrorMessage(err, "Erro ao remarcar sessão."), "error")
     } finally {
       setIsRescheduling(false)
     }
@@ -243,7 +246,7 @@ const PatientPortalContent: React.FC = () => {
       setReplacementTargetSlot(null)
       setActiveTab("replacements")
     } catch (err: any) {
-      showToast(err?.message || "Erro ao agendar reposição.", "error")
+      showToast(portalErrorMessage(err, "Erro ao agendar reposição."), "error")
     } finally {
       setIsBookingReplacement(false)
     }
@@ -1046,21 +1049,30 @@ const PatientPortalContent: React.FC = () => {
                 <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
                   {availableSlotsReschedule.map((slot: any) => {
                     const isSelected = rescheduleTargetSlot?.scheduleId === slot.scheduleId
+                    const isBlocked = slot.canSelect === false || slot.isAlreadyEnrolled || slot.hasConflict || slot.vacanciesLeft === 0
 
                     return (
                       <div
                         key={slot.scheduleId}
-                        onClick={() => setRescheduleTargetSlot(slot)}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? "border-primary bg-primary/10 shadow-sm"
-                            : "border-border/70 bg-card hover:border-primary/40"
+                        onClick={() => {
+                          if (!isBlocked) setRescheduleTargetSlot(slot)
+                        }}
+                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
+                          isBlocked
+                            ? "opacity-60 bg-muted/20 border-border/50 cursor-not-allowed"
+                            : isSelected
+                            ? "border-primary bg-primary/10 shadow-sm cursor-pointer"
+                            : "border-border/70 bg-card hover:border-primary/40 cursor-pointer"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <div
                             className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-                              isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"
+                              isBlocked
+                                ? "border-muted-foreground/30 bg-muted/20 text-transparent"
+                                : isSelected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-muted-foreground"
                             }`}
                           >
                             {isSelected && <Check className="h-3 w-3" />}
@@ -1075,9 +1087,25 @@ const PatientPortalContent: React.FC = () => {
                           </div>
                         </div>
 
-                        <Badge variant="secondary" className="text-[10px]">
-                          {slot.vacanciesLeft} vaga(s)
-                        </Badge>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {slot.isAlreadyEnrolled ? (
+                            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                              Já agendado
+                            </Badge>
+                          ) : slot.hasConflict ? (
+                            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                              Horário conflitante
+                            </Badge>
+                          ) : slot.vacanciesLeft === 0 ? (
+                            <Badge variant="secondary" className="text-[10px] text-muted-foreground">
+                              Lotado
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {slot.vacanciesLeft} vaga(s)
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
@@ -1099,7 +1127,7 @@ const PatientPortalContent: React.FC = () => {
               </Button>
               <Button
                 size="sm"
-                disabled={!rescheduleTargetSlot || isRescheduling}
+                disabled={!rescheduleTargetSlot || isRescheduling || rescheduleTargetSlot.isAlreadyEnrolled || rescheduleTargetSlot.hasConflict || rescheduleTargetSlot.vacanciesLeft === 0}
                 onClick={handleConfirmReschedule}
                 className="h-11 rounded-2xl text-xs font-bold shadow-md shadow-primary/25"
               >

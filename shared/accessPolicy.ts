@@ -33,6 +33,12 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "admin",
     "professional"
   ],
+  "audit:clearAuditLogs": [
+    "admin"
+  ],
+  "audit:deleteAuditLog": [
+    "admin"
+  ],
   "availability:listRules": [
     "admin",
     "professional",
