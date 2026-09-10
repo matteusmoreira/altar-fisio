@@ -1,3 +1,4 @@
+import { bookingConfirmationValidator } from "./lib/bookingConfirmation"
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
@@ -548,6 +549,7 @@ export default defineSchema({
 
   // Configuração do Construtor de Agendamento Público e Triagem
   bookingFormConfig: defineTable({
+    confirmation: v.optional(bookingConfirmationValidator),
     requireApproval: v.boolean(),
     insurancePartners: v.optional(v.array(v.object({ id: v.string(), name: v.string(), logo: v.optional(v.string()) }))),
     steps: v.array(
@@ -595,6 +597,22 @@ export default defineSchema({
   }),
 
   // Submissões de Agendamentos Públicos Realizados por Pacientes
+  publicBookingReceipts: defineTable({
+    requestId: v.string(),
+    fingerprint: v.string(),
+    result: v.object({
+      success: v.boolean(),
+      bookingId: v.id('publicBookings'),
+      patientId: v.id('patients'),
+      status: v.string(),
+      requireApproval: v.boolean(),
+      scheduledDate: v.string(),
+      scheduledTime: v.string(),
+      patientName: v.string(),
+      portalAccessCreated: v.boolean(),
+    }),
+  }).index('by_request', ['requestId']),
+
   publicBookings: defineTable({
     patientId: v.id("patients"),
     scheduleId: v.optional(v.id("schedules")),

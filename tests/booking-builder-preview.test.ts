@@ -13,7 +13,8 @@ const publicBookingSource = readFileSync(
 
 describe("prévia do construtor de agendamento", () => {
   test("renderiza a própria agenda pública em vez de manter um fluxo simulado duplicado", () => {
-    expect(builderSource).toContain('src={`${publicUrl}?preview=builder`}')
+    expect(builderSource).toContain('src={`${publicUrl}?preview=builder${')
+    expect(builderSource).toContain('&confirmation=${previewScreen}')
     expect(builderSource).toContain('sandbox="allow-scripts allow-same-origin"')
     expect(builderSource).not.toContain('"08:00", "09:00", "14:00", "16:00"')
     expect(builderSource).not.toContain("Studio Pilates\", \"Fisioterapia Geral")

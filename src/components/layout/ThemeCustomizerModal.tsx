@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { useTheme, PRESET_COLORS, type ColorPreset } from "@/contexts/ThemeContext"
+import { useTheme, PRESET_COLORS, type ColorPreset, normalizeToHex } from "@/contexts/ThemeContext"
 import {
   Dialog,
   DialogContent,
@@ -22,10 +22,29 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({
   onOpenChange,
 }) => {
   const { theme, setMode, setPreset, updateClinicInfo } = useTheme()
-  const [customHex, setCustomHex] = useState(theme.customHex || "#10b981")
+  const [customHex, setCustomHex] = useState(() =>
+    normalizeToHex(
+      theme.preset === "custom"
+        ? theme.customHex
+        : (PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]?.hex || theme.customHex)
+    )
+  )
   const [clinicName, setClinicName] = useState(theme.clinicName)
   const [clinicSubtitle, setClinicSubtitle] = useState(theme.clinicSubtitle)
   const [savedFeedback, setSavedFeedback] = useState(false)
+
+  React.useEffect(() => {
+    if (open) {
+      const activeHex = normalizeToHex(
+        theme.preset === "custom"
+          ? theme.customHex
+          : (PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]?.hex || theme.customHex)
+      )
+      setCustomHex(activeHex)
+      setClinicName(theme.clinicName)
+      setClinicSubtitle(theme.clinicSubtitle)
+    }
+  }, [open, theme.clinicName, theme.clinicSubtitle, theme.preset, theme.customHex])
 
   const handleSaveInfo = (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,7 +120,10 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setPreset(key)}
+                    onClick={() => {
+                      setPreset(key)
+                      setCustomHex(preset.hex)
+                    }}
                     className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-xs font-medium transition-all ${
                       isSelected
                         ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
@@ -136,19 +158,21 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={customHex}
+                value={normalizeToHex(customHex)}
                 onChange={(e) => {
-                  setCustomHex(e.target.value)
-                  setPreset("custom", e.target.value)
+                  const val = e.target.value
+                  setCustomHex(val)
+                  setPreset("custom", val)
                 }}
                 className="h-9 w-10 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
               />
               <Input
                 value={customHex}
                 onChange={(e) => {
-                  setCustomHex(e.target.value)
-                  if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
-                    setPreset("custom", e.target.value)
+                  const val = e.target.value
+                  setCustomHex(val)
+                  if (/^#[0-9A-F]{6}$/i.test(val)) {
+                    setPreset("custom", val)
                   }
                 }}
                 placeholder="#10b981"
@@ -157,7 +181,11 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({
               <Button
                 size="sm"
                 variant={theme.preset === "custom" ? "default" : "outline"}
-                onClick={() => setPreset("custom", customHex)}
+                onClick={() => {
+                  const valid = normalizeToHex(customHex)
+                  setCustomHex(valid)
+                  setPreset("custom", valid)
+                }}
                 className="h-9 text-xs shrink-0"
               >
                 Aplicar HEX

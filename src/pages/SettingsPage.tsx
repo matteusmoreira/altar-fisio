@@ -1,7 +1,7 @@
 import { LegacyClassServices } from '@/components/schedule/LegacyClassServices'
 import { PortalBookingSettings } from '@/components/patients/PortalMessage'
 import React, { useState, useEffect } from "react"
-import { useTheme, PRESET_COLORS, type ColorPreset } from "@/contexts/ThemeContext"
+import { useTheme, PRESET_COLORS, type ColorPreset, normalizeToHex } from "@/contexts/ThemeContext"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { AuditTrailViewer } from "@/components/clinical/AuditTrailViewer"
 import { useQuery, useMutation } from "@/lib/staffConvex"
@@ -188,10 +188,9 @@ export const SettingsPage: React.FC = () => {
         logoUrl,
         logoStorageId,
         primaryColor:
-          theme.customHex ||
-          (theme.preset !== "custom" && PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]
-            ? PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS].hex
-            : "#10b981"),
+          theme.preset === "custom"
+            ? normalizeToHex(theme.customHex, "#10b981")
+            : (PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]?.hex || "#10b981"),
         colorPreset: theme.preset,
         mode: theme.mode,
         phone,

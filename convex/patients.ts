@@ -238,3 +238,51 @@ export const deletePatient = mutation({
   },
 })
 
+export const listAssignedPatientIds = query({
+  args: {
+    sessionToken: v.string(),
+    professionalId: v.optional(v.id("professionals")),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, professionalId } = input
+    const user = await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"])
+
+    const targetProfId = user.role === "professional"
+      ? (user.professionalId ?? professionalId)
+      : (professionalId ?? user.professionalId)
+    if (!targetProfId) return []
+
+    // 1. Participantes em agendamentos do profissional
+    const schedules = await ctx.db
+      .query("schedules")
+      .withIndex("by_professional_date", (q) => q.eq("professionalId", targetProfId))
+      .collect()
+
+    const patientIdSet = new Set<string>()
+
+    await Promise.all(
+      schedules.map(async (schedule) => {
+        const parts = await ctx.db
+          .query("scheduleParticipants")
+          .withIndex("by_schedule", (q) => q.eq("scheduleId", schedule._id))
+          .collect()
+        for (const p of parts) {
+          patientIdSet.add(p.patientId)
+        }
+      })
+    )
+
+    // 2. Pacientes com evolução SOAP registrada pelo profissional
+    const evolutions = await ctx.db
+      .query("clinicalEvolutions")
+      .withIndex("by_professional", (q) => q.eq("professionalId", targetProfId))
+      .collect()
+
+    for (const evo of evolutions) {
+      patientIdSet.add(evo.patientId)
+    }
+
+    return Array.from(patientIdSet)
+  },
+})
+

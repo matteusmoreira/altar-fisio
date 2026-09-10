@@ -47,6 +47,25 @@ const publicReserve = (f: Fixture, index: number, extra = {}) => f.t.mutation(in
   name: `Paciente ${index}`, documentCpf: cpf(index), phone: '11987654321', birthDate: '1990-01-01', date, startTime: '08:00', endTime: '08:30', roomId: f.roomIds[0], professionalId: f.professionalIds[0], serviceId: f.serviceId, answers: [], credential: { salt: 'test', passwordHash: 'test' }, ...extra,
 })
 
+test('public slots exclude past days and elapsed starts in Sao Paulo, including UTC rollover', async () => {
+  const f = await fixture()
+  vi.setSystemTime(new Date('2026-09-14T11:30:00Z'))
+  expect((await query(f)).map(slot => slot.startTime)).toEqual(['09:00', '09:30'])
+  vi.setSystemTime(new Date('2026-09-14T22:39:00Z'))
+  expect(await query(f)).toEqual([])
+  vi.setSystemTime(new Date('2026-09-15T01:00:00Z'))
+  expect(await query(f)).toEqual([])
+  expect((await query(f, { date: '2026-09-21' })).map(slot => slot.startTime)).toEqual(['08:00', '08:30', '09:00', '09:30'])
+})
+
+test.each([true, false])('expired public booking is rejected before persistence, approval=%s', async requireApproval => {
+  const f = await fixture(requireApproval)
+  await f.t.run(ctx => ctx.db.patch(f.serviceId, { modality: 'individual', isEvaluation: true }))
+  vi.setSystemTime(new Date('2026-09-14T22:39:00Z'))
+  await expect(publicReserve(f, 99)).rejects.toThrow('Selecione um horário futuro')
+  expect(await f.t.run(ctx => ctx.db.query('publicBookings').collect())).toEqual([])
+})
+
 // Engine-level capacity tests remain valid independently of the public assessment channel.
 const reserve = async (f: Fixture, index: number, extra = {}) => f.t.run(async ctx => {
   let patient = await ctx.db.query('patients').filter(q => q.eq(q.field('documentCpf'), cpf(index))).first()

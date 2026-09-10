@@ -1,6 +1,8 @@
+import { bookingConfirmationValidator } from "./lib/bookingConfirmation"
+import { DEFAULT_CONFIRMATION } from "../shared/bookingConfirmation"
 import { DEFAULT_INSURANCE_PARTNERS } from "../shared/bookingInsurance"
 import { validDate } from './lib/validation'
-import { requireStaff } from './lib/security'
+import { hashToken, requireStaff } from './lib/security'
 import { query, mutation, action, internalMutation } from "./_generated/server"
 import { credentialFields, ensurePatientCredential, findPatients } from './lib/patientCredentials'
 import { isValidCpf, isValidPhone, normalizeCpf, normalizePhone } from '../shared/patientIdentity'
@@ -77,6 +79,7 @@ export const getBookingConfig = query({
     const config = await ctx.db.query("bookingFormConfig").first()
     if (!config) {
       return {
+        confirmation: DEFAULT_CONFIRMATION,
         requireApproval: false,
         insurancePartners: DEFAULT_INSURANCE_PARTNERS,
         steps: DEFAULT_BOOKING_STEPS,
@@ -99,6 +102,7 @@ export const getBookingConfig = query({
 // 2. Atualizar Configuração do Construtor (Painel Admin)
 export const updateBookingConfig = mutation({
   args: { sessionToken: v.string(),
+    confirmation: v.optional(bookingConfirmationValidator),
     requireApproval: v.boolean(),
     insurancePartners: v.optional(v.array(v.object({ id: v.string(), name: v.string(), logo: v.optional(v.string()) }))),
     steps: v.array(
@@ -163,10 +167,12 @@ export const updateBookingConfig = mutation({
         if (partner.logo && (partner.logo.length > 220000 || !/^(https:\/\/|\/assets\/convenios\/|data:image\/(png|jpeg|webp);base64,)/.test(partner.logo))) throw new ConvexError("Use uma imagem PNG, JPG, WebP ou URL HTTPS válida (até 150 KB).")
       }
     }
+    if (args.confirmation && Object.entries(args.confirmation).some(([key, value]) => typeof value === "string" && (value.length > 2000 || (key !== "address" && !value.trim())))) throw new ConvexError("Preencha os textos da confirmação com até 2000 caracteres.")
     const now = Date.now()
 
     if (existing) {
       await ctx.db.patch(existing._id, {
+        confirmation: args.confirmation ?? existing?.confirmation,
         requireApproval: args.requireApproval,
         insurancePartners: args.insurancePartners ?? existing?.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS,
         steps: args.steps,
@@ -178,6 +184,7 @@ export const updateBookingConfig = mutation({
       })
     } else {
       await ctx.db.insert("bookingFormConfig", {
+        confirmation: args.confirmation,
         requireApproval: args.requireApproval,
         insurancePartners: args.insurancePartners ?? DEFAULT_INSURANCE_PARTNERS,
         steps: args.steps,
@@ -213,6 +220,7 @@ export const resetBookingConfigToDefault = mutation({
     const now = Date.now()
 
     const defaultData = {
+      confirmation: DEFAULT_CONFIRMATION,
       requireApproval: false,
       insurancePartners: DEFAULT_INSURANCE_PARTNERS,
         steps: DEFAULT_BOOKING_STEPS,
@@ -285,6 +293,7 @@ export const listPublicPackages = query({
 
 // 5. Submeter Agendamento Público (Realizado pelo Paciente na Página /agendar)
 const publicBookingArgs = {
+    requestId: v.optional(v.string()),
     name: v.string(),
     documentCpf: v.string(),
     phone: v.string(),
@@ -325,6 +334,16 @@ export const submitPublicBooking = action({
 export const persistPublicBooking = internalMutation({
   args: { ...publicBookingArgs, credential: v.object(credentialFields) },
   handler: async (ctx, args) => {
+    const { credential: _credential, requestId, ...request } = args
+    if (requestId && !/^[0-9a-f-]{36}$/i.test(requestId)) throw new ConvexError('Solicitação inválida. Atualize a página.')
+    const fingerprint = requestId ? await hashToken(JSON.stringify(request)) : undefined
+    if (requestId) {
+      const receipt = await ctx.db.query('publicBookingReceipts').withIndex('by_request', q => q.eq('requestId', requestId)).unique()
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint) throw new ConvexError('Esta solicitação já foi utilizada. Atualize a página para fazer outro agendamento.')
+        return receipt.result
+      }
+    }
     const evaluation = await resolveBookingService(ctx, args)
     if (!evaluation?.isEvaluation || evaluation.modality !== 'individual') throw new ConvexError('O agendamento público aceita somente avaliação individual. Tratamentos são reservados no portal do paciente.')
     const now = Date.now()
@@ -469,7 +488,7 @@ export const persistPublicBooking = internalMutation({
       timestamp: now,
     })
 
-    return {
+    const result = {
       success: true,
       bookingId: publicBookingId,
       portalAccessCreated,
@@ -480,6 +499,8 @@ export const persistPublicBooking = internalMutation({
       scheduledTime: args.startTime,
       patientName: args.name,
     }
+    if (requestId) await ctx.db.insert('publicBookingReceipts', { requestId, fingerprint: fingerprint!, result })
+    return result
   },
 })
 

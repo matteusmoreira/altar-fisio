@@ -1,7 +1,11 @@
+import { DEFAULT_CONFIRMATION } from "../../shared/bookingConfirmation"
 import type { Id } from "@convex/_generated/dataModel"
+import { clinicDateTime, isFutureBooking } from '../../shared/bookingTime'
 import { formatCpf, formatPhone, isValidCpf, isValidPhone } from '../../shared/patientIdentity'
 import React, { useState, useMemo, useRef, useEffect } from "react"
-import { useQuery, useAction } from "convex/react"
+import { useQuery, useConvex } from "convex/react"
+import { createPublicBookingSubmit } from '@/lib/publicBookingSubmit'
+import { portalErrorMessage } from '@/lib/portalErrors'
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -68,13 +72,16 @@ const LEGACY_INSURANCE_FIELD_IDS = new Set([
 
 export const PublicBookingPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
+  const confirmation = { ...DEFAULT_CONFIRMATION, ...config?.confirmation }
   const clinicSettings = useQuery(api.clinic.getSettings)
   const publicPackages = useQuery(api.bookingBuilder.listPublicPackages)
-  const submitBooking = useAction(api.bookingBuilder.submitPublicBooking)
+  const convex = useConvex()
+  const [submitBooking] = useState(() => createPublicBookingSubmit(convex.url))
 
   // Rastreia especialidade da URL se houver (ex: ?servico=pilates)
   const urlParams = new URLSearchParams(window.location.search)
   const isBuilderPreview = urlParams.get("preview") === "builder"
+  const confirmationPreview = isBuilderPreview && ["confirmed", "pending"].includes(urlParams.get("confirmation") || "")
   const initialSpecialty = (urlParams.get("especialidade") || urlParams.get("servico") || "pilates") as BookingSpecialty
 
   // Estado do Fluxo
@@ -142,20 +149,36 @@ export const PublicBookingPage: React.FC = () => {
     return publicPackages.filter((pkg) => pkg.specialty === specialtyFilter)
   }, [publicPackages, specialtyFilter])
 
+  const [now, setNow] = useState(Date.now)
+  const today = clinicDateTime(now).slice(0, 10)
+  useEffect(() => {
+    const refresh = () => setNow(Date.now())
+    const timer = window.setInterval(refresh, 1000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
+
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = getTodayDateString()
     // Se for domingo, pula para segunda
-    const d = new Date()
-    if (d.getDay() === 0) return addDaysSafe(today, 1)
+    const d = new Date(`${today}T12:00:00Z`)
+    if (d.getUTCDay() === 0) return addDaysSafe(today, 1)
     return today
   })
-  const [selectedSlot, setSelectedSlot] = useState<{
+  const [selectedSlotChoice, setSelectedSlot] = useState<{
     startTime: string
     endTime: string
     roomId?: string
     professionalId?: string
     roomName?: string
   } | null>(null)
+  const selectedSlot = selectedSlotChoice && isFutureBooking(selectedDate, selectedSlotChoice.startTime, now)
+    ? selectedSlotChoice : null
 
   // Filtro de Turno nos Horários
   const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<"all" | "morning" | "afternoon" | "evening">("all")
@@ -180,7 +203,8 @@ export const PublicBookingPage: React.FC = () => {
 
   // Estado de Submissão e Sucesso
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [bookingSuccessData, setBookingSuccessData] = useState<any>(null)
+  const [actualSuccessData, setBookingSuccessData] = useState<any>(null)
+  const bookingSuccessData = confirmationPreview ? { patientName: "Paciente de exemplo", packageName: "Sessão de exemplo", isConvenio: true, healthInsuranceName: "Convênio de exemplo", requireApproval: urlParams.get("confirmation") === "pending" } : actualSuccessData
 
   // Consulta de Horários Disponíveis
   const slotsByTime = useQuery(api.bookingBuilder.listPublicAvailableSlots, {
@@ -189,13 +213,13 @@ export const PublicBookingPage: React.FC = () => {
     packageId: selectedPackageId ? selectedPackageId as Id<"packages"> : undefined,
   })
 
-  const availableSlots = useMemo(() => slotsByTime?.flatMap(slot =>
+  const availableSlots = useMemo(() => slotsByTime?.filter(slot => isFutureBooking(selectedDate, slot.startTime, now)).flatMap(slot =>
     slot.rooms.length === 0 ? [slot] : slot.rooms.map(room => ({
       ...slot,
       rooms: [room],
       totalAvailableSpots: room.availableSpots,
     }))
-  ), [slotsByTime])
+  ), [slotsByTime, selectedDate, now])
 
   // Lista de etapas ordenadas
   const steps = useMemo(() => {
@@ -229,7 +253,7 @@ export const PublicBookingPage: React.FC = () => {
   // Próximos dias para seleção no carrossel de calendário
   const dateOptions = useMemo(() => {
     const dates = []
-    const base = getTodayDateString()
+    const base = today
     for (let i = 0; i < 14; i++) {
       const dStr = addDaysSafe(base, i)
       const parts = dStr.split("-")
@@ -254,7 +278,7 @@ export const PublicBookingPage: React.FC = () => {
       }
     }
     return dates
-  }, [])
+  }, [today])
 
   // Classificador de período do slot
   const getSlotPeriod = (timeStr: string): "morning" | "afternoon" | "evening" => {
@@ -359,6 +383,14 @@ export const PublicBookingPage: React.FC = () => {
 
   // Submissão Final
   const handleSubmitBooking = async () => {
+    if (!selectedSlot || !isFutureBooking(selectedDate, selectedSlot.startTime)) {
+      setSelectedSlot(null)
+      setFormErrors({ submit: 'O horário venceu ou não foi selecionado. Escolha um horário futuro.' })
+      const index = steps.findIndex(step => step.type === 'slot_picker')
+      if (index >= 0) setCurrentStepIndex(index)
+      return
+    }
+    if (isSubmitting) return
     if (isBuilderPreview) {
       setFormErrors({
         submit: "Prévia segura: nenhum agendamento real será criado pelo construtor.",
@@ -402,8 +434,8 @@ export const PublicBookingPage: React.FC = () => {
         email: patientEmail || undefined,
         birthDate: patientBirthDate,
         date: selectedDate,
-        startTime: selectedSlot?.startTime || "08:00",
-        endTime: selectedSlot?.endTime || "08:55",
+        startTime: selectedSlot.startTime,
+        endTime: selectedSlot.endTime,
         specialty: selectedSpecialty,
         packageId: chosenPkg?._id,
         packageName: chosenPkg?.name,
@@ -435,7 +467,7 @@ export const PublicBookingPage: React.FC = () => {
       window.scrollTo({ top: 0, behavior: "smooth" })
     } catch (err: any) {
       setFormErrors({
-        submit: err?.message || "Erro ao registrar o agendamento. Por favor, tente novamente.",
+        submit: portalErrorMessage(err),
       })
     } finally {
       setIsSubmitting(false)
@@ -448,10 +480,10 @@ export const PublicBookingPage: React.FC = () => {
     const title = encodeURIComponent(`Sessão de ${selectedSpecialty.toUpperCase()} - Altar Fisio`)
     const details = encodeURIComponent(
       `Atendimento de Fisioterapia/Pilates na Altar Fisio (Dr. Marcelo).\nEndereço: ${
-        clinicSettings?.address || "Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
-      }\nTelefone: ${clinicSettings?.phone || "(11) 98765-4321"}\nRecomendações: Roupas confortáveis e meias antiderrapantes para Studio Pilates.`
+        confirmation.address || clinicSettings?.address || "Endereço não informado"
+      }\nTelefone: ${clinicSettings?.phone || "(11) 98765-4321"}\nRecomendações: ${confirmation.instructionsMessage}`
     )
-    const location = encodeURIComponent(clinicSettings?.address || "Altar Fisio")
+    const location = encodeURIComponent(confirmation.address || clinicSettings?.address || "Altar Fisio")
     const dateFormatted = selectedDate.replace(/-/g, "")
     const startHour = selectedSlot?.startTime.replace(":", "") || "0800"
     const endHour = selectedSlot?.endTime.replace(":", "") || "0855"
@@ -474,7 +506,8 @@ export const PublicBookingPage: React.FC = () => {
     const isPending = bookingSuccessData.requireApproval || bookingSuccessData.status === "pending_approval"
     return (
       <div className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-muted/30 py-12 px-4 sm:px-6 flex flex-col items-center justify-center selection:bg-primary/20">
-        <div className="w-full max-w-xl animate-fade-in">
+        <div className="w-full max-w-xl animate-fade-in break-words">
+          {isBuilderPreview && <p role="status" className="mb-4 rounded-xl border bg-card p-3 text-center text-xs">Prévia da confirmação • Dados fictícios • Nenhuma reserva criada</p>}
           <Card className="border border-border/80 shadow-2xl overflow-hidden rounded-[2rem] bg-card backdrop-blur-md">
             {/* Header da Confirmação com Gradiente Luxuoso */}
             <div className="relative overflow-hidden bg-gradient-to-br from-primary via-emerald-700 to-emerald-900 text-white p-8 sm:p-10 text-center">
@@ -492,34 +525,37 @@ export const PublicBookingPage: React.FC = () => {
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-1">
-                  {isPending ? "Recebemos sua Solicitação!" : "Sua Sessão está Confirmada!"}
+                  {isPending ? confirmation.pendingTitle : confirmation.confirmedTitle}
                 </h1>
                 
-                <p className="text-xs sm:text-sm text-emerald-100/90 mt-2 max-w-md mx-auto leading-relaxed">
-                  {config?.successMessage ||
-                    "Seu horário foi reservado no sistema da Altar Fisio. Enviamos o comprovante completo para o seu WhatsApp."}
+                <p className="text-xs sm:text-sm text-emerald-100/90 whitespace-pre-line mt-2 max-w-md mx-auto leading-relaxed">
+                  {isPending ? confirmation.pendingMessage : config?.successMessage || "Seu agendamento foi registrado com sucesso! Entraremos em contato via WhatsApp com os detalhes da sua sessão."}
                 </p>
               </div>
             </div>
 
             <CardContent className="p-6 sm:p-8 space-y-6">
               {/* Acesso criado junto com o cadastro, sem alterar senhas existentes. */}
+              {confirmation.showPortal && (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
-                <h2 className="font-semibold">Acesso ao portal do paciente</h2>
+                <h2 className="font-semibold">{confirmation.portalTitle}</h2>
                 <p className="text-sm text-muted-foreground">{bookingSuccessData.portalAccessCreated ? <>Seu acesso foi criado. Entre com CPF ou telefone e a senha inicial <strong className="text-foreground">@mudar123</strong>.</> : 'Seu acesso está disponível. Entre com CPF ou telefone e sua senha atual.'}</p>
-                <a className="inline-flex min-h-11 items-center font-medium text-primary underline" href="/portal">Acessar meu portal</a>
+                <a className="inline-flex min-h-11 items-center font-medium text-primary underline" href={isBuilderPreview ? undefined : "/portal"} aria-disabled={isBuilderPreview}>{confirmation.portalButton}</a>
               </div>
+              )}
+
               {/* Voucher Ticket de Confirmação */}
+              {confirmation.showReceipt && (
               <div className="rounded-2xl bg-muted/40 border border-border p-5 relative overflow-hidden">
                 <div className="flex items-center justify-between border-b border-border/70 pb-3 mb-4">
                   <div className="flex items-center gap-2">
                     <HeartPulse className="h-4 w-4 text-primary" />
                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Comprovante de Reserva
+                      {confirmation.receiptTitle}
                     </span>
                   </div>
                   <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] font-bold">
-                    Vaga Garantida
+                    {isPending ? "Aguardando aprovação" : "Vaga Garantida"}
                   </Badge>
                 </div>
 
@@ -563,7 +599,7 @@ export const PublicBookingPage: React.FC = () => {
                     </span>
                     <span className="font-bold text-foreground flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-primary" />
-                      {selectedSlot?.startTime} às {selectedSlot?.endTime}
+                      {confirmationPreview ? "10:30" : selectedSlot?.startTime} às {confirmationPreview ? "11:00" : selectedSlot?.endTime}
                     </span>
                   </div>
 
@@ -613,72 +649,84 @@ export const PublicBookingPage: React.FC = () => {
                   )}
                 </div>
               </div>
+              )}
 
               {/* Informação sobre Acerto na Recepção */}
+              {confirmation.showPayment && (
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
                 <CreditCard className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <strong className="block font-bold mb-0.5">Pagamento Presencial na Recepção:</strong>
-                  O acerto do pacote ou sessão é realizado diretamente na clínica no dia do seu atendimento. Aceitamos Pix com desconto e Cartão de Crédito/Débito.
+                <div className="leading-relaxed whitespace-pre-line">
+                  <strong className="block font-bold mb-0.5">{confirmation.paymentTitle}</strong>
+                  {confirmation.paymentMessage}
                 </div>
               </div>
+              )}
 
               {/* Informações da Clínica & Dicas Importantes */}
               <div className="space-y-3 text-sm">
+                {confirmation.showLocation && (
                 <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-card border border-border shadow-sm">
                   <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
                     <MapPin className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="font-bold text-foreground text-xs uppercase tracking-wider">
-                      Local de Atendimento
+                      {confirmation.locationTitle}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      {clinicSettings?.address || "Av. Paulista, 1000 - Bela Vista, São Paulo - SP"}
+                      {confirmation.address || clinicSettings?.address || "Endereço não informado"}
                     </div>
                   </div>
                 </div>
-
+                )}
+                {confirmation.showInstructions && (
                 <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/15">
                   <div className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
                     <Sparkles className="h-5 w-5" />
                   </div>
-                  <div className="text-xs text-muted-foreground leading-relaxed">
-                    <strong className="text-foreground block font-semibold mb-0.5">Orientações para o Atendimento:</strong>
-                    Para sessões de Pilates ou RPG, utilize roupas leves e meias antiderrapantes.
-                    Recomendamos chegar com 10 minutos de antecedência.
+                  <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                    <strong className="text-foreground block font-semibold mb-0.5">{confirmation.instructionsTitle}</strong>
+                    {confirmation.instructionsMessage}
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Ações Rápidas */}
               <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                {confirmation.showCalendar && (
                 <a
-                  href={getGoogleCalendarUrl()}
+                  href={isBuilderPreview ? undefined : getGoogleCalendarUrl()}
+                  aria-disabled={isBuilderPreview}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-card hover:bg-muted border border-border font-bold text-xs text-foreground transition-all shadow-sm hover:shadow"
                 >
                   <CalendarCheck className="h-4 w-4 text-primary" />
-                  <span>Salvar no Google Agenda</span>
+                  <span>{confirmation.calendarButton}</span>
                 </a>
+                )}
 
+                {confirmation.showWhatsapp && (
                 <a
-                  href={clinicWhatsAppUrl}
+                  href={isBuilderPreview ? undefined : clinicWhatsAppUrl}
+                  aria-disabled={isBuilderPreview}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/20 hover:shadow-lg"
                 >
                   <Phone className="h-4 w-4" />
-                  <span>Falar no WhatsApp da Clínica</span>
+                  <span>{confirmation.whatsappButton}</span>
                 </a>
+                )}
               </div>
 
-              <div className="text-center pt-2">
+              {confirmation.showRestart && <div className="text-center pt-2">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
+                    if (isBuilderPreview) { window.location.href = "/agendar?preview=builder"; return }
                     setBookingSuccessData(null)
                     setCurrentStepIndex(0)
                     setAnswers({})
@@ -686,9 +734,9 @@ export const PublicBookingPage: React.FC = () => {
                   }}
                   className="text-xs text-muted-foreground hover:text-foreground font-medium"
                 >
-                  Fazer outro agendamento
+                  {confirmation.restartButton}
                 </Button>
-              </div>
+              </div>}
             </CardContent>
           </Card>
         </div>
@@ -851,7 +899,7 @@ export const PublicBookingPage: React.FC = () => {
                         </div>
 
                         {field.helpText && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
+                          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
                             {field.helpText}
                           </p>
                         )}
@@ -1731,7 +1779,7 @@ export const PublicBookingPage: React.FC = () => {
                   <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <CalendarCheck className="h-5 w-5" />
                   </div>
-                  <div className="text-xs text-muted-foreground leading-relaxed">
+                  <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
                     Você está agendando uma sessão de{" "}
                     <strong className="text-foreground font-bold capitalize">
                       {selectedSpecialty === "pilates"

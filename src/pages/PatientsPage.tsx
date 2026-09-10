@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { formatCep, formatCpf, formatPhone, isValidCpf, isValidPhone, normalizeCep } from '../../shared/patientIdentity'
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../../shared/healthInsurance'
-import React, { useRef, useState } from "react"
+import React, { useRef, useState, useEffect, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient } from "@/types"
 import { useMutation, useQuery } from "@/lib/staffConvex"
@@ -38,6 +38,7 @@ import {
   Eye,
   Loader2,
   Settings2,
+  Stethoscope,
 } from "lucide-react"
 import { PatientProfileModal } from "@/components/patients/PatientProfileModal"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
@@ -47,12 +48,46 @@ interface PatientsPageProps {
 }
 
 export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical }) => {
-  const { role } = useAuth()
+  const { role, user, isProfessional } = useAuth()
   const canEditPatient = role === 'admin'
-  const { patients, addPatient, updatePatient, deletePatient, clinicalOverview } = useClinicData()
+  const { patients, addPatient, updatePatient, deletePatient, clinicalOverview, professionals = [] } = useClinicData()
   const healthInsuranceOptionsQuery = useQuery(api.clinic.getHealthInsuranceOptions)
   const updateHealthInsuranceOptionsMutation = useMutation(api.clinic.updateHealthInsuranceOptions)
   const healthInsuranceOptions = healthInsuranceOptionsQuery ?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
+
+  const [selectedProfFilter, setSelectedProfFilter] = useState<string>(() =>
+    isProfessional && user?.professionalId ? user.professionalId : "all"
+  )
+  const [hasInitializedProf, setHasInitializedProf] = useState(false)
+
+  useEffect(() => {
+    if (!hasInitializedProf && isProfessional && user?.professionalId) {
+      setSelectedProfFilter(user.professionalId)
+      setHasInitializedProf(true)
+    }
+  }, [isProfessional, user?.professionalId, hasInitializedProf])
+
+  const assignedPatientIds = useQuery(
+    api.patients.listAssignedPatientIds,
+    selectedProfFilter !== "all" && selectedProfFilter !== user?.professionalId
+      ? { professionalId: selectedProfFilter as any }
+      : "skip"
+  )
+  const myAssignedPatientIds = useQuery(
+    api.patients.listAssignedPatientIds,
+    user?.professionalId ? { professionalId: user.professionalId as any } : "skip"
+  )
+  const effectiveAssignedIds =
+    selectedProfFilter === "all"
+      ? undefined
+      : selectedProfFilter === user?.professionalId
+      ? myAssignedPatientIds
+      : assignedPatientIds
+
+  const isFilteringProfessional = selectedProfFilter !== "all"
+  const isFilteringMyPatients = !!(user?.professionalId && selectedProfFilter === user.professionalId)
+  const activeProfName = professionals.find((p) => p.id === selectedProfFilter)?.name
+  const isProfLoading = selectedProfFilter !== "all" && effectiveAssignedIds === undefined
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("altar_patients_view_mode")
@@ -195,31 +230,46 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   }
 
   // Filtragem
-  const filteredPatients = patients.filter((p) => {
-    const term = searchTerm.toLowerCase()
-    const matchesSearch =
-      p.name.toLowerCase().includes(term) ||
-      p.documentCpf.includes(term) ||
-      p.phone.includes(term) ||
-      (p.email && p.email.toLowerCase().includes(term))
+  const filteredPatients = useMemo(() => {
+    return patients.filter((p) => {
+      const term = searchTerm.toLowerCase()
+      const matchesSearch =
+        p.name.toLowerCase().includes(term) ||
+        p.documentCpf.includes(term) ||
+        p.phone.includes(term) ||
+        (p.email && p.email.toLowerCase().includes(term))
 
-    if (!matchesSearch) return false
+      if (!matchesSearch) return false
 
-    const hasRecord = clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)
+      const hasRecord = clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)
 
-    if (statusFilter === "active" && !p.active) return false
-    if (statusFilter === "inactive" && p.active) return false
-    if (statusFilter === "has_record" && !hasRecord) return false
+      if (statusFilter === "active" && !p.active) return false
+      if (statusFilter === "inactive" && p.active) return false
+      if (statusFilter === "has_record" && !hasRecord) return false
 
-    return true
-  })
+      if (selectedProfFilter !== "all") {
+        if (effectiveAssignedIds !== undefined && !effectiveAssignedIds.includes(p.id)) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [patients, searchTerm, statusFilter, clinicalOverview, selectedProfFilter, effectiveAssignedIds])
 
   // KPIs
-  const totalCount = patients.length
-  const activeCount = patients.filter((p) => p.active).length
-  const withRecordCount = patients.filter((p) =>
-    clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)
-  ).length
+  const basePatients = useMemo(() => {
+    if (!isFilteringProfessional) return patients
+    if (effectiveAssignedIds === undefined) return []
+    return patients.filter((p) => effectiveAssignedIds.includes(p.id))
+  }, [isFilteringProfessional, effectiveAssignedIds, patients])
+
+  const totalCount = basePatients.length
+  const activeCount = useMemo(() => basePatients.filter((p) => p.active).length, [basePatients])
+  const withRecordCount = useMemo(
+    () => basePatients.filter((p) => clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)).length,
+    [basePatients, clinicalOverview]
+  )
 
   const handleOpenCreate = () => {
     cepLookupSequence.current += 1
@@ -378,14 +428,20 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
         <Card className="border-border shadow-xs">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">
-              Total de Cadastros
+              {isFilteringMyPatients
+                ? "Meus Pacientes"
+                : isFilteringProfessional
+                ? `Pacientes (${activeProfName || "Profissional"})`
+                : "Total de Cadastros"}
             </CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <div className="text-2xl font-bold text-foreground">{totalCount}</div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Pacientes e alunos registrados
+              {isFilteringProfessional
+                ? "Vinculados aos atendimentos"
+                : "Pacientes e alunos registrados"}
             </p>
           </CardContent>
         </Card>
@@ -427,7 +483,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
       {/* Barra de Filtros e Busca */}
       <Card className="p-4 border-border shadow-xs">
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -438,8 +494,60 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
             />
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="w-48 sm:w-56 flex-1 sm:flex-initial">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Botão de Atalho Rápido "Meus Pacientes" para quem tem vínculo */}
+            {user?.professionalId && (
+              <Button
+                type="button"
+                variant={isFilteringMyPatients ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setSelectedProfFilter(isFilteringMyPatients ? "all" : user.professionalId!)
+                }
+                className={`h-10 px-3 gap-2 rounded-xl text-xs font-semibold shrink-0 transition-colors ${
+                  isFilteringMyPatients
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "border-input hover:bg-muted text-foreground"
+                }`}
+                title={
+                  isFilteringMyPatients
+                    ? "Exibindo seus pacientes. Clique para ver todos os pacientes da clínica"
+                    : "Filtrar apenas seus pacientes vinculados"
+                }
+              >
+                <Stethoscope className="h-4 w-4" />
+                <span>Meus Pacientes</span>
+                {myAssignedPatientIds !== undefined && (
+                  <Badge
+                    variant={isFilteringMyPatients ? "secondary" : "outline"}
+                    className="text-[10px] px-1.5 py-0 h-4 min-w-4 flex items-center justify-center font-bold"
+                  >
+                    {myAssignedPatientIds.length}
+                  </Badge>
+                )}
+              </Button>
+            )}
+
+            {/* Dropdown de Profissional (para Admin ou Recepção gerenciarem equipes) */}
+            {(role === "admin" || role === "reception") && (
+              <div className="w-44 sm:w-52">
+                <Select
+                  value={selectedProfFilter}
+                  onChange={(e) => setSelectedProfFilter(e.target.value)}
+                >
+                  <option value="all">Todos os Profissionais</option>
+                  {professionals
+                    .filter((p) => p.active)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.id === user?.professionalId ? `⭐ Meus (${p.name})` : p.name}
+                      </option>
+                    ))}
+                </Select>
+              </div>
+            )}
+
+            <div className="w-44 sm:w-52 flex-1 sm:flex-initial">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -457,17 +565,49 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
       </Card>
 
       {/* Listagem de Pacientes (Grade ou Lista) */}
-      {filteredPatients.length === 0 ? (
+      {isProfLoading ? (
+        <Card className="p-12 text-center border-border shadow-xs">
+          <div className="flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            <p className="text-xs font-semibold text-muted-foreground">
+              Carregando carteira de pacientes vinculados...
+            </p>
+          </div>
+        </Card>
+      ) : filteredPatients.length === 0 ? (
         <Card className="p-12 text-center border-border shadow-xs">
           <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-foreground">Nenhum paciente encontrado</h3>
+          <h3 className="text-base font-semibold text-foreground">
+            {searchTerm.trim()
+              ? "Nenhum paciente encontrado para esta busca"
+              : isFilteringProfessional
+              ? "Nenhum paciente vinculado a este profissional"
+              : "Nenhum paciente cadastrado"}
+          </h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-            Ajuste os filtros de busca ou cadastre um novo paciente na clínica.
+            {searchTerm.trim() && isFilteringProfessional
+              ? `Não encontramos "${searchTerm}" entre os pacientes deste profissional. Tente buscar na clínica inteira.`
+              : isFilteringProfessional
+              ? "Não foram encontrados pacientes com agendamentos ou evoluções para o filtro selecionado."
+              : "Ajuste os filtros de busca ou cadastre um novo paciente na clínica."}
           </p>
-          <Button onClick={handleOpenCreate} variant="outline" size="sm" className="mt-4 gap-2 text-xs">
-            <Plus className="h-3.5 w-3.5" />
-            <span>Cadastrar Paciente</span>
-          </Button>
+          <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+            {isFilteringProfessional && (
+              <Button
+                onClick={() => setSelectedProfFilter("all")}
+                variant="outline"
+                size="sm"
+                className="gap-2 text-xs"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Ver Todos os Pacientes da Clínica</span>
+              </Button>
+            )}
+            <Button onClick={handleOpenCreate} variant={isFilteringProfessional ? "secondary" : "outline"} size="sm" className="gap-2 text-xs">
+              <Plus className="h-3.5 w-3.5" />
+              <span>Cadastrar Paciente</span>
+            </Button>
+          </div>
         </Card>
       ) : viewMode === "grid" ? (
         /* MODO GRADE */

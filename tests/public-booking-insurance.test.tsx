@@ -32,6 +32,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }))
 
 vi.mock('convex/react', () => ({
+  useConvex: () => ({ url: 'https://example.convex.cloud' }),
   useQuery: (ref: any) => {
     const name = getFunctionName(ref)
     if (name === 'bookingBuilder:getBookingConfig') return mocks.bookingConfig

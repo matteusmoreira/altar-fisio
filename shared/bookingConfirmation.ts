@@ -1,0 +1,27 @@
+export const DEFAULT_CONFIRMATION = {
+  confirmedTitle: 'Sua Sessão está Confirmada!',
+  pendingTitle: 'Recebemos sua Solicitação!',
+  pendingMessage: 'Sua solicitação aguarda análise da recepção. Entraremos em contato para confirmar a disponibilidade.',
+  portalTitle: 'Acesso ao portal do paciente',
+  portalButton: 'Acessar meu portal',
+  receiptTitle: 'Comprovante de Reserva',
+  paymentTitle: 'Pagamento Presencial na Recepção:',
+  paymentMessage: 'O acerto do pacote ou sessão é realizado diretamente na clínica no dia do seu atendimento. Aceitamos Pix com desconto e Cartão de Crédito/Débito.',
+  locationTitle: 'Local de Atendimento',
+  address: '',
+  instructionsTitle: 'Orientações para o Atendimento:',
+  instructionsMessage: 'Para sessões de Pilates ou RPG, utilize roupas leves e meias antiderrapantes. Recomendamos chegar com 10 minutos de antecedência.',
+  calendarButton: 'Salvar no Google Agenda',
+  whatsappButton: 'Falar no WhatsApp da Clínica',
+  restartButton: 'Fazer outro agendamento',
+  showPortal: true,
+  showReceipt: true,
+  showPayment: true,
+  showLocation: true,
+  showInstructions: true,
+  showCalendar: true,
+  showWhatsapp: true,
+  showRestart: true,
+}
+
+export type BookingConfirmation = typeof DEFAULT_CONFIRMATION

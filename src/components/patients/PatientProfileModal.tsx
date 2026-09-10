@@ -78,7 +78,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   onNavigateToClinical,
 }) => {
   const {
-    schedules,
     patientPackages,
     packages,
     replacementCredits,
@@ -101,6 +100,11 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     title: string
   } | null>(null)
 
+  const storedPatientSchedules = useQuery(
+    api.schedules.listSchedulesForPatient,
+    patient && isOpen ? { patientId: patient.id as any } : "skip"
+  )
+
   // Cálculo da idade
   const age = useMemo(() => {
     if (!patient?.birthDate) return null
@@ -121,12 +125,12 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   // Agendamentos e Presenças do Paciente
   const patientSchedules = useMemo(() => {
     if (!patient) return []
-    return schedules
+    return (storedPatientSchedules || [])
       .filter((s) => s.participants.some((p) => p.patientId === patient.id))
       .map((s) => {
         const participant = s.participants.find((p) => p.patientId === patient.id)!
         return {
-          scheduleId: s.id,
+          scheduleId: s._id,
           title: s.title,
           type: s.type,
           specialty: s.specialty,
@@ -143,7 +147,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         }
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime))
-  }, [schedules, patient])
+  }, [storedPatientSchedules, patient])
 
   // Métricas de Presença e Assiduidade
   const attendanceStats = useMemo(() => {

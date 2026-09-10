@@ -196,6 +196,44 @@ export const listSchedulesByDateRange = query({
   },
 })
 
+export const listSchedulesForPatient = query({
+  args: {
+    sessionToken: v.string(),
+    patientId: v.id("patients"),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ["admin", "professional", "reception"])
+
+    const patient = await ctx.db.get(args.patientId)
+    if (!patient) throw new ConvexError("Paciente não encontrado.")
+
+    const participations = await ctx.db
+      .query("scheduleParticipants")
+      .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+      .collect()
+
+    const schedules = await Promise.all(
+      participations.map(async (participant) => {
+        const schedule = await ctx.db.get(participant.scheduleId)
+        if (!schedule) return null
+        const room = await ctx.db.get(schedule.roomId)
+        const professional = await ctx.db.get(schedule.professionalId)
+        return {
+          ...schedule,
+          roomName: room?.name || "Sala",
+          roomColor: room?.color || "#10b981",
+          professionalName: professional?.name || "Profissional",
+          participants: [{ ...participant, patientName: patient.name, patientPhone: patient.phone }],
+        }
+      })
+    )
+
+    return schedules
+      .filter((schedule) => schedule !== null)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+  },
+})
+
 // Validador de Conflitos em Tempo Real
 export const checkScheduleConflict = query({
   args: { sessionToken: v.string(),

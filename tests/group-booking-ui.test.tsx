@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { getFunctionName } from 'convex/server'
 
 const mocks = vi.hoisted(() => ({
@@ -31,6 +31,7 @@ const publicSlots = [{ startTime: '08:00', endTime: '08:30', isAvailable: true, 
   { roomId: 'room2', roomName: 'Sala B', professionalId: 'prof2', capacity: 8, availableSpots: 8 },
 ] }]
 vi.mock('convex/react', () => ({
+  useConvex: () => ({ url: 'https://example.convex.cloud' }),
   useQuery: (ref: any) => {
     const name = getFunctionName(ref)
     if (name === 'bookingBuilder:getBookingConfig') return mocks.bookingConfig
@@ -42,11 +43,36 @@ vi.mock('convex/react', () => ({
 }))
 import { PublicBookingPage } from '../src/pages/PublicBookingPage'
 
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-09T10:59:00Z'))
+})
+
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.useRealTimers()
   vi.clearAllMocks()
   mocks.bookingConfig = { steps: [{ id: 'slots', type: 'slot_picker', title: 'Horários', order: 0 }], fields: [] }
   mocks.publicPackages = []
+})
+
+test('elapsed cards disappear at 19:39 in Sao Paulo while tomorrow remains bookable', () => {
+  vi.setSystemTime(new Date('2026-09-09T22:39:00Z'))
+  render(<PublicBookingPage />)
+  expect(screen.queryByRole('button', { name: /Sala A/ })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /AMANHÃ/i }))
+  expect(screen.getByRole('button', { name: /Sala A/ })).toBeTruthy()
+})
+
+test('an open page removes a selected slot when its start arrives', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-09-09T10:59:59Z'))
+  render(<PublicBookingPage />)
+  fireEvent.click(screen.getByRole('button', { name: /Sala A/ }))
+  act(() => { vi.advanceTimersByTime(1000) })
+  expect(screen.queryByRole('button', { name: /Sala A/ })).toBeNull()
+  expect(screen.queryByText('Selecionado')).toBeNull()
 })
 test('editing and saving a zero-minute break preserves zero and explains consecutive sessions', async () => {
   render(<AvailabilityManagerModal isOpen onClose={() => {}} />)
@@ -61,6 +87,8 @@ test('editing and saving a zero-minute break preserves zero and explains consecu
 })
 
 test('public cards show eight places per room and selecting one does not select both', () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-09T07:00:00-03:00'))
   render(<PublicBookingPage />)
   expect(screen.getAllByText('8 vagas')).toHaveLength(2)
   expect(screen.queryByText('16 vagas')).toBeNull()

@@ -49,6 +49,19 @@
         console.warn('[Vite] Chunk dinâmico obsoleto pós-deploy. Recarregando aplicação...', event);
         window.location.reload();
       });
+
+      // Aplica o tema escuro salvo no carregamento inicial para evitar flash branco
+      (function() {
+        try {
+          var saved = localStorage.getItem('altar_fisio_theme');
+          if (saved) {
+            var parsed = JSON.parse(saved);
+            if (parsed && parsed.mode === 'dark') {
+              document.documentElement.classList.add('dark');
+            }
+          }
+        } catch (e) {}
+      })();
     </script>
   </head>
   <body class="font-sans">

@@ -1,3 +1,4 @@
+import { ConfirmationEditor } from "@/components/booking/ConfirmationEditor"
 import { InsuranceEditor } from "@/components/booking/InsuranceEditor"
 import React, { useState, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
@@ -72,6 +73,7 @@ export const BookingBuilderPage: React.FC = () => {
 
   // Viewport da página pública real: "mobile" | "desktop"
   const [previewDevice, setPreviewDevice] = useState<"mobile" | "desktop">("mobile")
+  const [previewScreen, setPreviewScreen] = useState("form")
   const [previewKey, setPreviewKey] = useState(0)
   const handleReloadPreview = () => setPreviewKey((prev) => prev + 1)
 
@@ -602,6 +604,8 @@ export const BookingBuilderPage: React.FC = () => {
             </CardContent>
           </Card>
 
+          <ConfirmationEditor config={config} onPreview={setPreviewScreen} />
+
           <InsuranceEditor config={config} />
 
           {/* Card 3: Gerenciador de Etapas */}
@@ -878,7 +882,7 @@ export const BookingBuilderPage: React.FC = () => {
                 className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-foreground"
                 title="Abrir página pública em tela cheia"
               >
-                <a href={`${publicUrl}?preview=builder`} target="_blank" rel="noopener noreferrer">
+                <a href={`${publicUrl}?preview=builder${previewScreen === "form" ? "" : `&confirmation=${previewScreen}`}`} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </Button>
@@ -946,7 +950,7 @@ export const BookingBuilderPage: React.FC = () => {
                     <iframe
                       key={`mobile-${previewKey}`}
                       title="Prévia real do agendamento público em celular"
-                      src={`${publicUrl}?preview=builder`}
+                      src={`${publicUrl}?preview=builder${previewScreen === "form" ? "" : `&confirmation=${previewScreen}`}`}
                       sandbox="allow-scripts allow-same-origin"
                       className="block w-full h-[690px] border-none bg-background scrollbar-none"
                     />
@@ -987,7 +991,7 @@ export const BookingBuilderPage: React.FC = () => {
                 <iframe
                   key={`desktop-${previewKey}`}
                   title="Prévia real do agendamento público em desktop"
-                  src={`${publicUrl}?preview=builder`}
+                  src={`${publicUrl}?preview=builder${previewScreen === "form" ? "" : `&confirmation=${previewScreen}`}`}
                   sandbox="allow-scripts allow-same-origin"
                   className="block w-full bg-background h-[760px] border-none"
                 />

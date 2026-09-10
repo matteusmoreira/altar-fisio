@@ -139,12 +139,19 @@ test.each([true, false])('online booking (approval=%s) creates access atomically
     await ctx.db.insert('bookingFormConfig', { requireApproval, steps: [], fields: [], updatedAt: 1 })
   })
   const serviceId = await t.run(ctx => ctx.db.insert('services', { name: 'Avaliação', specialty: 'fisioterapia', modality: 'individual', durationMinutes: 55, defaultPrice: 100, active: true, isEvaluation: true }))
-  const args = { ...patient, serviceId, date: '2099-09-09', startTime: '09:00', endTime: '09:55', specialty: 'fisioterapia' as const, answers: [] }
+  const args = { ...patient, requestId: crypto.randomUUID(), serviceId, date: '2099-09-09', startTime: '09:00', endTime: '09:55', specialty: 'fisioterapia' as const, answers: [] }
   const booking = await t.action(api.bookingBuilder.submitPublicBooking, args)
   expect(booking).toMatchObject({ success: true, portalAccessCreated: true, requireApproval })
+  // The first response may have been lost after committing the reservation.
+  const retries = await Promise.all([t.action(api.bookingBuilder.submitPublicBooking, args), t.action(api.bookingBuilder.submitPublicBooking, args)])
+  expect(retries).toEqual([booking, booking])
+  expect(await t.run(ctx => ctx.db.query('publicBookings').collect())).toHaveLength(1)
+  expect(await t.run(ctx => ctx.db.query('auditLogs').filter(q => q.eq(q.field('action'), 'public_booking_created')).collect())).toHaveLength(1)
+  expect(await t.run(ctx => ctx.db.query('notificationLogs').collect())).toHaveLength(1)
+  await expect(t.action(api.bookingBuilder.submitPublicBooking, { ...args, name: 'Outro nome' })).rejects.toThrow(/solicitação já foi utilizada/)
   expect((await login(t)).token).toBeTruthy()
   await t.action(api.portalAuth.changePassword, { sessionToken: 'admin', patientId: booking.patientId, password: 'CustomPass123' })
-  const repeat = await t.action(api.bookingBuilder.submitPublicBooking, { ...args, name: 'Não sobrescrever', phone: '21987654321', startTime: '10:00', endTime: '10:55' })
+  const repeat = await t.action(api.bookingBuilder.submitPublicBooking, { ...args, requestId: crypto.randomUUID(), name: 'Não sobrescrever', phone: '21987654321', startTime: '10:00', endTime: '10:55' })
   expect(repeat).toMatchObject({ patientId: booking.patientId, portalAccessCreated: false })
   expect(await t.run(ctx => ctx.db.query('patients').collect())).toHaveLength(1)
   expect(await t.run(ctx => ctx.db.get(booking.patientId))).toMatchObject({ name: patient.name, phone: patient.phone })

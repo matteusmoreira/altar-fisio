@@ -21,6 +21,7 @@ import type * as crons from "../crons.js";
 import type * as finance from "../finance.js";
 import type * as lib_appointmentJobs from "../lib/appointmentJobs.js";
 import type * as lib_bookGroupSession from "../lib/bookGroupSession.js";
+import type * as lib_bookingConfirmation from "../lib/bookingConfirmation.js";
 import type * as lib_bookingSlots from "../lib/bookingSlots.js";
 import type * as lib_monthlyBooking from "../lib/monthlyBooking.js";
 import type * as lib_packageBookingBalance from "../lib/packageBookingBalance.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   finance: typeof finance;
   "lib/appointmentJobs": typeof lib_appointmentJobs;
   "lib/bookGroupSession": typeof lib_bookGroupSession;
+  "lib/bookingConfirmation": typeof lib_bookingConfirmation;
   "lib/bookingSlots": typeof lib_bookingSlots;
   "lib/monthlyBooking": typeof lib_monthlyBooking;
   "lib/packageBookingBalance": typeof lib_packageBookingBalance;

@@ -61,12 +61,56 @@ export const PRESET_COLORS: Record<
   },
 }
 
+export function normalizeToHex(color: string | undefined, defaultHex = "#10b981"): string {
+  if (!color || typeof color !== "string") return defaultHex
+  const trimmed = color.trim()
+
+  if (/^#?[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed.startsWith("#") ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`
+  }
+
+  if (/^#?[0-9a-fA-F]{3}$/.test(trimmed)) {
+    const raw = trimmed.replace("#", "")
+    const full = raw.split("").map((ch) => ch + ch).join("")
+    return `#${full.toLowerCase()}`
+  }
+
+  for (const preset of Object.values(PRESET_COLORS)) {
+    if (trimmed === preset.hslLight || trimmed === preset.hslDark || trimmed.toLowerCase() === preset.hex.toLowerCase()) {
+      return preset.hex
+    }
+  }
+
+  const cleanHsl = trimmed.replace(/^hsl\(/i, "").replace(/\)$/, "").replace(/,/g, " ")
+  const hslMatch = cleanHsl.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%$/)
+  if (hslMatch) {
+    const h = parseFloat(hslMatch[1]) / 360
+    const s = parseFloat(hslMatch[2]) / 100
+    const l = parseFloat(hslMatch[3]) / 100
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+    const p = 2 * l - q
+    const hueToRgb = (t: number) => {
+      let temp = t
+      if (temp < 0) temp += 1
+      if (temp > 1) temp -= 1
+      if (temp < 1 / 6) return p + (q - p) * 6 * temp
+      if (temp < 1 / 2) return q
+      if (temp < 2 / 3) return p + (q - p) * (2 / 3 - temp) * 6
+      return p
+    }
+    const r = Math.round(hueToRgb(h + 1 / 3) * 255)
+    const g = Math.round(hueToRgb(h) * 255)
+    const b = Math.round(hueToRgb(h - 1 / 3) * 255)
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
+  }
+
+  return defaultHex
+}
+
 // Helper to convert HEX to HSL values "H S% L%"
 function hexToHsl(hex: string): { light: string; dark: string } {
-  let c = hex.replace("#", "")
-  if (c.length === 3) {
-    c = c.split("").map((x) => x + x).join("")
-  }
+  const normalizedHex = normalizeToHex(hex, "#10b981")
+  const c = normalizedHex.replace("#", "")
   const num = parseInt(c, 16)
   if (isNaN(num)) {
     return { light: "158 64% 38%", dark: "158 64% 45%" }
@@ -128,34 +172,77 @@ const defaultTheme: ClinicThemeConfig = {
   logoUrl: undefined,
 }
 
+const LOCAL_STORAGE_KEY = "altar_fisio_theme"
+
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const convexSettings = useQuery(api.clinic.getSettings)
 
-  const [localTheme, setLocalTheme] = useState<ClinicThemeConfig>(() => {
+  const [userOverrides, setUserOverrides] = useState<Partial<ClinicThemeConfig>>(() => {
     try {
-      const saved = localStorage.getItem("altar_fisio_theme")
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY)
       if (saved) {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === "object") {
+          return {
+            mode: parsed.mode === "dark" || parsed.mode === "light" ? parsed.mode : undefined,
+            preset:
+              parsed.preset && (parsed.preset in PRESET_COLORS || parsed.preset === "custom")
+                ? parsed.preset
+                : undefined,
+            customHex: parsed.customHex ? normalizeToHex(parsed.customHex) : undefined,
+            clinicName: parsed.clinicName || undefined,
+            clinicSubtitle: parsed.clinicSubtitle || undefined,
+            logoUrl: parsed.logoUrl,
+          }
+        }
       }
     } catch {
       // ignore
     }
-    return defaultTheme
+    return {}
   })
 
-  // Derivação reativa sem render cascata: dados do servidor têm precedência sobre cache local
+  // Derivação reativa sem render cascata:
+  // As escolhas ativas do usuário têm precedência imediata sobre os defaults do servidor.
+  // Se o usuário ainda não personalizou uma propriedade, os valores do backend são utilizados.
   const theme: ClinicThemeConfig = useMemo(() => {
-    return {
-      mode: convexSettings?.mode ?? localTheme.mode,
-      preset: (convexSettings?.colorPreset as ColorPreset) ?? localTheme.preset,
-      customHex: convexSettings?.primaryColor ?? localTheme.customHex,
-      clinicName: convexSettings?.clinicName ?? localTheme.clinicName,
-      clinicSubtitle: convexSettings?.clinicSubtitle ?? localTheme.clinicSubtitle,
-      logoUrl: convexSettings?.logoUrl !== undefined ? convexSettings.logoUrl : localTheme.logoUrl,
+    const serverMode = convexSettings?.mode
+    const serverPreset = convexSettings?.colorPreset as ColorPreset | undefined
+    const serverHex = convexSettings?.primaryColor ? normalizeToHex(convexSettings.primaryColor) : undefined
+    const serverName = convexSettings?.clinicName
+    const serverSubtitle = convexSettings?.clinicSubtitle
+    const serverLogo = convexSettings?.logoUrl
+
+    const mode: "light" | "dark" = userOverrides.mode ?? serverMode ?? defaultTheme.mode
+    const preset: ColorPreset =
+      userOverrides.preset ??
+      (serverPreset && (serverPreset in PRESET_COLORS || serverPreset === "custom")
+        ? serverPreset
+        : defaultTheme.preset)
+
+    let fallbackHex = defaultTheme.customHex || "#10b981"
+    if (preset !== "custom" && PRESET_COLORS[preset as keyof typeof PRESET_COLORS]) {
+      fallbackHex = PRESET_COLORS[preset as keyof typeof PRESET_COLORS].hex
     }
-  }, [convexSettings, localTheme])
+
+    const customHex: string = userOverrides.customHex ?? serverHex ?? fallbackHex
+    const clinicName: string = userOverrides.clinicName ?? serverName ?? defaultTheme.clinicName
+    const clinicSubtitle: string =
+      userOverrides.clinicSubtitle ?? serverSubtitle ?? defaultTheme.clinicSubtitle
+    const logoUrl: string | undefined =
+      userOverrides.logoUrl !== undefined ? userOverrides.logoUrl : (serverLogo ?? defaultTheme.logoUrl)
+
+    return {
+      mode,
+      preset,
+      customHex,
+      clinicName,
+      clinicSubtitle,
+      logoUrl,
+    }
+  }, [convexSettings, userOverrides])
 
   // Apply CSS variables & dark class whenever theme changes
   useEffect(() => {
@@ -187,41 +274,79 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty("--primary", activeHsl)
     root.style.setProperty("--ring", activeHsl)
     root.style.setProperty("--sidebar-primary", activeHsl)
+    root.style.setProperty("--sidebar-ring", activeHsl)
 
     try {
-      localStorage.setItem("altar_fisio_theme", JSON.stringify(theme))
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(theme))
     } catch {
       // ignore
     }
   }, [theme])
 
   const setMode = (mode: "light" | "dark") => {
-    setLocalTheme((prev) => ({ ...prev, mode }))
+    setUserOverrides((prev) => {
+      const next = { ...prev, mode }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+      } catch {}
+      return next
+    })
   }
 
   const toggleMode = () => {
-    setLocalTheme((prev) => ({ ...prev, mode: prev.mode === "light" ? "dark" : "light" }))
+    setUserOverrides((prev) => {
+      const currentMode = prev.mode ?? theme.mode
+      const nextMode: "light" | "dark" = currentMode === "light" ? "dark" : "light"
+      const next: Partial<ClinicThemeConfig> = { ...prev, mode: nextMode }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+      } catch {}
+      return next
+    })
   }
 
   const setPreset = (preset: ColorPreset, customHex?: string) => {
-    setLocalTheme((prev) => ({
-      ...prev,
-      preset,
-      customHex: customHex || prev.customHex,
-    }))
+    setUserOverrides((prev) => {
+      const validHex = customHex
+        ? normalizeToHex(customHex)
+        : (preset !== "custom" && PRESET_COLORS[preset as keyof typeof PRESET_COLORS]?.hex) ||
+          prev.customHex ||
+          "#10b981"
+      const next = {
+        ...prev,
+        preset,
+        customHex: validHex,
+      }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+      } catch {}
+      return next
+    })
   }
 
   const updateClinicInfo = (clinicName: string, clinicSubtitle: string, logoUrl?: string) => {
-    setLocalTheme((prev) => ({
-      ...prev,
-      clinicName,
-      clinicSubtitle,
-      ...(logoUrl !== undefined ? { logoUrl } : {}),
-    }))
+    setUserOverrides((prev) => {
+      const next = {
+        ...prev,
+        clinicName,
+        clinicSubtitle,
+        ...(logoUrl !== undefined ? { logoUrl } : {}),
+      }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+      } catch {}
+      return next
+    })
   }
 
   const updateLogoUrl = (logoUrl?: string) => {
-    setLocalTheme((prev) => ({ ...prev, logoUrl }))
+    setUserOverrides((prev) => {
+      const next = { ...prev, logoUrl }
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+      } catch {}
+      return next
+    })
   }
 
   return (

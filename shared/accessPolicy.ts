@@ -3,6 +3,7 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   'schedules:unlinkedClassSeries': ['admin'],
   'schedules:linkClassSeriesService': ['admin'],
   'schedules:previewRecurringMonth': ['admin', 'professional', 'reception'],
+  'patients:listAssignedPatientIds': ['admin', 'professional', 'reception'],
   'clinic:updatePortalBooking': ['admin'],
   'patientPortal:listMonthlyClasses': 'patient',
   'patientPortal:previewMonthlyBooking': 'patient',

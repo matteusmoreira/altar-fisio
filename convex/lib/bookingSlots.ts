@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from '../_generated/server'
 import type { Doc, Id } from '../_generated/dataModel'
 import { sliceTimeWindowIntoSlots } from '../availability'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
+import { isFutureBooking } from '../../shared/bookingTime'
 
 type Specialty = Doc<'services'>['specialty']
 export type BookingSelection = {
@@ -25,6 +26,7 @@ export async function resolveBookingService(ctx: QueryCtx | MutationCtx, args: P
 }
 
 export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingSelection) {
+  const now = Date.now()
   const service = await resolveBookingService(ctx, args)
   if ((args.packageId || args.serviceId) && !service) return []
   const specialty = service?.specialty ?? args.specialty
@@ -66,6 +68,7 @@ export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingS
   type RoomOption = { roomId: Id<'rooms'>; roomName: string; professionalId: Id<'professionals'>; specialty: Specialty; capacity: number; occupied: number; availableSpots: number; existingScheduleId: Id<'schedules'> | null; modality: 'individual' | 'turma' }
   const grouped = new Map<string, { startTime: string; endTime: string; rooms: RoomOption[] }>()
   for (const candidate of candidates) {
+    if (!isFutureBooking(args.date, candidate.start, now)) continue
     if (specialty && candidate.specialty !== specialty) continue
     if (args.professionalId && candidate.professionalId !== args.professionalId) continue
     const room = rooms.find(r => r._id === candidate.roomId)
