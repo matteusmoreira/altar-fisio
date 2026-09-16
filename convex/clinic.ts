@@ -1,7 +1,8 @@
 import { requireStaff } from './lib/security'
 import { query, mutation } from "./_generated/server"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../shared/healthInsurance'
+import { DEFAULT_CLINICAL_SPECIALTIES, slugifySpecialtyId } from '../shared/clinicalSpecialties'
 import { validatePortalMessage, messageText } from '../shared/portalMessage'
 import { internal } from './_generated/api'
 
@@ -110,6 +111,85 @@ export const updateHealthInsuranceOptions = mutation({
       healthInsuranceOptions: options,
     })
     return options
+  },
+})
+
+export const getClinicalSpecialties = query({
+  args: { sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (args.sessionToken) {
+      await requireStaff(ctx, args.sessionToken, ['admin', 'professional', 'reception'])
+    }
+    const settings = await ctx.db.query('clinicSettings').first()
+    return settings?.clinicalSpecialties ?? [...DEFAULT_CLINICAL_SPECIALTIES]
+  },
+})
+
+export const updateClinicalSpecialties = mutation({
+  args: {
+    sessionToken: v.string(),
+    specialties: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        description: v.optional(v.string()),
+      })
+    ),
+  },
+  handler: async (ctx, input) => {
+    const actor = await requireStaff(ctx, input.sessionToken, ['admin'])
+
+    const seenIds = new Set<string>()
+    const sanitized: Array<{ id: string; name: string; description?: string }> = []
+
+    for (const item of input.specialties) {
+      const name = item.name.trim()
+      if (!name) continue
+      let id = item.id.trim() || slugifySpecialtyId(name)
+      if (seenIds.has(id.toLowerCase())) {
+        let counter = 2
+        while (seenIds.has(`${id.toLowerCase()}_${counter}`)) {
+          counter++
+        }
+        id = `${id}_${counter}`
+      }
+      seenIds.add(id.toLowerCase())
+      sanitized.push({
+        id,
+        name,
+        ...(item.description?.trim() ? { description: item.description.trim() } : {}),
+      })
+    }
+
+    if (sanitized.length === 0) {
+      throw new ConvexError('A clínica deve possuir pelo menos uma especialidade clínica cadastrada.')
+    }
+
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (settings) {
+      await ctx.db.patch(settings._id, { clinicalSpecialties: sanitized })
+    } else {
+      await ctx.db.insert('clinicSettings', {
+        clinicName: 'Altar Fisio',
+        clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
+        primaryColor: '#10b981',
+        colorPreset: 'emerald',
+        mode: 'light',
+        cancellationNoticeHours: 2,
+        replacementExpiryDays: 30,
+        clinicalSpecialties: sanitized,
+      })
+    }
+
+    await ctx.db.insert('auditLogs', {
+      action: 'update_clinical_specialties',
+      userName: actor.name,
+      userRole: actor.role,
+      details: `Especialidades clínicas atualizadas (${sanitized.length} cadastradas).`,
+      timestamp: Date.now(),
+    })
+
+    return sanitized
   },
 })
 

@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select-native"
+import { useQuery } from "convex/react"
+import { api } from "../../../convex/_generated/api"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
 import { ServiceFormModal } from "./ServiceFormModal"
 import { DeleteServiceModal } from "./DeleteServiceModal"
 import {
@@ -34,9 +37,11 @@ export const ServicesCatalogTab: React.FC<ServicesCatalogTabProps> = ({
   onToast,
 }) => {
   const { services, updateService } = useClinicData()
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [specialtyFilter, setSpecialtyFilter] = useState<"all" | "pilates" | "fisioterapia" | "rpg">("all")
+  const [specialtyFilter, setSpecialtyFilter] = useState<string>("all")
   const [modalityFilter, setModalityFilter] = useState<"all" | "individual" | "turma">("all")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
 
@@ -89,29 +94,32 @@ export const ServicesCatalogTab: React.FC<ServicesCatalogTabProps> = ({
   }
 
   const getSpecialtyBadge = (spec: string) => {
+    const found = clinicalSpecialties.find((s) => s.id === spec)
+    const label = found ? found.name : spec
+
     switch (spec) {
       case "pilates":
         return (
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-            Pilates
+            {label}
           </span>
         )
       case "fisioterapia":
         return (
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
-            Fisioterapia
+            {label}
           </span>
         )
       case "rpg":
         return (
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
-            RPG
+            {label}
           </span>
         )
       default:
         return (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-            {spec}
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {label}
           </span>
         )
     }
@@ -214,13 +222,15 @@ export const ServicesCatalogTab: React.FC<ServicesCatalogTabProps> = ({
             <div className="grid grid-cols-3 gap-2">
               <Select
                 value={specialtyFilter}
-                onChange={(e) => setSpecialtyFilter(e.target.value as any)}
+                onChange={(e) => setSpecialtyFilter(e.target.value)}
                 className="text-xs h-9 rounded-xl"
               >
                 <option value="all">Todas Especialidades</option>
-                <option value="pilates">Pilates</option>
-                <option value="fisioterapia">Fisioterapia</option>
-                <option value="rpg">RPG</option>
+                {clinicalSpecialties.map((spec) => (
+                  <option key={spec.id} value={spec.id}>
+                    {spec.name}
+                  </option>
+                ))}
               </Select>
 
               <Select

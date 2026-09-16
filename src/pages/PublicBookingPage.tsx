@@ -53,7 +53,9 @@ const MONTHS_SHORT = [
   "JUL", "AGO", "SET", "OUT", "NOV", "DEZ",
 ]
 
-type BookingSpecialty = "pilates" | "fisioterapia" | "rpg"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../shared/clinicalSpecialties"
+
+type BookingSpecialty = "pilates" | "fisioterapia" | "rpg" | (string & {})
 
 const SPECIALTY_LABELS: Record<BookingSpecialty, string> = {
   pilates: "Studio Pilates",
@@ -72,6 +74,22 @@ const LEGACY_INSURANCE_FIELD_IDS = new Set([
 
 export const PublicBookingPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
+
+  const getSpecialtyLabel = (specId?: string) => {
+    if (!specId) return ""
+    if (dbClinicalSpecialties && dbClinicalSpecialties.length > 0) {
+      const found = dbClinicalSpecialties.find((s) => s.id === specId)
+      if (found) return found.name
+    }
+    if (SPECIALTY_LABELS[specId as keyof typeof SPECIALTY_LABELS]) {
+      return SPECIALTY_LABELS[specId as keyof typeof SPECIALTY_LABELS]
+    }
+    const found = clinicalSpecialties.find((s) => s.id === specId)
+    if (found) return found.name
+    return specId.charAt(0).toUpperCase() + specId.slice(1)
+  }
   const confirmation = { ...DEFAULT_CONFIRMATION, ...config?.confirmation }
   const clinicSettings = useQuery(api.clinic.getSettings)
   const publicPackages = useQuery(api.bookingBuilder.listPublicPackages)
@@ -140,7 +158,9 @@ export const PublicBookingPage: React.FC = () => {
   const availableSpecialties = useMemo(() => {
     if (!publicPackages) return []
     const registered = new Set(publicPackages.map((pkg) => pkg.specialty))
-    return BOOKING_SPECIALTIES.filter((specialty) => registered.has(specialty))
+    const base = BOOKING_SPECIALTIES.filter((specialty) => registered.has(specialty))
+    const others = Array.from(registered).filter((s) => !BOOKING_SPECIALTIES.includes(s as any))
+    return [...base, ...others]
   }, [publicPackages])
 
   const filteredPublicPackages = useMemo(() => {
@@ -575,11 +595,7 @@ export const PublicBookingPage: React.FC = () => {
                     </span>
                     <span className="font-bold text-primary capitalize flex items-center gap-1">
                       <Activity className="h-3.5 w-3.5" />
-                      {selectedSpecialty === "pilates"
-                        ? "Studio Pilates"
-                        : selectedSpecialty === "fisioterapia"
-                        ? "Fisioterapia Clínica"
-                        : "RPG Souchard"}
+                      {getSpecialtyLabel(selectedSpecialty)}
                     </span>
                   </div>
 
@@ -1193,7 +1209,7 @@ export const PublicBookingPage: React.FC = () => {
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                       {[
                         { id: "all" as const, label: "Todas as Modalidades" },
-                        ...availableSpecialties.map((specialty) => ({ id: specialty, label: SPECIALTY_LABELS[specialty] })),
+                        ...availableSpecialties.map((specialty) => ({ id: specialty, label: getSpecialtyLabel(specialty) })),
                       ].map((tab) => {
                         const isActive = specialtyFilter === tab.id
 
@@ -1260,11 +1276,7 @@ export const PublicBookingPage: React.FC = () => {
                             <div>
                               <div className="flex items-start justify-between gap-2 mb-2">
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                                  {pkg.specialty === "pilates"
-                                    ? "Studio Pilates"
-                                    : pkg.specialty === "fisioterapia"
-                                    ? "Fisioterapia"
-                                    : "RPG Postural"}
+                                  {getSpecialtyLabel(pkg.specialty)}
                                 </span>
 
                                 {isSelected ? (
@@ -1738,11 +1750,7 @@ export const PublicBookingPage: React.FC = () => {
                           <div className="text-xs font-bold text-foreground flex items-center gap-2">
                             <span>Sessão Selecionada:</span>
                             <span className="text-emerald-700 dark:text-emerald-400 capitalize font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/25">
-                              {selectedSpecialty === "pilates"
-                                ? "Studio Pilates"
-                                : selectedSpecialty === "fisioterapia"
-                                ? "Fisioterapia"
-                                : "RPG Souchard"}
+                              {getSpecialtyLabel(selectedSpecialty)}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
@@ -1782,11 +1790,7 @@ export const PublicBookingPage: React.FC = () => {
                   <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
                     Você está agendando uma sessão de{" "}
                     <strong className="text-foreground font-bold capitalize">
-                      {selectedSpecialty === "pilates"
-                        ? "Studio Pilates"
-                        : selectedSpecialty === "fisioterapia"
-                        ? "Fisioterapia"
-                        : "RPG"}
+                      {getSpecialtyLabel(selectedSpecialty)}
                     </strong>{" "}
                     para{" "}
                     <strong className="text-foreground font-bold">

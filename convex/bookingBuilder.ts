@@ -253,7 +253,7 @@ export const resetBookingConfigToDefault = mutation({
 export const listPublicAvailableSlots = query({
   args: {
     date: v.string(), // YYYY-MM-DD
-    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     professionalId: v.optional(v.id("professionals")),
     serviceId: v.optional(v.id("services")),
     packageId: v.optional(v.id("packages")),
@@ -312,7 +312,7 @@ const publicBookingArgs = {
     date: v.string(), // YYYY-MM-DD
     startTime: v.string(),
     endTime: v.string(),
-    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     answers: v.array(
       v.object({
         questionId: v.string(),

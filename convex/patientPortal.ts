@@ -135,7 +135,7 @@ export const getPatientPortalData = query({
     const enrichedPackages = await Promise.all(
       rawPackages.map(async (pkg) => {
         const { packageDefinition: pkgDef, service } = await resolvePatientPackageService(ctx, pkg)
-        let specialty: "pilates" | "fisioterapia" | "rpg" = "pilates"
+        let specialty: string = "pilates"
         let serviceName = "Pilates"
         if (service) {
           specialty = service.specialty
@@ -478,7 +478,7 @@ export const useReplacementCreditToBook = mutation({
 export const listAvailableSlotsForBooking = query({
   args: {
     portalToken: v.string(),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     startDate: v.string(), // YYYY-MM-DD
     daysCount: v.optional(v.number()), // Padrao: 14 dias
     patientId: v.optional(v.string()),

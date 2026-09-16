@@ -1,6 +1,7 @@
+export type { ClinicalSpecialty } from "../../shared/clinicalSpecialties"
 export type Role = "admin" | "reception" | "professional" | "patient"
 
-export type Specialty = "Fisioterapia" | "Pilates" | "RPG"
+export type Specialty = "Fisioterapia" | "Pilates" | "RPG" | (string & {})
 
 export type RoomType =
   | "pilates_aparelhos"
@@ -79,7 +80,7 @@ export interface Schedule {
   id: string
   title: string
   type: "individual" | "turma"
-  specialty: "fisioterapia" | "pilates" | "rpg"
+  specialty: "fisioterapia" | "pilates" | "rpg" | (string & {})
   roomId: string
   roomName: string
   roomColor: string
@@ -118,7 +119,7 @@ export interface ReplacementCredit {
 export interface RecurringScheduleSeriesParams {
   title: string
   type: "individual" | "turma"
-  specialty: "fisioterapia" | "pilates" | "rpg"
+  specialty: "fisioterapia" | "pilates" | "rpg" | (string & {})
   roomId: string
   professionalId: string
   startTime: string
@@ -313,7 +314,7 @@ export interface ClinicService {
   id: string
   name: string
   modality: "individual" | "turma"
-  specialty: "fisioterapia" | "pilates" | "rpg"
+  specialty: "fisioterapia" | "pilates" | "rpg" | (string & {})
   maxCapacity?: number
   durationMinutes: number
   defaultPrice: number
@@ -329,7 +330,7 @@ export interface ClinicPackage {
   serviceId: string
   serviceName?: string
   modality?: "individual" | "turma"
-  specialty?: "fisioterapia" | "pilates" | "rpg"
+  specialty?: "fisioterapia" | "pilates" | "rpg" | (string & {})
   sessionCount: number
   validityDays: number
   price: number // Preço Cartão Particular
@@ -457,7 +458,7 @@ export interface AvailabilityRule {
   roomName?: string
   roomColor?: string
   roomCapacity?: number
-  specialty: "fisioterapia" | "pilates" | "rpg"
+  specialty: "fisioterapia" | "pilates" | "rpg" | (string & {})
   dayOfWeek: number // 0 = Domingo, 1 = Segunda, ... 6 = Sábado
   startTime: string // "08:00"
   endTime: string // "12:00"
@@ -476,7 +477,7 @@ export interface AvailabilityOverride {
   type: "block" | "extra"
   startTime?: string
   endTime?: string
-  specialty?: "fisioterapia" | "pilates" | "rpg"
+  specialty?: "fisioterapia" | "pilates" | "rpg" | (string & {})
   reason?: string
   createdAt: number
 }

@@ -1,5 +1,18 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-16] Gestão Dinâmica de Especialidades Clínicas (Criar, Editar e Excluir)
+- **Ponto de Fricção**:
+  1. No modal de "Novo Horário Semanal" e nas definições de serviços e turmas, as opções de especialidade eram fixas em código ("Fisioterapia Avançada", "Pilates (Solo & Aparelhos)", "RPG (Postural)") e validadas rigidamente no backend Convex através de unions literais `v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))`.
+  2. A introdução de novas especialidades sem flexibilização de validadores causava falhas de schema nas mutações de horários e serviços.
+  3. No Vitest sob jsdom, referências a funções do Convex (`api.clinic.getClinicalSpecialties`) não devem ser convertidas com `String(fn)` (dispara `TypeError: Cannot convert object to primitive value`).
+- **Mitigação / Regra**:
+  1. Modelar as especialidades como lista de objetos estruturados `{ id, name, description }` em `clinicSettings.clinicalSpecialties`, preservando 100% de compatibilidade retroativa com regras legadas cadastradas com `"fisioterapia"`, `"pilates"` e `"rpg"`, sem custo de leitura extra no banco.
+  2. Flexibilizar os validadores do Convex para `v.string()` nas tabelas e mutações que gravam especialidades.
+  3. Em mocks de testes com Convex, utilizar sempre a função oficial `getFunctionName(ref)` do pacote `convex/server` para identificar a query/mutation chamada com 100% de robustez.
+  4. Implementar o componente modular `ClinicalSpecialtiesManager` com suporte a visualização em card nas Configurações da Clínica e visualização embutida (`variant="embedded"`) acionada pelo botão "Gerenciar especialidades" no próprio formulário de horários semanais.
+- **Publicação Convex**: Backend Convex de produção `exuberant-guanaco-180` publicado com sucesso via `npx convex deploy`. Consulta remota de smoke `clinic:getClinicalSpecialties` respondeu com sucesso retornando as especialidades clínicas.
+- **Validação e Revisão Abrangente**: 5 testes automatizados dedicados em `tests/clinical-specialties.test.tsx` cobrindo criação, edição de nome, exclusão e integração com modal de horários. Propagação dinâmica estendida para Catálogo de Serviços (`ServicesCatalogTab`), Cadastro e Filtro de Profissionais (`ProfessionalsPage`), Turmas Recorrentes e Filtros de Grade (`ClassesPage`), Agendamento Geral (`SchedulePage`), Agendamento Online Público (`PublicBookingPage`) e Construtor de Links (`BookingBuilderPage`). 227 testes Vitest em 38 arquivos e 3 testes de service worker aprovados 100%; TypeScript (`tsc -b`), build Vite de produção e oxlint aprovados com 0 erros.
+
 ### [2026-09-10] Modo Escuro e Personalização de Cores Bloqueados por Precedência Reativa e Formato HSL
 - **Ponto de Fricção**:
   1. A derivação de estado reativo em `ThemeContext.tsx` usava `convexSettings?.mode ?? localTheme.mode` e `convexSettings?.colorPreset ?? localTheme.preset`. Uma vez carregadas as configurações do Convex, os campos do servidor nunca retornavam nulo, tornando `localTheme` inatingível e ignorando 100% dos cliques em "Modo Escuro", alternador da barra lateral e seleção de paletas pré-definidas.

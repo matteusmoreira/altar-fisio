@@ -7,7 +7,7 @@ export const unlinkedClassSeries = query({
     await requireStaff(ctx, args.sessionToken, ['admin'])
     const today = new Date().toISOString().slice(0, 10)
     const sessions = await ctx.db.query('schedules').withIndex('by_date', q => q.gte('date', today)).collect()
-    const series = new Map<string, { recurringGroupId: string; title: string; specialty: 'pilates' | 'rpg' | 'fisioterapia'; count: number }>()
+    const series = new Map<string, { recurringGroupId: string; title: string; specialty: string; count: number }>()
     for (const s of sessions.filter(s => s.recurringGroupId && !s.serviceId && s.type === 'turma' && s.status !== 'cancelled')) {
       const row = series.get(s.recurringGroupId!) ?? { recurringGroupId: s.recurringGroupId!, title: s.title, specialty: s.specialty, count: 0 }
       row.count++; series.set(row.recurringGroupId, row)
@@ -296,7 +296,7 @@ export const createSchedule = mutation({
   args: { sessionToken: v.string(),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     roomId: v.id("rooms"),
     professionalId: v.id("professionals"),
     date: v.string(),
@@ -325,7 +325,7 @@ export const createRecurringScheduleSeries = mutation({
   args: { sessionToken: v.string(),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     roomId: v.id("rooms"),
     professionalId: v.id("professionals"),
     startTime: v.string(),
@@ -917,7 +917,7 @@ export const listAvailableTurmasForReplacement = query({
   args: { sessionToken: v.string(),
     startDate: v.string(), // YYYY-MM-DD
     endDate: v.string(), // YYYY-MM-DD
-    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
@@ -978,7 +978,7 @@ export const updateSchedule = mutation({
   args: { sessionToken: v.string(),
     id: v.id("schedules"),
     title: v.optional(v.string()),
-    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     roomId: v.optional(v.id("rooms")),
     professionalId: v.optional(v.id("professionals")),
     date: v.optional(v.string()),

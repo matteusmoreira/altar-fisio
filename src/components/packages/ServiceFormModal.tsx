@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
+import { useQuery } from "@/lib/staffConvex"
+import { api } from "@convex/_generated/api"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
 import type { ClinicService } from "@/types"
 import {
   Dialog,
@@ -28,9 +31,11 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   onSuccess,
 }) => {
   const { addService, updateService } = useClinicData()
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
 
   const [name, setName] = useState("")
-  const [specialty, setSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">("pilates")
+  const [specialty, setSpecialty] = useState<string>("pilates")
   const [modality, setModality] = useState<"individual" | "turma">("turma")
   const [maxCapacity, setMaxCapacity] = useState(4)
   const [durationMinutes, setDurationMinutes] = useState(55)
@@ -59,7 +64,7 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
     } else {
       setIsEvaluation(false)
       setName("")
-      setSpecialty("pilates")
+      setSpecialty(clinicalSpecialties[0]?.id || "pilates")
       setModality("turma")
       setMaxCapacity(4)
       setDurationMinutes(55)
@@ -72,24 +77,24 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
   }, [serviceToEdit, open])
 
   // Ajustes inteligentes de duração e valor padrão ao mudar especialidade ou modalidade
-  const handleSpecialtyChange = (val: "pilates" | "fisioterapia" | "rpg") => {
+  const handleSpecialtyChange = (val: string) => {
     setSpecialty(val)
     if (!isEditing) {
-      if (val === "pilates") {
+      if (val.toLowerCase().includes("pilates")) {
         setModality("turma")
         setMaxCapacity(4)
         setDurationMinutes(55)
         setDefaultPrice(90)
-      } else if (val === "fisioterapia") {
-        setModality("individual")
-        setMaxCapacity(1)
-        setDurationMinutes(50)
-        setDefaultPrice(180)
-      } else if (val === "rpg") {
+      } else if (val.toLowerCase().includes("rpg")) {
         setModality("individual")
         setMaxCapacity(1)
         setDurationMinutes(60)
         setDefaultPrice(220)
+      } else {
+        setModality("individual")
+        setMaxCapacity(1)
+        setDurationMinutes(50)
+        setDefaultPrice(180)
       }
     }
   }
@@ -221,12 +226,17 @@ export const ServiceFormModal: React.FC<ServiceFormModalProps> = ({
                 </label>
                 <Select
                   value={specialty}
-                  onChange={(e) => handleSpecialtyChange(e.target.value as any)}
+                  onChange={(e) => handleSpecialtyChange(e.target.value)}
                   required
                 >
-                  <option value="pilates">Pilates Clínico</option>
-                  <option value="fisioterapia">Fisioterapia Geral / Traumato</option>
-                  <option value="rpg">Reeducação Postural Global (RPG)</option>
+                  {clinicalSpecialties.map((spec) => (
+                    <option key={spec.id} value={spec.id}>
+                      {spec.name}
+                    </option>
+                  ))}
+                  {specialty && !clinicalSpecialties.some((s) => s.id === specialty) && (
+                    <option value={specialty}>{specialty} (opção removida)</option>
+                  )}
                 </Select>
               </div>
 

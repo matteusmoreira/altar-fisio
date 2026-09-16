@@ -1,6 +1,7 @@
 import { useQuery } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
+import { DEFAULT_CLINICAL_SPECIALTIES } from '../../shared/clinicalSpecialties'
 import React, { useState, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
@@ -89,6 +90,8 @@ export const SchedulePage: React.FC = () => {
     cancelWithReplacement,
     sendWhatsAppReminder,
   } = useClinicData()
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("altar_schedule_view_mode")
@@ -112,7 +115,7 @@ export const SchedulePage: React.FC = () => {
   const [creationMode, setCreationMode] = useState<"single" | "recurring">("single")
   const [title, setTitle] = useState("")
   const [type, setType] = useState<"individual" | "turma">("turma")
-  const [specialty, setSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">("pilates")
+  const [specialty, setSpecialty] = useState<string>("pilates")
   const [roomId, setRoomId] = useState(rooms[0]?.id || "")
   const [profId, setProfId] = useState(professionals[0]?.id || "")
   const [startTime, setStartTime] = useState("08:00")
@@ -1111,11 +1114,13 @@ export const SchedulePage: React.FC = () => {
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Especialidade</label>
                   <Select
                     value={specialty}
-                    onChange={(e) => setSpecialty(e.target.value as any)}
+                    onChange={(e) => setSpecialty(e.target.value)}
                   >
-                    <option value="pilates">Pilates</option>
-                    <option value="fisioterapia">Fisioterapia</option>
-                    <option value="rpg">RPG</option>
+                    {clinicalSpecialties.map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name}
+                      </option>
+                    ))}
                   </Select>
                 </div>
               </div>

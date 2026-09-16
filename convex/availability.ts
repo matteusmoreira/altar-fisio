@@ -90,7 +90,7 @@ export const saveRule = mutation({
     id: v.optional(v.id("availabilityRules")),
     professionalId: v.id("professionals"),
     roomId: v.id("rooms"),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     dayOfWeek: v.number(), // 0 = Domingo, 1 = Segunda, ... 6 = Sábado
     startTime: v.string(), // "08:00"
     endTime: v.string(), // "12:00"
@@ -247,7 +247,7 @@ export const saveOverride = mutation({
     type: v.union(v.literal("block"), v.literal("extra")),
     startTime: v.optional(v.string()),
     endTime: v.optional(v.string()),
-    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
@@ -298,7 +298,7 @@ export const deleteOverride = mutation({
 export const getAvailableSlotsForDate = query({
   args: { sessionToken: v.string(),
     date: v.string(), // YYYY-MM-DD
-    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     professionalId: v.optional(v.id("professionals")),
     roomId: v.optional(v.id("rooms")),
   },
@@ -355,7 +355,7 @@ export const getAvailableSlotsForDate = query({
       endTime: string
       roomId: any
       professionalId: any
-      specialty: "fisioterapia" | "pilates" | "rpg"
+      specialty: string
       ruleId?: any
     }> = []
 

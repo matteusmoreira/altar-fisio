@@ -37,7 +37,10 @@ import {
   Info,
   Check,
   X,
+  Settings2,
 } from "lucide-react"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
+import { ClinicalSpecialtiesManager } from "@/components/settings/ClinicalSpecialtiesManager"
 import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 
 const DAYS_OF_WEEK = [
@@ -71,6 +74,8 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   const overrides = useQuery(api.availability.listOverrides, {}) || []
   const professionals = useQuery(api.professionals.listProfessionals, {}) || []
   const rooms = useQuery(api.rooms.listRooms, {}) || []
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
 
   // Mutations Convex
   const saveRuleMutation = useMutation(api.availability.saveRule)
@@ -100,7 +105,8 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
   const [formProfId, setFormProfId] = useState<string>("")
   const [formRoomId, setFormRoomId] = useState<string>("")
-  const [formSpecialty, setFormSpecialty] = useState<"fisioterapia" | "pilates" | "rpg">("fisioterapia")
+  const [formSpecialty, setFormSpecialty] = useState<string>("fisioterapia")
+  const [showSpecialtyManager, setShowSpecialtyManager] = useState<boolean>(false)
   const [formDayOfWeek, setFormDayOfWeek] = useState<number>(1)
   const [formStartTime, setFormStartTime] = useState<string>("08:00")
   const [formEndTime, setFormEndTime] = useState<string>("12:00")
@@ -126,7 +132,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   const [extraProfId, setExtraProfId] = useState<string>("")
   const [extraRoomId, setExtraRoomId] = useState<string>("")
   const [extraDate, setExtraDate] = useState<string>(getTodayDateString())
-  const [extraSpecialty, setExtraSpecialty] = useState<"fisioterapia" | "pilates" | "rpg">("fisioterapia")
+  const [extraSpecialty, setExtraSpecialty] = useState<string>("fisioterapia")
   const [extraStartTime, setExtraStartTime] = useState<string>("08:00")
   const [extraEndTime, setExtraEndTime] = useState<string>("12:00")
   const [extraReason, setExtraReason] = useState<string>("Atendimento Extra")
@@ -180,7 +186,8 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
         : (isProfessional && user?.professionalId ? user.professionalId : professionals[0]?._id || "")
     )
     setFormRoomId(filterRoomId !== "all" ? filterRoomId : rooms[0]?._id || "")
-    setFormSpecialty("fisioterapia")
+    setFormSpecialty(clinicalSpecialties[0]?.id || "fisioterapia")
+    setShowSpecialtyManager(false)
     setFormDayOfWeek(filterDay !== "all" ? Number(filterDay) : 1)
     setFormStartTime("08:00")
     setFormEndTime("12:00")
@@ -195,6 +202,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
   const handleOpenEditRule = (rule: any) => {
     if (!canManageAvailability) return
     setEditingRuleId(rule._id)
+    setShowSpecialtyManager(false)
     setFormProfId(rule.professionalId)
     setFormRoomId(rule.roomId)
     setFormSpecialty(rule.specialty)
@@ -478,7 +486,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                     setExtraProfId(filterProfId !== "all" ? filterProfId : professionals[0]?._id || "")
                     setExtraRoomId(filterRoomId !== "all" ? filterRoomId : rooms[0]?._id || "")
                     setExtraDate(getTodayDateString())
-                    setExtraSpecialty("fisioterapia")
+                    setExtraSpecialty(clinicalSpecialties[0]?.id || "fisioterapia")
                     setIsExtraFormOpen(true)
                   }}
                   size="sm"
@@ -541,9 +549,14 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                             <div className="flex items-center gap-2 text-foreground font-semibold">
                               <Stethoscope className="w-4 h-4 text-primary shrink-0" />
                               <span>{rule.professionalName}</span>
-                              <Badge variant="secondary" className="text-[9px] uppercase font-bold px-1.5 py-0">
-                                {rule.specialty}
-                              </Badge>
+                              {(() => {
+                                const specName = clinicalSpecialties.find((s) => s.id === rule.specialty)?.name || rule.specialty
+                                return (
+                                  <Badge variant="secondary" className="text-[9px] uppercase font-bold px-1.5 py-0">
+                                    {specName}
+                                  </Badge>
+                                )
+                              })()}
                             </div>
 
                             <div className="flex items-center gap-2 text-muted-foreground">
@@ -804,12 +817,43 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-foreground/85 mb-1">Especialidade Clínica *</label>
-                    <Select value={formSpecialty} onChange={(e) => setFormSpecialty(e.target.value as any)}>
-                      <option value="fisioterapia">Fisioterapia Avançada</option>
-                      <option value="pilates">Pilates (Solo & Aparelhos)</option>
-                      <option value="rpg">RPG (Postural)</option>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-foreground/85">Especialidade Clínica *</label>
+                      {canManageAvailability && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowSpecialtyManager((prev) => !prev)}
+                          className="h-6 gap-1 px-1.5 text-[11px] text-primary hover:text-primary font-medium"
+                        >
+                          <Settings2 className="h-3 w-3" />
+                          {showSpecialtyManager ? "Fechar gestor" : "Gerenciar especialidades"}
+                        </Button>
+                      )}
+                    </div>
+                    <Select value={formSpecialty} onChange={(e) => setFormSpecialty(e.target.value)}>
+                      {clinicalSpecialties.map((spec) => (
+                        <option key={spec.id} value={spec.id}>
+                          {spec.name}
+                        </option>
+                      ))}
+                      {formSpecialty && !clinicalSpecialties.some((s) => s.id === formSpecialty) && (
+                        <option value={formSpecialty}>{formSpecialty} (opção removida)</option>
+                      )}
                     </Select>
+
+                    {showSpecialtyManager && (
+                      <div className="mt-3">
+                        <ClinicalSpecialtiesManager
+                          variant="embedded"
+                          onClose={() => setShowSpecialtyManager(false)}
+                          onSaved={() => {
+                            // Atualizado
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1026,10 +1070,15 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-foreground/85 mb-1">Especialidade *</label>
-                    <Select value={extraSpecialty} onChange={(e) => setExtraSpecialty(e.target.value as any)}>
-                      <option value="fisioterapia">Fisioterapia</option>
-                      <option value="pilates">Pilates</option>
-                      <option value="rpg">RPG</option>
+                    <Select value={extraSpecialty} onChange={(e) => setExtraSpecialty(e.target.value)}>
+                      {clinicalSpecialties.map((spec) => (
+                        <option key={spec.id} value={spec.id}>
+                          {spec.name}
+                        </option>
+                      ))}
+                      {extraSpecialty && !clinicalSpecialties.some((s) => s.id === extraSpecialty) && (
+                        <option value={extraSpecialty}>{extraSpecialty} (opção removida)</option>
+                      )}
                     </Select>
                   </div>
                 </div>

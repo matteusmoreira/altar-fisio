@@ -35,11 +35,14 @@ import {
 
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
-
-const ALL_SPECIALTIES: Specialty[] = ["Fisioterapia", "Pilates", "RPG"]
+import { useQuery } from "convex/react"
+import { api } from "../../convex/_generated/api"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../shared/clinicalSpecialties"
 
 export const ProfessionalsPage: React.FC = () => {
   const { professionals, addProfessional, updateProfessional, deleteProfessional } = useClinicData()
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("altar_professionals_view_mode")
@@ -99,8 +102,17 @@ export const ProfessionalsPage: React.FC = () => {
 
     if (!matchesSearch) return false
 
-    if (specialtyFilter !== "all" && !prof.specialties.includes(specialtyFilter as Specialty)) {
-      return false
+    if (specialtyFilter !== "all") {
+      const filterLower = specialtyFilter.toLowerCase()
+      const matchesSpec = prof.specialties.some((s) => {
+        const sLower = s.toLowerCase()
+        return (
+          sLower === filterLower ||
+          clinicalSpecialties.find((cs) => cs.id.toLowerCase() === filterLower)?.name.toLowerCase() === sLower ||
+          clinicalSpecialties.find((cs) => cs.name.toLowerCase() === filterLower)?.id.toLowerCase() === sLower
+        )
+      })
+      if (!matchesSpec) return false
     }
 
     if (statusFilter === "active" && !prof.active) return false
@@ -121,7 +133,7 @@ export const ProfessionalsPage: React.FC = () => {
     setEmail("")
     setPhone("")
     setCrefito("")
-    setSpecialties(["Fisioterapia"])
+    setSpecialties([clinicalSpecialties[0]?.name || "Fisioterapia"])
     setCommissionType("percentage")
     setCommissionValue(40)
     setActive(true)
@@ -347,9 +359,11 @@ export const ProfessionalsPage: React.FC = () => {
                 onChange={(e) => setSpecialtyFilter(e.target.value)}
               >
                 <option value="all">Todas as Especialidades</option>
-                <option value="Fisioterapia">Fisioterapia</option>
-                <option value="Pilates">Pilates</option>
-                <option value="RPG">RPG</option>
+                {clinicalSpecialties.map((spec) => (
+                  <option key={spec.id} value={spec.name}>
+                    {spec.name}
+                  </option>
+                ))}
               </Select>
             </div>
 
@@ -840,13 +854,15 @@ export const ProfessionalsPage: React.FC = () => {
               <div className="space-y-2 pt-1">
                 <label className="block text-xs font-semibold text-foreground/85">Especialidades Habilitadas *</label>
                 <div className="flex flex-wrap gap-2">
-                  {ALL_SPECIALTIES.map((spec) => {
-                    const isSelected = specialties.includes(spec)
+                  {clinicalSpecialties.map((spec) => {
+                    const isSelected = specialties.some(
+                      (s) => s.toLowerCase() === spec.name.toLowerCase() || s.toLowerCase() === spec.id.toLowerCase()
+                    )
                     return (
                       <button
-                        key={spec}
+                        key={spec.id}
                         type="button"
-                        onClick={() => toggleSpecialty(spec)}
+                        onClick={() => toggleSpecialty(spec.name)}
                         className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all ${
                           isSelected
                             ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -854,7 +870,7 @@ export const ProfessionalsPage: React.FC = () => {
                         }`}
                       >
                         {isSelected ? "✓ " : "+ "}
-                        {spec}
+                        {spec.name}
                       </button>
                     )
                   })}

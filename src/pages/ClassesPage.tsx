@@ -49,6 +49,7 @@ import { AbsenceModal } from "@/components/classes/AbsenceModal"
 import { AttendanceReportView } from "@/components/classes/AttendanceReportView"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../shared/clinicalSpecialties"
 
 const ROOM_TYPES: Array<{ id: RoomType; label: string }> = [
   { id: "pilates_aparelhos", label: "Pilates em Aparelhos" },
@@ -59,6 +60,9 @@ const ROOM_TYPES: Array<{ id: RoomType; label: string }> = [
 ]
 
 export const ClassesPage: React.FC = () => {
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
+
   const {
     rooms,
     addRoom,
@@ -150,7 +154,7 @@ export const ClassesPage: React.FC = () => {
   // Modal 3: Nova Série Recorrente
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false)
   const [recTitle, setRecTitle] = useState("")
-  const [recSpecialty, setRecSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">("pilates")
+  const [recSpecialty, setRecSpecialty] = useState<string>("pilates")
   const [recRoomId, setRecRoomId] = useState(rooms[0]?.id || "")
   const [recProfId, setRecProfId] = useState(professionals[0]?.id || "")
   const [recStartTime, setRecStartTime] = useState("08:00")
@@ -173,7 +177,7 @@ export const ClassesPage: React.FC = () => {
   // Modal 4: Editar Turma / Horário
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null)
   const [editTitle, setEditTitle] = useState("")
-  const [editSpecialty, setEditSpecialty] = useState<"pilates" | "fisioterapia" | "rpg">("pilates")
+  const [editSpecialty, setEditSpecialty] = useState<string>("pilates")
   const [editRoomId, setEditRoomId] = useState("")
   const [editProfId, setEditProfId] = useState("")
   const [editDate, setEditDate] = useState("")
@@ -605,9 +609,11 @@ export const ClassesPage: React.FC = () => {
                     onChange={(e) => setSelectedSpecialtyFilter(e.target.value)}
                   >
                     <option value="all">Todas Modalidades</option>
-                    <option value="pilates">Pilates</option>
-                    <option value="rpg">RPG</option>
-                    <option value="fisioterapia">Fisioterapia</option>
+                    {clinicalSpecialties.map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name}
+                      </option>
+                    ))}
                   </Select>
                 </div>
 
@@ -1197,11 +1203,13 @@ export const ClassesPage: React.FC = () => {
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Modalidade *</label>
                   <Select
                     value={recSpecialty}
-                    onChange={(e) => setRecSpecialty(e.target.value as any)}
+                    onChange={(e) => setRecSpecialty(e.target.value)}
                   >
-                    <option value="pilates">Pilates</option>
-                    <option value="rpg">RPG</option>
-                    <option value="fisioterapia">Fisioterapia</option>
+                    {clinicalSpecialties.map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name}
+                      </option>
+                    ))}
                   </Select>
                 </div>
 

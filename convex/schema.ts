@@ -18,6 +18,15 @@ export default defineSchema({
     portalBookingEnabled: v.optional(v.boolean()),
     portalBookingMessage: v.optional(v.array(v.object({ type: v.union(v.literal("paragraph"), v.literal("bullet")), runs: v.array(v.object({ text: v.string(), bold: v.optional(v.boolean()), italic: v.optional(v.boolean()), href: v.optional(v.string()) })) }))),
     healthInsuranceOptions: v.optional(v.array(v.string())),
+    clinicalSpecialties: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          description: v.optional(v.string()),
+        })
+      )
+    ),
     // Regras de agendamento & reposição
     cancellationNoticeHours: v.number(), // Ex: 2 (horas de antecedência mínima para gerar reposição)
     replacementExpiryDays: v.number(), // Ex: 30 (dias para usar o crédito de reposição)
@@ -101,7 +110,7 @@ export default defineSchema({
     isEvaluation: v.optional(v.boolean()),
     name: v.string(), // Ex: "Pilates em Grupo", "Fisioterapia Ortopédica", "Sessão de RPG"
     modality: v.union(v.literal("individual"), v.literal("turma")),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     maxCapacity: v.optional(v.number()), // Limite de pacientes por horário quando for turma
     durationMinutes: v.number(),
     defaultPrice: v.number(),
@@ -148,7 +157,7 @@ export default defineSchema({
     serviceId: v.optional(v.id("services")),
     title: v.string(),
     type: v.union(v.literal("individual"), v.literal("turma")),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     roomId: v.id("rooms"),
     professionalId: v.id("professionals"),
     date: v.string(), // YYYY-MM-DD
@@ -621,7 +630,7 @@ export default defineSchema({
       v.literal("confirmed"),
       v.literal("rejected")
     ),
-    specialty: v.optional(v.union(v.literal("pilates"), v.literal("fisioterapia"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     serviceId: v.optional(v.id("services")),
     packageId: v.optional(v.id("packages")),
     packageName: v.optional(v.string()),
@@ -655,7 +664,7 @@ export default defineSchema({
   availabilityRules: defineTable({
     professionalId: v.id("professionals"),
     roomId: v.id("rooms"),
-    specialty: v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg")),
+    specialty: v.string(),
     dayOfWeek: v.number(), // 0 = Domingo, 1 = Segunda, 2 = Terça, 3 = Quarta, 4 = Quinta, 5 = Sexta, 6 = Sábado
     startTime: v.string(), // "08:00"
     endTime: v.string(), // "12:00"
@@ -676,7 +685,7 @@ export default defineSchema({
     type: v.union(v.literal("block"), v.literal("extra")), // "block" = folga/bloqueio; "extra" = atendimento avulso
     startTime: v.optional(v.string()), // Se omitido, dia inteiro
     endTime: v.optional(v.string()),
-    specialty: v.optional(v.union(v.literal("fisioterapia"), v.literal("pilates"), v.literal("rpg"))),
+    specialty: v.optional(v.string()),
     reason: v.optional(v.string()), // Ex: "Férias", "Congresso", "Atestado", "Plantão Extra"
     createdAt: v.number(),
   })

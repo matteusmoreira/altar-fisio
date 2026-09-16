@@ -1,4 +1,5 @@
 import { ConfirmationEditor } from "@/components/booking/ConfirmationEditor"
+import { DEFAULT_CLINICAL_SPECIALTIES } from "../../shared/clinicalSpecialties"
 import { InsuranceEditor } from "@/components/booking/InsuranceEditor"
 import React, { useState, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
@@ -54,6 +55,8 @@ interface BookingField {
 
 export const BookingBuilderPage: React.FC = () => {
   const config = useQuery(api.bookingBuilder.getBookingConfig)
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0 ? dbClinicalSpecialties : DEFAULT_CLINICAL_SPECIALTIES
   const updateConfig = useMutation(api.bookingBuilder.updateBookingConfig)
   const resetConfig = useMutation(api.bookingBuilder.resetBookingConfigToDefault)
 
@@ -457,45 +460,26 @@ export const BookingBuilderPage: React.FC = () => {
                   </Button>
                 </div>
 
-                {/* Link Pilates */}
-                <div className="p-3.5 rounded-xl bg-muted/20 border border-border/60 flex flex-col justify-between space-y-2">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">Studio Pilates</span>
-                      <Badge variant="outline" className="text-[10px] text-primary border-primary/30">Pilates</Badge>
+                {clinicalSpecialties.map((spec) => (
+                  <div key={spec.id} className="p-3.5 rounded-xl bg-muted/20 border border-border/60 flex flex-col justify-between space-y-2">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">{spec.name}</span>
+                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30">{spec.id}</Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">Direciona automaticamente para agendamentos de {spec.name}.</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">Direciona automaticamente para turmas de Pilates.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyLink(`${publicUrl}?servico=${spec.id}`)}
+                      className="w-full text-xs font-semibold gap-1 h-8"
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span>Copiar Link</span>
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyLink(`${publicUrl}?servico=pilates`)}
-                    className="w-full text-xs font-semibold gap-1 h-8"
-                  >
-                    <Copy className="h-3 w-3" />
-                    <span>Copiar Link</span>
-                  </Button>
-                </div>
-
-                {/* Link Fisioterapia */}
-                <div className="p-3.5 rounded-xl bg-muted/20 border border-border/60 flex flex-col justify-between space-y-2">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">Fisioterapia</span>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300">Fisio</Badge>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1">Direciona para avaliação e reabilitação física.</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyLink(`${publicUrl}?servico=fisioterapia`)}
-                    className="w-full text-xs font-semibold gap-1 h-8"
-                  >
-                    <Copy className="h-3 w-3" />
-                    <span>Copiar Link</span>
-                  </Button>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
