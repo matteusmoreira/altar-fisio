@@ -50,6 +50,7 @@ import {
 } from "lucide-react"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
+import { ClinicalSpecialtiesDialog } from "@/components/settings/ClinicalSpecialtiesManager"
 import { SchedulePeriodToggle } from "@/components/schedule/SchedulePeriodToggle"
 import { ScheduleMetricsBar } from "@/components/schedule/ScheduleMetricsBar"
 import { WeeklyScheduleView } from "@/components/schedule/WeeklyScheduleView"
@@ -71,7 +72,7 @@ function formatDuration(minutes: number) {
 }
 
 export const SchedulePage: React.FC = () => {
-  const { user, isProfessional } = useAuth()
+  const { user, isProfessional, isAdmin } = useAuth()
   const {
     services,
     schedules,
@@ -116,12 +117,20 @@ export const SchedulePage: React.FC = () => {
   const [title, setTitle] = useState("")
   const [type, setType] = useState<"individual" | "turma">("turma")
   const [specialty, setSpecialty] = useState<string>("pilates")
+  const [isSpecialtiesDialogOpen, setIsSpecialtiesDialogOpen] = useState(false)
   const [roomId, setRoomId] = useState(rooms[0]?.id || "")
   const [profId, setProfId] = useState(professionals[0]?.id || "")
   const [startTime, setStartTime] = useState("08:00")
   const [endTime, setEndTime] = useState("08:55")
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 3]) // Seg e Qua
   const [capacity, setCapacity] = useState(4)
+
+  useEffect(() => {
+    if (clinicalSpecialties.length > 0 && !clinicalSpecialties.some((s) => s.id === specialty)) {
+      setSpecialty(clinicalSpecialties[0].id)
+    }
+  }, [clinicalSpecialties, specialty])
+
   useEffect(() => {
     if (!isNewModalOpen) return
     if (!rooms.some(r => r.id === roomId && r.isActive)) setRoomId(rooms.find(r => r.isActive)?.id ?? '')
@@ -1111,7 +1120,18 @@ export const SchedulePage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Especialidade</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-foreground/85">Especialidade</label>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setIsSpecialtiesDialogOpen(true)}
+                        className="text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Gerenciar
+                      </button>
+                    )}
+                  </div>
                   <Select
                     value={specialty}
                     onChange={(e) => setSpecialty(e.target.value)}
@@ -1121,7 +1141,15 @@ export const SchedulePage: React.FC = () => {
                         {spec.name}
                       </option>
                     ))}
+                    {specialty && !clinicalSpecialties.some((s) => s.id === specialty) && (
+                      <option value={specialty}>{specialty} (opção personalizada)</option>
+                    )}
                   </Select>
+
+                  <ClinicalSpecialtiesDialog
+                    open={isSpecialtiesDialogOpen}
+                    onOpenChange={setIsSpecialtiesDialogOpen}
+                  />
                 </div>
               </div>
 

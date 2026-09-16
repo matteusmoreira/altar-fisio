@@ -97,9 +97,9 @@ test('adiciona uma nova especialidade clínica e salva', async () => {
   fireEvent.change(input, { target: { value: 'Osteopatia Clínica' } })
   fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }))
 
-  expect(screen.getByText('Osteopatia Clínica')).toBeTruthy()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Salvar Especialidades' }))
+  await waitFor(() => {
+    expect(screen.getByText('Osteopatia Clínica')).toBeTruthy()
+  })
 
   await waitFor(() => {
     expect(mocks.updateSpecialties).toHaveBeenCalledWith({
@@ -125,10 +125,10 @@ test('edita o nome de uma especialidade clínica existente', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar edição' }))
 
-  expect(screen.getByText('Studio Pilates Moderno')).toBeTruthy()
-  expect(screen.queryByText('Pilates (Solo & Aparelhos)')).toBeNull()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Salvar Especialidades' }))
+  await waitFor(() => {
+    expect(screen.getByText('Studio Pilates Moderno')).toBeTruthy()
+    expect(screen.queryByText('Pilates (Solo & Aparelhos)')).toBeNull()
+  })
 
   await waitFor(() => {
     expect(mocks.updateSpecialties).toHaveBeenCalledWith({
@@ -148,9 +148,9 @@ test('exclui uma especialidade clínica da lista', async () => {
   const deleteButton = screen.getByRole('button', { name: 'Excluir RPG (Postural)' })
   fireEvent.click(deleteButton)
 
-  expect(screen.queryByText('RPG (Postural)')).toBeNull()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Salvar Especialidades' }))
+  await waitFor(() => {
+    expect(screen.queryByText('RPG (Postural)')).toBeNull()
+  })
 
   await waitFor(() => {
     expect(mocks.updateSpecialties).toHaveBeenCalledWith({

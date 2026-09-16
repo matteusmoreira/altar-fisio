@@ -170,6 +170,13 @@ export const ClassesPage: React.FC = () => {
     if (!rooms.some(r => r.id === recRoomId && r.isActive)) setRecRoomId(rooms.find(r => r.isActive)?.id ?? '')
     if (!professionals.some(p => p.id === recProfId && p.active)) setRecProfId(professionals.find(p => p.active)?.id ?? '')
   }, [isRecurringModalOpen, rooms, professionals, recRoomId, recProfId])
+
+  useEffect(() => {
+    if (clinicalSpecialties.length > 0 && !clinicalSpecialties.some((s) => s.id === recSpecialty)) {
+      setRecSpecialty(clinicalSpecialties[0].id)
+    }
+  }, [clinicalSpecialties, recSpecialty])
+
   const [recEnrolledPatients, setRecEnrolledPatients] = useState<string[]>([])
   const [recError, setRecError] = useState<string | null>(null)
   const [isSubmittingRec, setIsSubmittingRec] = useState(false)
@@ -1345,7 +1352,24 @@ export const ClassesPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Especialidade / Modalidade *</label>
+                  <Select
+                    value={editSpecialty}
+                    onChange={(e) => setEditSpecialty(e.target.value)}
+                  >
+                    {clinicalSpecialties.map((spec) => (
+                      <option key={spec.id} value={spec.id}>
+                        {spec.name}
+                      </option>
+                    ))}
+                    {editSpecialty && !clinicalSpecialties.some((s) => s.id === editSpecialty) && (
+                      <option value={editSpecialty}>{editSpecialty} (opção personalizada)</option>
+                    )}
+                  </Select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Sala *</label>
                   <Select

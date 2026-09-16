@@ -40,7 +40,7 @@ import {
   Settings2,
 } from "lucide-react"
 import { DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
-import { ClinicalSpecialtiesManager } from "@/components/settings/ClinicalSpecialtiesManager"
+import { ClinicalSpecialtiesDialog } from "@/components/settings/ClinicalSpecialtiesManager"
 import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 
 const DAYS_OF_WEEK = [
@@ -824,11 +824,11 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setShowSpecialtyManager((prev) => !prev)}
+                          onClick={() => setShowSpecialtyManager(true)}
                           className="h-6 gap-1 px-1.5 text-[11px] text-primary hover:text-primary font-medium"
                         >
                           <Settings2 className="h-3 w-3" />
-                          {showSpecialtyManager ? "Fechar gestor" : "Gerenciar especialidades"}
+                          <span>Gerenciar especialidades</span>
                         </Button>
                       )}
                     </div>
@@ -843,17 +843,10 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                       )}
                     </Select>
 
-                    {showSpecialtyManager && (
-                      <div className="mt-3">
-                        <ClinicalSpecialtiesManager
-                          variant="embedded"
-                          onClose={() => setShowSpecialtyManager(false)}
-                          onSaved={() => {
-                            // Atualizado
-                          }}
-                        />
-                      </div>
-                    )}
+                    <ClinicalSpecialtiesDialog
+                      open={showSpecialtyManager}
+                      onOpenChange={setShowSpecialtyManager}
+                    />
                   </div>
                 </div>
 
