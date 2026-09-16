@@ -458,12 +458,15 @@ export const persistPublicBooking = internalMutation({
     if (patient.phone && !requireApproval) {
       const room = args.roomId ? await ctx.db.get(args.roomId) : null
       const prof = args.professionalId ? await ctx.db.get(args.professionalId) : null
+      const settings = await ctx.db.query("clinicSettings").first()
+      const foundSpecialty = settings?.clinicalSpecialties?.find((s) => s.id === args.specialty)
       const serviceTitle =
-        args.specialty === "pilates"
+        foundSpecialty?.name ||
+        (args.specialty === "pilates"
           ? "Pilates Studio"
           : args.specialty === "rpg"
           ? "RPG"
-          : "Fisioterapia"
+          : "Fisioterapia")
 
       await ctx.scheduler.runAfter(0, internal.notifications.sendScheduleConfirmationAction, {
         patientName: patient.name,
