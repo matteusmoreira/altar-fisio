@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { AppointmentDeliveryProblems } from '@/components/whatsapp/AppointmentDeliveryProblems'
 import React, { useState, useMemo } from "react"
-import { useQuery, useAction } from "@/lib/staffConvex"
+import { useQuery, useAction, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useTheme } from "@/contexts/ThemeContext"
@@ -41,6 +41,7 @@ import {
   Info,
   Loader2,
   FileCheck,
+  Trash2,
 } from "lucide-react"
 import type { NotificationLog } from "@/types"
 import { WhatsAppInstanceManager } from "@/components/whatsapp/WhatsAppInstanceManager"
@@ -80,6 +81,45 @@ export const NotificationsPage: React.FC = () => {
   }, [instances])
 
   const sendWhatsAppAction = useAction(api.notifications.sendWhatsAppNotificationAction)
+  const clearNotificationLogsMutation = useMutation(api.notifications.clearNotificationLogs)
+  const deleteNotificationLogMutation = useMutation(api.notifications.deleteNotificationLog)
+
+  // Estados de Exclusão de Logs
+  const [showConfirmClear, setShowConfirmClear] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
+  const [logToDelete, setLogToDelete] = useState<NotificationLog | null>(null)
+  const [isDeletingSingle, setIsDeletingSingle] = useState(false)
+
+  const handleClearAllLogs = async () => {
+    setIsClearing(true)
+    try {
+      const result = await clearNotificationLogsMutation({})
+      const count = result?.deletedCount ?? 0
+      showToast(`Logs de notificações excluídos com sucesso! (${count} ${count === 1 ? "registro removido" : "registros removidos"})`)
+      setShowConfirmClear(false)
+    } catch (err: any) {
+      showToast("Erro ao excluir logs: " + (err?.message || "Tente novamente"), "error")
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  const handleDeleteSingleLog = async () => {
+    if (!logToDelete) return
+    setIsDeletingSingle(true)
+    try {
+      await deleteNotificationLogMutation({ id: logToDelete.id as any })
+      showToast(`Log para ${logToDelete.recipientName} excluído com sucesso!`)
+      if (selectedLog?.id === logToDelete.id) {
+        setSelectedLog(null)
+      }
+      setLogToDelete(null)
+    } catch (err: any) {
+      showToast("Erro ao excluir log: " + (err?.message || "Tente novamente"), "error")
+    } finally {
+      setIsDeletingSingle(false)
+    }
+  }
 
   // Estados de Teste Manual
   const [testTab, setTestTab] = useState<"whatsapp" | "email">("whatsapp")
@@ -435,6 +475,21 @@ export const NotificationsPage: React.FC = () => {
                   <option value="queued">Na Fila</option>
                 </Select>
               </div>
+
+              {isAdmin && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowConfirmClear(true)}
+                  disabled={notificationLogs.length === 0 || isClearing}
+                  className="text-xs h-8 gap-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50"
+                  title="Excluir permanentemente todos os logs de notificação"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Excluir Todos os Logs</span>
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -519,6 +574,18 @@ export const NotificationsPage: React.FC = () => {
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
+
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => setLogToDelete(log)}
+                        title="Excluir este log"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               )
@@ -803,9 +870,133 @@ Estamos ansiosos para te receber! ✨`}
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setSelectedLog(null)} className="text-xs">
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            {isAdmin && selectedLog ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  const target = selectedLog
+                  setSelectedLog(null)
+                  setLogToDelete(target)
+                }}
+                className="text-xs h-8 gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Excluir Log</span>
+              </Button>
+            ) : <div />}
+            <Button variant="outline" size="sm" onClick={() => setSelectedLog(null)} className="text-xs h-8">
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação para Exclusão de Todos os Logs */}
+      <Dialog open={showConfirmClear} onOpenChange={setShowConfirmClear}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-foreground">
+                  Excluir Todos os Logs de Notificação?
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-1">
+                  Esta ação apagará permanentemente todos os <strong>{notificationLogs.length}</strong> registros de disparos (WhatsApp e E-mail) da clínica. Essa operação é irreversível e não poderá ser desfeita.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowConfirmClear(false)}
+              disabled={isClearing}
+              className="text-xs h-8"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleClearAllLogs}
+              disabled={isClearing}
+              className="text-xs h-8 gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isClearing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Excluindo...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Sim, Excluir Todos</span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação para Exclusão de Log Individual */}
+      <Dialog open={!!logToDelete} onOpenChange={(open) => !open && setLogToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold text-foreground">
+                  Excluir Registro de Notificação?
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-1">
+                  Deseja excluir permanentemente o log de envio para <strong>{logToDelete?.recipientName}</strong> ({logToDelete?.recipientContact})? Essa ação é irreversível.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setLogToDelete(null)}
+              disabled={isDeletingSingle}
+              className="text-xs h-8"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteSingleLog}
+              disabled={isDeletingSingle}
+              className="text-xs h-8 gap-1.5 bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeletingSingle ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Excluindo...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Excluir</span>
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

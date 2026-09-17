@@ -1,5 +1,41 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Resumo Único de WhatsApp no Agendamento Rápido e Clareza de Marcações na Ficha do Paciente
+- **Ponto de Fricção**:
+  1. No Agendamento Rápido, ao agendar sessões recorrentes (ex: segundas e quartas ao longo do mês), o sistema disparava múltiplos WhatsApps individuais (um para cada dia agendado, totalizando 8 a 10 mensagens simultâneas), gerando spam ao paciente, e não permitia ao operador revisar ou editar o texto antes do disparo.
+  2. Após agendar, a Ficha do Paciente (`PatientProfileModal`) exibia "0 turma(s) encontrada(s)" e histórico zerado, porque a query `schedules:listSchedulesForPatient` não estava autorizada em `shared/accessPolicy.ts` e o hook customizado `useQuery` de `staffConvex.ts` forçava silenciosamente `'skip'`.
+  3. Sessões recorrentes com `recurringGroupId` eram tratadas como avulsas no KPI superior (exibia "Avulso / Sem turma") porque o filtro checava apenas `type === 'turma'`, e a aba principal "Visão Geral" não mostrava um card com os próximos agendamentos confirmados.
+  4. O componente `PatientProfileModal` possui uma folha oculta de impressão (`#printable-patient-sheet`), duplicando nomes de salas e profissionais no DOM e quebrando consultas estritas `screen.getByText` em testes com Testing Library.
+- **Mitigação / Regra**:
+  1. Em `convex/quickBooking.ts`, substituir o laço de envio individual por uma única chamada à action interna `sendQuickBookingSummaryAction` (`convex/notifications.ts`), enviando um WhatsApp consolidado com todas as datas/horários (`• Seg, 08/09 às 08:00`) e suporte a mensagem editada customizada (`customMessage`).
+  2. Criar o componente `WhatsAppSummaryModal.tsx` no Agendamento Rápido, permitindo ao atendente revisar, editar livremente o texto ou optar por não enviar antes do disparo.
+  3. Adicionar `'schedules:listSchedulesForPatient': ['admin', 'professional', 'reception']` em `shared/accessPolicy.ts`.
+  4. No `PatientProfileModal.tsx`, agrupar sessões recorrentes por `recurringGroupId || isRecurring || type === 'turma'` para calcular a turma fixa no cabeçalho (ex: `Seg e Qua 08:00`), e adicionar a seção nobre "Próximas Sessões Marcadas" com grid de encontros, salas e profissionais na aba "Visão Geral".
+  5. Em testes do perfil do paciente, utilizar `screen.getAllByText(...).length).toBeGreaterThanOrEqual(1)` para nós que coexistam no modal e na ficha de impressão.
+- **Validação**: 258 testes Vitest em 45 arquivos e 3 testes de service worker aprovados 100% (incluindo `tests/quick-booking-whatsapp-summary.test.tsx` e `tests/patient-profile-appointments-clarity.test.tsx`). Typecheck TypeScript (`tsc -b`) e oxlint com 0 erros.
+
+### [2026-09-17] Exclusão Administrativa de Logs de Notificações e Testes de Abas Radix UI no Vitest
+- **Ponto de Fricção**:
+  1. No painel de Lembretes WhatsApp/Email (`NotificationsPage.tsx`), a aba "Histórico & Auditoria" exibia todos os disparos efetuados (com taxa de sucesso e erros acumulados durante testes, ex: `HTTP 401`), mas não havia nenhuma função no backend ou interface para o administrador expurgar os registros.
+  2. Em testes com jsdom e Vitest no Radix UI (`@radix-ui/react-tabs`), simular apenas o evento `fireEvent.click(tab)` não ativa a mudança de aba, pois os gatilhos internos do Radix escutam `pointerDown` e teclas de acessibilidade (`Enter`/`Space`).
+- **Mitigação / Regra**:
+  1. Implementar as mutações protegidas `notifications:clearNotificationLogs` (exclusão total com contagem de registros deletados) e `notifications:deleteNotificationLog` (exclusão individual por ID) no backend Convex, restritas a administradores (`requireStaff(ctx, sessionToken, ["admin"])`).
+  2. Registrar compulsoriamente a ação do administrador na tabela `auditLogs` (LGPD & COFFITO), registrando quem executou a limpeza e a quantidade de registros eliminados.
+  3. Adicionar as permissões correspondentes em `shared/accessPolicy.ts` (`"notifications:clearNotificationLogs": ["admin"]`, `"notifications:deleteNotificationLog": ["admin"]`).
+  4. Na UI de `NotificationsPage.tsx`, disponibilizar o botão `"Excluir Todos os Logs"` no cabeçalho da tabela apenas para perfil administrador, acompanhado de diálogo modal de confirmação irreversível com alerta explicativo. Disponibilizar também o botão de lixeira individual em cada linha de log e no modal de detalhes.
+  5. Em testes unitários que navegam entre abas do Radix UI no Vitest, utilizar o helper `activateTab(tab)` combinando `pointerDown`, `click` e `keyDown(Enter)`.
+- **Validação**: 252 testes Vitest em 43 arquivos (incluindo testes dedicados em `tests/notification-logs-deletion.test.ts` e `tests/notification-logs-ui.test.tsx`) e 3 testes de service worker aprovados 100%. Typecheck TypeScript (`tsc -b`) aprovado com 0 erros, oxlint com 0 erros.
+
+### [2026-09-17] Destaque Operacional da Lotação de Salas e Rebalanceamento do Dashboard
+- **Ponto de Fricção**:
+  1. A capacidade e ocupação física em tempo real das salas ficava comprimida na 3ª coluna lateral do Dashboard, com textos cortados (`max-w-[170px]`) e barras de 2px, dificultando a rápida tomada de decisão sobre vagas e turmas em andamento.
+  2. O cabeçalho de ações continha o botão "Lançar SOAP" que gerava redundância com o fluxo de atendimento clínico e da timeline de pacientes.
+- **Mitigação / Regra**:
+  1. No `DashboardPage.tsx`, promover a Lotação das Salas para uma seção horizontal nobre logo abaixo dos KPIs operacionais com grid responsivo (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`), exibindo a cor da sala, ocupação em tempo real (`0/5`, `4/8`), percentual, barra encorpada, status de momento (*Disponível*, *Em uso*, *Lotada*), detalhes da aula atual ou próxima prevista e total de alunos/turmas do dia.
+  2. Remover a listagem antiga comprimida da coluna 3, evitando duplicação e dando respiro aos blocos de WhatsApp e Ações Rápidas.
+  3. Remover o botão "Lançar SOAP" do cabeçalho superior.
+- **Validação**: Novo teste automatizado em `tests/dashboard-room-occupancy.test.tsx` cobrindo ausência do botão SOAP e presença dos dados de capacidade e status de todas as salas. 244 testes Vitest em 41 arquivos e 3 testes de service worker aprovados 100%, typecheck TypeScript (`tsc -b`) sem erros, e build de produção Vite gerado com sucesso.
+
 ### [2026-09-17] Exclusão Resiliente de Instâncias WhatsApp (Uazapi) e Tratamento de Tokens Órfãos no Provedor
 - **Ponto de Fricção**:
   1. Ao excluir uma instância no painel de WhatsApp, a action `whatsapp:deleteInstanceAction` realizava a chamada `DELETE /instance` na UAZAPI com o header `token` e exigia que a resposta fosse estritamente `res.ok === true` antes de disparar `removeInstanceInternal`.

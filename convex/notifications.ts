@@ -2,7 +2,7 @@ import { internalAction } from './_generated/server'
 import { requireStaff, requireStaffAction } from './lib/security'
 import { query, mutation, action, internalQuery, internalMutation, type ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
-import { v } from "convex/values"
+import { v, ConvexError } from "convex/values"
 import { sendUazapiInteractiveMessage, normalizeWhatsAppText, sanitizeUazapiEndpoint, formatDateBR } from "./whatsapp"
 
 export { formatDateBR }
@@ -134,6 +134,43 @@ export const getNotificationStats = query({
       todayCount,
       successRate: Number(successRate.toFixed(1)),
     }
+  },
+})
+
+export const clearNotificationLogs = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    const actor = await requireStaff(ctx, input.sessionToken, ["admin"])
+    const allLogs = await ctx.db.query("notificationLogs").collect()
+    for (const log of allLogs) {
+      await ctx.db.delete(log._id)
+    }
+    await ctx.db.insert("auditLogs", {
+      action: "clear_notification_logs",
+      userName: actor.name,
+      userRole: actor.role,
+      details: `Expurgo administrativo total de ${allLogs.length} registros de log de notificação.`,
+      timestamp: Date.now(),
+    })
+    return { deletedCount: allLogs.length }
+  },
+})
+
+export const deleteNotificationLog = mutation({
+  args: { sessionToken: v.string(), id: v.id("notificationLogs") },
+  handler: async (ctx, input) => {
+    const actor = await requireStaff(ctx, input.sessionToken, ["admin"])
+    const log = await ctx.db.get(input.id)
+    if (!log) throw new ConvexError("Registro de log não encontrado.")
+    await ctx.db.delete(input.id)
+    await ctx.db.insert("auditLogs", {
+      action: "delete_notification_log",
+      userName: actor.name,
+      userRole: actor.role,
+      details: `Exclusão individual de log de notificação: ${log.recipientName} (${log.channel} - ${log.status}).`,
+      timestamp: Date.now(),
+    })
+    return { success: true }
   },
 })
 
@@ -729,6 +766,22 @@ export const sendScheduleConfirmationAction = internalAction({
       recipientName: args.patientName,
       phone: args.phone,
       message,
+      triggerType: "confirmacao_agendamento",
+    })
+  },
+})
+
+export const sendQuickBookingSummaryAction = internalAction({
+  args: {
+    patientName: v.string(),
+    phone: v.string(),
+    message: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await sendWhatsAppDirectHelper(ctx, {
+      recipientName: args.patientName,
+      phone: args.phone,
+      message: args.message,
       triggerType: "confirmacao_agendamento",
     })
   },

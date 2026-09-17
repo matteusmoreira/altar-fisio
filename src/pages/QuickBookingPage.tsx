@@ -26,7 +26,8 @@ import { QuickPatientForm } from '@/components/quickBooking/QuickPatientForm'
 import { WeeklyScheduleGrid, type GridSlot, type SelectedSlot } from '@/components/quickBooking/WeeklyScheduleGrid'
 import { RoomDrawer } from '@/components/quickBooking/RoomDrawer'
 import { ConfirmBookingModal } from '@/components/quickBooking/ConfirmBookingModal'
-import { WhatsAppCountdownToast } from '@/components/quickBooking/WhatsAppCountdownToast'
+import { WhatsAppSummaryModal, type WhatsAppScheduleItem } from '@/components/quickBooking/WhatsAppSummaryModal'
+import { monthDates } from '../../shared/monthlySchedule'
 import {
   getTodayDateString,
   addDaysSafe,
@@ -118,9 +119,11 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // State: WhatsApp
-  const [showWhatsAppToast, setShowWhatsAppToast] = useState(false)
+  // State: WhatsApp Summary Modal
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
+  const [whatsAppScheduleItems, setWhatsAppScheduleItems] = useState<WhatsAppScheduleItem[]>([])
   const [lastBookingResult, setLastBookingResult] = useState<{ scheduleIds: string[] } | null>(null)
+  const [whatsAppSuccessToast, setWhatsAppSuccessToast] = useState(false)
 
   // State: Remarcação
   const [reschedulingParticipant, setReschedulingParticipant] = useState<{
@@ -129,6 +132,8 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   } | null>(null)
 
   // ─── Queries ────────────────────────────────────────────────────────────
+
+  const clinicSettings = useQuery(api.clinic.getSettings, {})
 
   const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
   const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0
@@ -264,10 +269,43 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         month: isRecurring ? month : undefined,
       })
 
+      if (!result.scheduleIds || result.scheduleIds.length === 0) {
+        if (result.errors && result.errors.length > 0) {
+          alert(`Não foi possível realizar os agendamentos:\n${result.errors.join('\n')}`)
+        } else {
+          alert('Nenhum horário pôde ser agendado.')
+        }
+        return
+      }
+
+      const bookedItems: WhatsAppScheduleItem[] = isRecurring
+        ? selectedSlots.flatMap((slot) => {
+            const dates = monthDates(month, [slot.dayOfWeek])
+            return dates.map((date) => ({
+              date,
+              dayOfWeek: slot.dayOfWeek,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              specialty: slot.specialty,
+              roomName: slot.roomName,
+              professionalName: slot.professionalName,
+            }))
+          })
+        : selectedSlots.map((slot) => ({
+            date: slot.day,
+            dayOfWeek: slot.dayOfWeek,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            specialty: slot.specialty,
+            roomName: slot.roomName,
+            professionalName: slot.professionalName,
+          }))
+
       setLastBookingResult({ scheduleIds: result.scheduleIds })
+      setWhatsAppScheduleItems(bookedItems)
       setShowConfirm(false)
       setSelectedSlots([])
-      setShowWhatsAppToast(true)
+      setShowWhatsAppModal(true)
 
       if (result.errors.length > 0) {
         alert(`Agendamento criado com ${result.errors.length} avisos:\n${result.errors.join('\n')}`)
@@ -279,20 +317,23 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
     }
   }, [selectedPatientId, selectedPackageId, selectedSlots, isRecurring, month, confirmBooking])
 
-  const handleWhatsAppComplete = useCallback(() => {
+  const handleSendWhatsApp = useCallback(async (customMessage: string) => {
     if (!selectedPatientId || !lastBookingResult) return
-    sendWhatsApp({
-      patientId: selectedPatientId as any,
-      scheduleIds: lastBookingResult.scheduleIds as any[],
-    }).catch(() => {})
-    setShowWhatsAppToast(false)
-    setLastBookingResult(null)
+    try {
+      await sendWhatsApp({
+        patientId: selectedPatientId as any,
+        scheduleIds: lastBookingResult.scheduleIds as any[],
+        customMessage,
+      })
+      setWhatsAppSuccessToast(true)
+      setTimeout(() => setWhatsAppSuccessToast(false), 4000)
+    } catch (e: any) {
+      alert(`Erro ao enviar WhatsApp: ${e.message}`)
+    } finally {
+      setShowWhatsAppModal(false)
+      setLastBookingResult(null)
+    }
   }, [selectedPatientId, lastBookingResult, sendWhatsApp])
-
-  const handleWhatsAppCancel = useCallback(() => {
-    setShowWhatsAppToast(false)
-    setLastBookingResult(null)
-  }, [])
 
   // Auto-seleciona pacote caso o paciente tenha apenas um ativo
   useEffect(() => {
@@ -779,13 +820,29 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         isLoading={isSubmitting}
       />
 
-      {/* ─── TOAST COM TIMER DE 5S DO WHATSAPP ─── */}
-      <WhatsAppCountdownToast
-        visible={showWhatsAppToast}
+      {/* ─── MODAL DE CONFIRMAÇÃO DO RESUMO WHATSAPP ─── */}
+      <WhatsAppSummaryModal
+        open={showWhatsAppModal}
+        onClose={() => {
+          setShowWhatsAppModal(false)
+          setLastBookingResult(null)
+        }}
+        onSend={handleSendWhatsApp}
         patientName={patientContext?.patient.name || ''}
-        onCancel={handleWhatsAppCancel}
-        onComplete={handleWhatsAppComplete}
+        patientPhone={patientContext?.patient.phone}
+        clinicName={clinicSettings?.clinicName || 'Altar Fisio'}
+        noticeHours={clinicSettings?.cancellationNoticeHours ?? 2}
+        items={whatsAppScheduleItems}
       />
+
+      {whatsAppSuccessToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+          <div className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs sm:text-sm font-medium">
+            <Check className="h-4 w-4" />
+            <span>WhatsApp com o resumo dos agendamentos enviado com sucesso!</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

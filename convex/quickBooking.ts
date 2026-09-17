@@ -491,12 +491,13 @@ export const addToWaitlistQuick = mutation({
   },
 })
 
-/** Enviar confirmação WhatsApp consolidada com todos os horários via Scheduler interno */
+/** Enviar confirmação WhatsApp consolidada com resumo de todos os horários via Scheduler interno */
 export const sendQuickBookingWhatsApp = mutation({
   args: {
     sessionToken: v.string(),
     patientId: v.id('patients'),
     scheduleIds: v.array(v.id('schedules')),
+    customMessage: v.optional(v.string()),
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
@@ -505,26 +506,44 @@ export const sendQuickBookingWhatsApp = mutation({
     const patient = await ctx.db.get(args.patientId)
     if (!patient?.phone) return { success: false, error: 'Paciente sem telefone cadastrado.' }
 
-    // Agenda confirmação para cada sessão agendada de forma transacional e confiável
-    for (const scheduleId of args.scheduleIds) {
-      const schedule = await ctx.db.get(scheduleId)
-      if (!schedule) continue
+    let messageToSend = args.customMessage?.trim()
 
-      const room = await ctx.db.get(schedule.roomId)
-      const prof = await ctx.db.get(schedule.professionalId)
+    if (!messageToSend) {
+      const schedules = []
+      for (const scheduleId of args.scheduleIds) {
+        const schedule = await ctx.db.get(scheduleId)
+        if (schedule) schedules.push(schedule)
+      }
+      schedules.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
 
-      await ctx.scheduler.runAfter(0, internal.notifications.sendScheduleConfirmationAction, {
-        patientName: patient.name,
-        phone: patient.phone,
-        serviceName: schedule.title,
-        professionalName: prof?.name || 'Profissional',
-        date: schedule.date,
-        startTime: schedule.startTime,
-        endTime: schedule.endTime,
-        roomName: room?.name || 'Sala',
-      })
+      const settings = await ctx.db.query('clinicSettings').first()
+      const clinicName = settings?.clinicName || 'Altar Fisio'
+      const noticeHours = settings?.cancellationNoticeHours ?? 2
+
+      const firstSchedule = schedules[0]
+      const prof = firstSchedule ? await ctx.db.get(firstSchedule.professionalId) : null
+      const room = firstSchedule ? await ctx.db.get(firstSchedule.roomId) : null
+
+      const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+      const datesList = schedules.map(s => {
+        const [y, m, d] = s.date.split('-').map(Number)
+        const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+        const dayName = DAY_NAMES[dateObj.getUTCDay()]
+        const formattedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+        return `• ${dayName}, ${formattedDate} às ${s.startTime}`
+      }).join('\n')
+
+      messageToSend = `Olá, *${patient.name}*! 🎉\n\nConfirmamos seus agendamentos na *${clinicName}*:\n\n📌 *Atividade:* ${firstSchedule?.title || 'Sessão'}\n👨‍⚕️ *Profissional:* ${prof?.name || 'Profissional'}\n📍 *Local:* ${room?.name || 'Sala Clínica'}\n\n🗓 *Datas e Horários Marcados:* (${schedules.length} sessões)\n${datesList}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
     }
+
+    // Dispara APENAS 1 mensagem de WhatsApp com o resumo consolidado
+    await ctx.scheduler.runAfter(0, internal.notifications.sendQuickBookingSummaryAction, {
+      patientName: patient.name,
+      phone: patient.phone,
+      message: messageToSend,
+    })
 
     return { success: true }
   },
 })
+

@@ -1,5 +1,4 @@
 import { ClinicalSpecialtiesManager } from '@/components/settings/ClinicalSpecialtiesManager'
-import { LegacyClassServices } from '@/components/schedule/LegacyClassServices'
 import { PortalBookingSettings } from '@/components/patients/PortalMessage'
 import React, { useState, useEffect } from "react"
 import { useTheme, PRESET_COLORS, type ColorPreset, normalizeToHex } from "@/contexts/ThemeContext"
@@ -268,7 +267,6 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       <PortalBookingSettings />
-      <LegacyClassServices />
       <ClinicalSpecialtiesManager variant="card" onSaved={() => showToast("Especialidades clínicas salvas com sucesso!")} />
       <form onSubmit={handleSave} className="space-y-6">
         {/* Card 1: Identidade Visual e Cores */}

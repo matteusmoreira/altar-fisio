@@ -141,6 +141,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           roomColor: s.roomColor,
           professionalName: s.professionalName,
           recurringGroupId: s.recurringGroupId,
+          isRecurring: s.isRecurring,
           status: participant.status,
           checkedInAt: participant.checkedInAt,
           notes: participant.notes,
@@ -148,6 +149,14 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime))
   }, [storedPatientSchedules, patient])
+
+  // Próximos agendamentos futuros do paciente (para visualização imediata)
+  const upcomingSchedules = useMemo(() => {
+    const today = getTodayDateString()
+    return patientSchedules
+      .filter((s) => s.date >= today && (s.status === "scheduled" || s.status === "replacement"))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+  }, [patientSchedules])
 
   // Métricas de Presença e Assiduidade
   const attendanceStats = useMemo(() => {
@@ -183,15 +192,17 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     }
   }, [patientSchedules])
 
-  // Identificação de Turmas Fixas / Regulares
+  // Identificação de Turmas Fixas / Regulares / Séries Recorrentes
   const activeTurmas = useMemo(() => {
     if (!patient) return []
     const today = getTodayDateString()
 
-    // Filtra agendamentos do tipo "turma"
-    const turmaSchedules = patientSchedules.filter((s) => s.type === "turma")
+    // Filtra agendamentos do tipo "turma" ou criados como série recorrente
+    const turmaSchedules = patientSchedules.filter(
+      (s) => s.type === "turma" || s.recurringGroupId || s.isRecurring
+    )
 
-    // Agrupa por assinatura única: título + horário + sala + profissional
+    // Agrupa por assinatura única da série ou título + horário + sala
     const groups: {
       [key: string]: {
         title: string
@@ -209,7 +220,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     } = {}
 
     turmaSchedules.forEach((s) => {
-      const key = `${s.title}|${s.startTime}|${s.endTime}|${s.roomName}`
+      const key = s.recurringGroupId || `${s.title}|${s.startTime}|${s.endTime}|${s.roomName}`
       const d = new Date(s.date + "T12:00:00")
       const dayOfWeek = d.getDay()
 
@@ -747,6 +758,98 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Próximas Sessões Marcadas & Visão dos Horários */}
+                <Card className="border-border shadow-xs">
+                  <CardHeader className="p-4 pb-3 border-b border-border/60 flex flex-row items-center justify-between">
+                    <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                      <span>Próximas Sessões Marcadas ({upcomingSchedules.length})</span>
+                    </CardTitle>
+                    {upcomingSchedules.length > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setActiveTab("classes")
+                          setAttendanceFilter("scheduled")
+                        }}
+                        className="h-6 text-[11px] text-primary hover:text-primary/80 gap-1 px-2"
+                      >
+                        <span>Ver todas na aba Turmas</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-2.5">
+                    {upcomingSchedules.length === 0 ? (
+                      <div className="py-6 text-center text-muted-foreground">
+                        <Calendar className="h-7 w-7 mx-auto mb-1.5 opacity-40 text-muted-foreground" />
+                        <p className="text-xs font-medium text-foreground">Nenhuma sessão futura agendada</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Para marcar novas sessões, acesse a Agenda ou o Agendamento Rápido.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {upcomingSchedules.slice(0, 6).map((sched, idx) => {
+                          const [y, m, d] = sched.date.split('-').map(Number)
+                          const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+                          const dayName = SHORT_DAY_NAMES[dateObj.getUTCDay()]
+                          const formattedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
+
+                          return (
+                            <div
+                              key={idx}
+                              className="p-3 rounded-xl border border-border/70 bg-card hover:border-primary/40 transition-colors space-y-1 text-xs relative overflow-hidden shadow-2xs"
+                            >
+                              <div
+                                className="absolute top-0 left-0 bottom-0 w-1"
+                                style={{ backgroundColor: sched.roomColor || 'var(--primary)' }}
+                              />
+                              <div className="pl-1.5">
+                                <div className="flex items-center justify-between gap-1 font-semibold text-foreground">
+                                  <span className="flex items-center gap-1.5">
+                                    <Clock className="h-3 w-3 text-primary" />
+                                    <span>{dayName}, {formattedDate}</span>
+                                  </span>
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-primary/5 text-primary border-primary/20">
+                                    {sched.startTime}
+                                  </Badge>
+                                </div>
+                                <div className="text-[11px] font-medium text-foreground/90 mt-1 truncate">
+                                  {sched.title}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground truncate flex items-center justify-between mt-1 pt-1 border-t border-border/40">
+                                  <span>{sched.professionalName}</span>
+                                  <span>{sched.roomName}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {upcomingSchedules.length > 6 && (
+                      <div className="text-center pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setActiveTab("classes")
+                            setAttendanceFilter("scheduled")
+                          }}
+                          className="text-[11px] h-7 gap-1"
+                        >
+                          <span>+ {upcomingSchedules.length - 6} sessões agendadas. Ver lista completa</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* ========================================================= */}

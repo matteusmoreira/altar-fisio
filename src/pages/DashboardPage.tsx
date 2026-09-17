@@ -30,6 +30,7 @@ import {
   Zap,
   CalendarCheck,
   UserX,
+  Users,
 } from "lucide-react"
 
 interface DashboardPageProps {
@@ -229,6 +230,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         ? currentActive.participants.filter((p) => p.status !== "justified_absence").length
         : 0
 
+      // Próxima sessão do dia caso a sala esteja livre agora
+      const nextActive = !currentActive
+        ? [...roomSchedules]
+            .filter((s) => s.startTime > currentTime)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime))[0] ?? null
+        : null
+
       const totalStudentsToday = roomSchedules.reduce(
         (acc, s) =>
           acc + s.participants.filter((p) => p.status !== "justified_absence").length,
@@ -238,17 +246,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       const occupancyPct =
         totalCapacityRoom > 0 ? Math.round((totalStudentsToday / totalCapacityRoom) * 100) : 0
 
+      const vacanciesNow = Math.max(0, room.capacity - currentOccupied)
+      const occupancyNowPct =
+        room.capacity > 0 ? Math.min(100, Math.round((currentOccupied / room.capacity) * 100)) : 0
+      const isCurrentlyInUse = Boolean(currentActive)
+      const isFullNow = isCurrentlyInUse && currentOccupied >= room.capacity
+
       return {
         ...room,
         schedulesCount: roomSchedules.length,
         currentOccupied,
+        vacanciesNow,
+        occupancyNowPct,
         totalStudentsToday,
         totalCapacityRoom,
         occupancyPct,
-        isCurrentlyInUse: Boolean(currentActive),
+        isCurrentlyInUse,
+        isFullNow,
+        currentActive,
+        nextActive,
       }
     })
   }, [rooms, todaySchedules, currentTime])
+
+  // Contagem de salas com aula agora
+  const roomsInUseCount = useMemo(() => {
+    return realRoomStats.filter((r) => r.isCurrentlyInUse).length
+  }, [realRoomStats])
 
   // Ações Rápidas
   const handleCheckInToggle = async (
@@ -400,15 +424,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <span>Novo Paciente</span>
           </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onNavigate("clinical")}
-            className="gap-2 rounded-xl text-xs h-9 px-3.5 hover:bg-muted hidden sm:inline-flex"
-          >
-            <FileText className="h-4 w-4 text-sky-600" />
-            <span>Lançar SOAP</span>
-          </Button>
 
           <Button
             size="sm"
@@ -635,7 +650,230 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. SPOTLIGHT "AGORA NA CLÍNICA / PRÓXIMO ATENDIMENTO"                      */}
+      {/* 4. PAINEL DE ALTO DESTAQUE: LOTAÇÃO DAS SALAS EM TEMPO REAL               */}
+      {/* ========================================================================= */}
+      <div className="space-y-3 bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/50">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+              <Building className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold tracking-tight text-foreground">
+                  Lotação das Salas
+                </h2>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  Tempo Real
+                </span>
+                {roomsInUseCount > 0 ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {roomsInUseCount} de {rooms.length} sala(s) em atendimento agora
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                    Salas disponíveis no momento
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Ocupação física instantânea e capacidade acumulada do dia
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate("classes")}
+            className="text-xs font-semibold rounded-xl h-8 px-3 gap-1.5 self-start sm:self-auto hover:bg-muted"
+          >
+            <span>Gerenciar Salas & Turmas</span>
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+        </div>
+
+        {/* Grade de Cards das Salas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          {realRoomStats.map((room) => {
+            const roomBorderColor = room.color || "#10b981"
+            return (
+              <Card
+                key={room.id}
+                className="relative overflow-hidden rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all bg-background/60 flex flex-col justify-between"
+              >
+                {/* Linha superior de destaque na cor configurada da sala */}
+                <div
+                  className="h-1.5 w-full shrink-0"
+                  style={{ backgroundColor: roomBorderColor }}
+                />
+
+                <CardContent className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                  {/* Cabeçalho do Card da Sala */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: roomBorderColor }}
+                        />
+                        <h3 className="font-bold text-sm text-foreground truncate" title={room.name}>
+                          {room.name}
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Capacidade física:{" "}
+                        <strong className="font-semibold text-foreground">{room.capacity} alunos</strong>
+                      </p>
+                    </div>
+
+                    {/* Badge Semântico de Status */}
+                    <div className="shrink-0">
+                      {room.isFullNow ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                          Lotada
+                        </span>
+                      ) : room.isCurrentlyInUse ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Em uso
+                        </span>
+                      ) : room.schedulesCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                          Disponível
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          Sem turmas hoje
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bloco de Lotação: Grande Indicador Numérico e Barra de Progresso */}
+                  <div className="space-y-1.5 bg-muted/30 p-2.5 rounded-xl border border-border/40">
+                    <div className="flex items-baseline justify-between">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black tracking-tight text-foreground">
+                          {room.currentOccupied}
+                        </span>
+                        <span className="text-muted-foreground font-semibold text-sm">
+                          /{room.capacity}
+                        </span>
+                        <span className="text-[11px] font-normal text-muted-foreground ml-1">
+                          agora
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-right">
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                            room.isFullNow
+                              ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                              : room.isCurrentlyInUse
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {room.occupancyNowPct}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Barra de Progresso Encorpada com a cor da sala */}
+                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(room.occupancyNowPct, room.currentOccupied > 0 ? 8 : 0)
+                          )}%`,
+                          backgroundColor: roomBorderColor,
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] pt-0.5">
+                      <span className="text-muted-foreground">
+                        {room.vacanciesNow > 0 ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {room.vacanciesNow} vaga(s) livre(s) agora
+                          </span>
+                        ) : (
+                          <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                            Capacidade atingida
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground/80">
+                        Lotação instantânea
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contexto Operacional: Sessão Atual ou Próxima */}
+                  <div className="text-xs rounded-xl bg-muted/20 p-2.5 border border-border/40 space-y-1">
+                    {room.currentActive ? (
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-semibold text-foreground truncate max-w-[170px]" title={room.currentActive.title}>
+                            {room.currentActive.title}
+                          </span>
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-background border border-border/60">
+                            {room.currentActive.startTime} - {room.currentActive.endTime}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          Com <strong className="text-foreground font-medium">{room.currentActive.professionalName}</strong> •{" "}
+                          {room.currentActive.participants.filter((p) => p.status === "present").length}/{room.currentActive.participants.length} presentes
+                        </p>
+                      </div>
+                    ) : room.nextActive ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <div className="truncate">
+                          <span className="text-muted-foreground text-[10px]">A seguir: </span>
+                          <span className="font-semibold text-foreground truncate" title={room.nextActive.title}>
+                            {room.nextActive.title}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[10px] font-bold text-primary shrink-0">
+                          {room.nextActive.startTime}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                        <span>Livre no momento</span>
+                        <span className="text-[10px] text-muted-foreground/80">
+                          {room.schedulesCount > 0 ? "Sem mais turmas hoje" : "Sem turmas hoje"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rodapé do Card: Estatísticas Acumuladas de Hoje */}
+                  <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1 truncate">
+                      <Users className="h-3 w-3 text-muted-foreground/70 shrink-0" />
+                      <span>
+                        <strong className="font-semibold text-foreground">{room.totalStudentsToday}</strong> alunos hoje
+                      </span>
+                    </span>
+                    <span className="text-[10px] font-medium bg-muted/60 px-2 py-0.5 rounded-md shrink-0">
+                      {room.schedulesCount} turma(s)
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 5. SPOTLIGHT "AGORA NA CLÍNICA / PRÓXIMO ATENDIMENTO"                      */}
       {/* ========================================================================= */}
       {spotlightSession && (
         <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-4 sm:p-5 shadow-xs">
@@ -1084,84 +1322,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
 
         {/* ======================================================================= */}
-        {/* COLUNA 3: CAPACIDADE DAS SALAS, STATUS UAZAPI & ATALHOS CLÍNICOS        */}
+        {/* COLUNA 3: CENTRAL WHATSAPP & AÇÕES RÁPIDAS DA CLÍNICA                    */}
         {/* ======================================================================= */}
         <div className="space-y-6">
-          {/* Card: Ocupação Real das Salas Físicas */}
-          <Card className="rounded-2xl border-border/80 shadow-2xs">
-            <CardHeader className="p-4 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Building className="h-4 w-4 text-primary" />
-                  <span>Lotação das Salas</span>
-                </CardTitle>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  Tempo Real
-                </span>
-              </div>
-              <CardDescription className="text-xs">
-                Ocupação física atual e capacidade acumulada hoje
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4">
-              {realRoomStats.map((room) => {
-                return (
-                  <div key={room.id} className="space-y-1.5 p-2 rounded-xl bg-muted/20 border border-border/40">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-foreground flex items-center gap-1.5 truncate max-w-[170px]">
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: room.color }}
-                        />
-                        <span className="truncate">{room.name}</span>
-                      </span>
-                      <span className="text-[11px] font-mono font-semibold text-foreground">
-                        {room.currentOccupied}/{room.capacity}{" "}
-                        <span className="text-muted-foreground font-normal">agora</span>
-                      </span>
-                    </div>
-
-                    {/* Barra de Progresso Real */}
-                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.round((room.currentOccupied / room.capacity) * 100)
-                          )}%`,
-                          backgroundColor: room.color,
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>
-                        {room.isCurrentlyInUse ? (
-                          <span className="text-emerald-600 font-semibold">● Em uso</span>
-                        ) : (
-                          <span>Disponível</span>
-                        )}
-                      </span>
-                      <span>
-                        {room.totalStudentsToday} alunos atendidos hoje ({room.schedulesCount} turmas)
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onNavigate("classes")}
-                className="w-full text-xs font-semibold rounded-xl h-9 mt-2 gap-1.5"
-              >
-                <span>Gerenciar Salas e Turmas</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </CardContent>
-          </Card>
 
           {/* Card: Central Omnicanal WhatsApp (UAZAPI) */}
           <Card className="rounded-2xl border-border/80 shadow-2xs bg-gradient-to-br from-card via-card to-emerald-500/5">

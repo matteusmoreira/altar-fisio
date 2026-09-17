@@ -209,6 +209,12 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "admin",
     "reception"
   ],
+  "notifications:clearNotificationLogs": [
+    "admin"
+  ],
+  "notifications:deleteNotificationLog": [
+    "admin"
+  ],
   "notifications:sendWhatsAppNotificationAction": [
     "admin",
     "reception"
@@ -348,6 +354,11 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "reception"
   ],
   "schedules:listSchedulesByDateRange": [
+    "admin",
+    "professional",
+    "reception"
+  ],
+  "schedules:listSchedulesForPatient": [
     "admin",
     "professional",
     "reception"
