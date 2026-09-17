@@ -64,14 +64,17 @@ export const ScheduleMetricsBar: React.FC<ScheduleMetricsBarProps> = ({
         </div>
       </div>
 
-      {/* Alunos Agendados */}
-      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-muted/30 border border-border/40">
+      {/* Vagas Ocupadas */}
+      <div 
+        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-muted/30 border border-border/40"
+        title={`${metrics.totalEnrolled} vaga(s) ocupada(s) em ${metrics.totalSessions} sessão(ões) (${metrics.uniquePatientsCount} ${metrics.uniquePatientsCount === 1 ? 'paciente único' : 'pacientes únicos'})`}
+      >
         <div className="h-8 w-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
           <Users className="h-4 w-4" />
         </div>
         <div className="min-w-0">
           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">
-            Alunos / Vagas
+            Vagas Ocupadas
           </p>
           <p className="text-sm sm:text-base font-extrabold text-foreground leading-tight">
             {metrics.totalEnrolled}{" "}

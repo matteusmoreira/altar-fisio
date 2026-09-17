@@ -1,5 +1,14 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Clareza Métrica na Agenda: Vagas Ocupadas vs Cadastros de Pacientes
+- **Ponto de Fricção**:
+  1. Na barra de métricas da Agenda (`ScheduleMetricsBar.tsx`), o card de ocupação exibia o rótulo `"Alunos / Vagas"` com a contagem total de matrículas somadas em todas as sessões do período selecionado (ex: 17 agendamentos em 40 sessões no mês para 2 pacientes com aulas recorrentes).
+  2. Isso gerava discrepância cognitiva com a tela "Pacientes & Alunos", que exibia apenas 2 pacientes cadastrados, levando o usuário a crer que o sistema estava exibindo 17 pacientes cadastrados em vez de 17 vagas preenchidas.
+- **Mitigação / Regra**:
+  1. No `ScheduleMetricsBar.tsx`, substituir o rótulo para `"Vagas Ocupadas"` (mantendo coerência direta com o card vizinho `"Vagas Livres"` e a taxa de `"Ocupação"`).
+  2. Adicionar tooltip semântico no card informando o total de vagas ocupadas e a quantidade de pacientes únicos atendidos no período (ex: `17 vaga(s) ocupada(s) em 40 sessão(ões) (2 pacientes únicos)`).
+- **Validação**: Novo teste unitário em `tests/schedule-metrics-bar.test.tsx` cobrindo o novo rótulo, cálculos de métricas e ausência de `"Alunos / Vagas"`. 287 testes Vitest em 52 arquivos e 3 testes de service worker aprovados com 100% de sucesso. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint aprovados com 0 erros.
+
 ### [2026-09-17] Provisionamento de Usuário Administrador e Escapamento de Argumentos JSON no PowerShell
 - **Ponto de Fricção**:
   1. Ao executar comandos do CLI do Convex (`npx convex run [action] [args]`) via PowerShell no Windows para provisionar usuários com senhas complexas que incluem `@` (ex: `@clinica2026`), o PowerShell interpreta o `@` como operador de splatting/array caso não esteja explicitamente entre aspas, e ao passar argumentos JSON com aspas simples `'{"..."}'`, o PowerShell remove as aspas internas antes de entregar ao binário, causando erro de parsing de JSON5.
