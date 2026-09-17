@@ -143,7 +143,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   const confirmBooking = useMutation(api.quickBooking.confirmQuickBooking)
   const reschedule = useMutation(api.quickBooking.rescheduleParticipant)
   const addToWaitlist = useMutation(api.quickBooking.addToWaitlistQuick)
-  const sendWhatsApp = useAction(api.quickBooking.sendQuickBookingWhatsApp)
+  const sendWhatsApp = useMutation(api.quickBooking.sendQuickBookingWhatsApp)
 
   // ─── Derived ──────────────────────────────────────────────────────────
 

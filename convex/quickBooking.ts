@@ -1,14 +1,14 @@
 import { v, ConvexError } from 'convex/values'
-import { query, mutation, action, internalQuery } from './_generated/server'
+import { query, mutation } from './_generated/server'
 import { internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
-import { requireStaff, requireStaffAction } from './lib/security'
+import { requireStaff } from './lib/security'
 import { occupiesSeat } from '../shared/scheduleOccupancy'
 import { checkTimeOverlap } from './schedules'
 import { sliceTimeWindowIntoSlots } from './availability'
 import { getPackageBookingBalance } from './lib/packageBookingBalance'
 import { cancelParticipantJobs, prepareReminders } from './lib/appointmentJobs'
-import { processWaitlist } from './lib/waitlist'
+import { enterWaitlist, processWaitlist } from './lib/waitlist'
 import { monthDates } from '../shared/monthlySchedule'
 
 // ─── Queries ────────────────────────────────────────────────────────────────
@@ -210,9 +210,10 @@ export const getPatientBookingContext = query({
       activePackages.map(async pkg => {
         const balance = await getPackageBookingBalance(ctx, pkg)
         const service = pkg.serviceId ? await ctx.db.get(pkg.serviceId) : null
+        const packDef = pkg.packageId ? await ctx.db.get(pkg.packageId) : null
         return {
           id: pkg._id,
-          serviceName: service?.name || pkg.packageName || 'Pacote',
+          serviceName: service?.name || packDef?.name || 'Pacote',
           specialty: service?.specialty || '',
           totalSessions: pkg.totalSessions,
           usedSessions: pkg.usedSessions,
@@ -436,7 +437,7 @@ export const rescheduleParticipant = mutation({
   },
 })
 
-/** Adicionar à fila de espera */
+/** Adicionar à fila de espera utilizando crédito de reposição disponível */
 export const addToWaitlistQuick = mutation({
   args: {
     sessionToken: v.string(),
@@ -476,32 +477,22 @@ export const addToWaitlistQuick = mutation({
       throw new ConvexError('Identificador da sessão não encontrado para a fila de espera.')
     }
 
-    // Verifica se já está na fila
-    const existing = await ctx.db.query('waitlistEntries')
-      .filter(q => q.and(
-        q.eq(q.field('patientId'), args.patientId),
-        q.eq(q.field('scheduleId'), targetScheduleId),
-        q.eq(q.field('status'), 'waiting')
-      ))
+    // Busca crédito de reposição ativo do paciente
+    const credit = await ctx.db.query('replacementCredits')
+      .withIndex('by_patient_status', q => q.eq('patientId', args.patientId).eq('status', 'available'))
       .first()
 
-    if (existing) throw new ConvexError('Paciente já está na fila de espera para este horário.')
+    if (!credit) {
+      throw new ConvexError('Para entrar na fila de espera automática, o paciente precisa ter um crédito de reposição disponível.')
+    }
 
-    await ctx.db.insert('waitlistEntries', {
-      patientId: args.patientId,
-      scheduleId: targetScheduleId,
-      status: 'waiting',
-      joinedAt: Date.now(),
-    })
-
-    return { success: true, scheduleId: targetScheduleId }
+    const waitlistId = await enterWaitlist(ctx, args.patientId, credit._id, targetScheduleId)
+    return { success: true, scheduleId: targetScheduleId, waitlistId }
   },
 })
 
-// ─── Actions ────────────────────────────────────────────────────────────────
-
-/** Enviar confirmação WhatsApp consolidada com todos os horários */
-export const sendQuickBookingWhatsApp = action({
+/** Enviar confirmação WhatsApp consolidada com todos os horários via Scheduler interno */
+export const sendQuickBookingWhatsApp = mutation({
   args: {
     sessionToken: v.string(),
     patientId: v.id('patients'),
@@ -509,62 +500,31 @@ export const sendQuickBookingWhatsApp = action({
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaffAction(ctx, sessionToken, ['admin', 'reception'])
+    await requireStaff(ctx, sessionToken, ['admin', 'reception'])
 
-    const patient: any = await ctx.runQuery(internal.quickBooking.getPatientForWhatsApp, { patientId: args.patientId })
+    const patient = await ctx.db.get(args.patientId)
     if (!patient?.phone) return { success: false, error: 'Paciente sem telefone cadastrado.' }
 
-    const results = []
-    // Dispara a confirmação para as sessões agendadas
+    // Agenda confirmação para cada sessão agendada de forma transacional e confiável
     for (const scheduleId of args.scheduleIds) {
-      const schedule: any = await ctx.runQuery(internal.quickBooking.getScheduleForWhatsApp, { scheduleId })
+      const schedule = await ctx.db.get(scheduleId)
       if (!schedule) continue
 
-      try {
-        const result = await ctx.runAction(internal.notifications.sendScheduleConfirmationAction, {
-          patientName: patient.name,
-          phone: patient.phone,
-          serviceName: schedule.title,
-          professionalName: schedule.professionalName,
-          date: schedule.date,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          roomName: schedule.roomName,
-        })
-        results.push(result)
-      } catch (err: any) {
-        results.push({ success: false, error: err.message })
-      }
+      const room = await ctx.db.get(schedule.roomId)
+      const prof = await ctx.db.get(schedule.professionalId)
+
+      await ctx.scheduler.runAfter(0, internal.notifications.sendScheduleConfirmationAction, {
+        patientName: patient.name,
+        phone: patient.phone,
+        serviceName: schedule.title,
+        professionalName: prof?.name || 'Profissional',
+        date: schedule.date,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        roomName: room?.name || 'Sala',
+      })
     }
 
-    return { success: results.some((r: any) => r?.success), results }
-  },
-})
-
-/** Query interna: dados do paciente para WhatsApp */
-export const getPatientForWhatsApp = internalQuery({
-  args: { patientId: v.id('patients') },
-  handler: async (ctx, args) => {
-    const patient = await ctx.db.get(args.patientId)
-    return patient ? { name: patient.name, phone: patient.phone } : null
-  },
-})
-
-/** Query interna: dados do agendamento para WhatsApp */
-export const getScheduleForWhatsApp = internalQuery({
-  args: { scheduleId: v.id('schedules') },
-  handler: async (ctx, args) => {
-    const schedule = await ctx.db.get(args.scheduleId)
-    if (!schedule) return null
-    const room = await ctx.db.get(schedule.roomId)
-    const prof = await ctx.db.get(schedule.professionalId)
-    return {
-      title: schedule.title,
-      date: schedule.date,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
-      roomName: room?.name || 'Sala',
-      professionalName: prof?.name || 'Profissional',
-    }
+    return { success: true }
   },
 })
