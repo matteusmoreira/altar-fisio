@@ -734,16 +734,25 @@ export const disconnectInstanceAction = action({
     if (!instance) throw new Error('Instância não encontrada.')
     const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
-    const res = await fetchUazapi(`${baseUrl}/instance/disconnect`, {
-      method: "POST",
-      headers: { token: resolvedToken },
-      body: {},
-    })
+    let baseUrl: string | null = null
+    try {
+      baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+    } catch {
+      baseUrl = null
+    }
 
-    const isAlreadyGone = res.status === 401 || res.status === 404
-    if (!res.ok && !isAlreadyGone) return { success: false, error: res.error }
+    if (baseUrl) {
+      const res = await fetchUazapi(`${baseUrl}/instance/disconnect`, {
+        method: "POST",
+        headers: { token: resolvedToken },
+        body: {},
+      })
+
+      const isAlreadyGone = res.status === 401 || res.status === 404
+      if (!res.ok && !isAlreadyGone) return { success: false, error: res.error }
+    }
+
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
       token: resolvedToken,
       status: "disconnected",
@@ -768,19 +777,27 @@ export const deleteInstanceAction = action({
     if (!instance) return { success: true }
     const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
-    const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
 
-    // 1. Deleta na Uazapi
-    const res = await fetchUazapi(`${baseUrl}/instance`, {
-      method: "DELETE",
-      headers: { token: resolvedToken },
-    })
+    let baseUrl: string | null = null
+    try {
+      baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
+    } catch {
+      baseUrl = null
+    }
 
-    // Se o provedor retornar 401 ou 404, significa que a instância já foi removida do Uazapi
-    // ou que o token expirou/não existe no provedor.
-    const isAlreadyGoneOnProvider = res.status === 401 || res.status === 404
-    if (!res.ok && !isAlreadyGoneOnProvider && !force) {
-      return { success: false, error: res.error }
+    // 1. Deleta na Uazapi se houver endpoint configurado
+    if (baseUrl) {
+      const res = await fetchUazapi(`${baseUrl}/instance`, {
+        method: "DELETE",
+        headers: { token: resolvedToken },
+      })
+
+      // Se o provedor retornar 401 ou 404, significa que a instância já foi removida do Uazapi
+      // ou que o token expirou/não existe no provedor.
+      const isAlreadyGoneOnProvider = res.status === 401 || res.status === 404
+      if (!res.ok && !isAlreadyGoneOnProvider && !force) {
+        return { success: false, error: res.error }
+      }
     }
 
     // 2. Remove localmente no Convex
