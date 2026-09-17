@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select-native"
 import { useTheme } from "@/contexts/ThemeContext"
+import { useQuery } from "@/lib/staffConvex"
+import { api } from "@convex/_generated/api"
 import { formatDateExtendedBR, formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 import {
   FileText,
@@ -85,6 +87,46 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
   onSaveReport,
 }) => {
   const { theme } = useTheme()
+  const clinicSettings = useQuery(api.clinic.getSettings)
+
+  const clinicDisplayName = theme.clinicName || clinicSettings?.clinicName || "Altar Fisio"
+  const clinicSubtitle = theme.clinicSubtitle || clinicSettings?.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"
+  const clinicLogoUrl = theme.logoUrl || clinicSettings?.logoUrl
+  const clinicPhone = theme.phone || clinicSettings?.phone || ""
+  const clinicAddress = theme.address || clinicSettings?.address || ""
+  const clinicCnpj = theme.cnpj || clinicSettings?.cnpj || ""
+
+  // Derivação das linhas do endereço timbrado
+  const addressLines = useMemo(() => {
+    if (!clinicAddress.trim()) return []
+    if (clinicAddress.includes("\n")) {
+      return clinicAddress.split("\n").map((l) => l.trim()).filter(Boolean)
+    }
+    const lastCommaIndex = clinicAddress.lastIndexOf(",")
+    if (clinicAddress.length > 35 && lastCommaIndex > 10) {
+      const part1 = clinicAddress.slice(0, lastCommaIndex).trim()
+      const part2 = clinicAddress.slice(lastCommaIndex + 1).trim()
+      if (part1 && part2) {
+        return [part1, part2]
+      }
+    }
+    return [clinicAddress.trim()]
+  }, [clinicAddress])
+
+  // Derivação da Cidade - UF para o rodapé timbrado (data e praça)
+  const documentCityState = useMemo(() => {
+    if (!clinicAddress.trim()) return "São Paulo - SP"
+    const match = clinicAddress.match(/(?:,\s*|\s+-\s+|^)([A-Za-zÀ-ÿ\s]+)\s*-\s*([A-Za-z]{2})/i)
+    if (match && match[1] && match[2]) {
+      const city = match[1].trim()
+      const state = match[2].trim().toUpperCase()
+      if (city.length >= 2 && city.length <= 30) {
+        return `${city} - ${state}`
+      }
+    }
+    return "São Paulo - SP"
+  }, [clinicAddress])
+
   const [selectedDocType, setSelectedDocType] = useState<ClinicalDocumentType>("report")
   const [selectedProfId, setSelectedProfId] = useState<string>(
     currentProfessional?.id || professionals[0]?.id || ""
@@ -914,10 +956,10 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center font-bold print:border print:border-black overflow-hidden">
-                      {theme.logoUrl ? (
+                      {clinicLogoUrl ? (
                         <img
-                          src={theme.logoUrl}
-                          alt={theme.clinicName}
+                          src={clinicLogoUrl}
+                          alt={clinicDisplayName}
                           className="h-full w-full object-contain"
                         />
                       ) : (
@@ -926,10 +968,10 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                     </div>
                     <div>
                       <h2 className="text-base font-bold tracking-tight text-foreground uppercase print:text-black">
-                        {theme.clinicName || "Altar Fisio"}
+                        {clinicDisplayName}
                       </h2>
                       <p className="text-[10px] text-muted-foreground tracking-wider uppercase font-medium print:text-gray-600">
-                        {theme.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"}
+                        {clinicSubtitle}
                       </p>
                     </div>
                   </div>
@@ -939,10 +981,19 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                 </div>
 
                 <div className="text-right text-[10px] text-muted-foreground space-y-0.5 print:text-gray-600">
-                  <p className="font-medium text-foreground print:text-black">CNPJ: 45.123.789/0001-90</p>
-                  <p>Av. Paulista, 1000 - Cj. 42 • Bela Vista</p>
-                  <p>São Paulo - SP • CEP 01310-100</p>
-                  <p>Tel/WhatsApp: (11) 99123-4567</p>
+                  {clinicCnpj && (
+                    <p className="font-medium text-foreground print:text-black">CNPJ: {clinicCnpj}</p>
+                  )}
+                  {addressLines.length > 0 ? (
+                    addressLines.map((line, idx) => (
+                      <p key={idx}>{line}</p>
+                    ))
+                  ) : (
+                    <p>Endereço não informado</p>
+                  )}
+                  {clinicPhone && (
+                    <p>Tel/WhatsApp: {clinicPhone}</p>
+                  )}
                 </div>
               </div>
 
@@ -1251,7 +1302,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                           {tcleIncludeBiofoto ? "3" : "2"}. Tratamento de Dados Pessoais e Sensíveis de Saúde (LGPD):
                         </p>
                         <p className="text-muted-foreground print:text-gray-700 leading-relaxed">
-                          Concordo com a coleta e armazenamento de meus dados pessoais e histórico clínico de saúde pela <strong>Altar Fisio</strong>, conforme a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD) e a Resolução COFFITO nº 414/2012, para a finalidade exclusiva de prestação de assistência fisioterapêutica e cumprimento de deveres regulatórios.
+                          Concordo com a coleta e armazenamento de meus dados pessoais e histórico clínico de saúde pela <strong>{clinicDisplayName}</strong>, conforme a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD) e a Resolução COFFITO nº 414/2012, para a finalidade exclusiva de prestação de assistência fisioterapêutica e cumprimento de deveres regulatórios.
                         </p>
                       </div>
 
@@ -1282,7 +1333,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
               {/* Data e Local */}
               <div className="pt-4 text-right text-xs">
                 <p>
-                  São Paulo - SP,{" "}
+                  {documentCityState},{" "}
                   {formatDateExtendedBR(
                     selectedDocType === "report"
                       ? reportDate
@@ -1319,7 +1370,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                 ) : (
                   <div className="text-left text-[10px] text-muted-foreground space-y-1 print:text-gray-600">
                     <p className="font-bold text-foreground print:text-black uppercase">Autenticidade e Rastreabilidade:</p>
-                    <p>Documento emitido digitalmente pela plataforma clínica Altar Fisio.</p>
+                    <p>Documento emitido digitalmente pela plataforma clínica {clinicDisplayName}.</p>
                     <p className="font-mono text-[9px]">Código Hash: {reportToEdit?.documentHash || docHash}</p>
                   </div>
                 )}
@@ -1333,7 +1384,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                   </div>
                   <p className="font-bold text-foreground print:text-black">{activeProf.name}</p>
                   <p className="text-[10px] text-primary font-semibold print:text-black">{activeProf.crefito}</p>
-                  <p className="text-[9px] text-muted-foreground print:text-gray-600">Fisioterapeuta Responsável • Altar Fisio</p>
+                  <p className="text-[9px] text-muted-foreground print:text-gray-600">Fisioterapeuta Responsável • {clinicDisplayName}</p>
                 </div>
               </div>
             </div>

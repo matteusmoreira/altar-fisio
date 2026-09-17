@@ -15,6 +15,7 @@ export default defineSchema({
     logoStorageId: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
+    cnpj: v.optional(v.string()),
     portalBookingEnabled: v.optional(v.boolean()),
     portalBookingMessage: v.optional(v.array(v.object({ type: v.union(v.literal("paragraph"), v.literal("bullet")), runs: v.array(v.object({ text: v.string(), bold: v.optional(v.boolean()), italic: v.optional(v.boolean()), href: v.optional(v.string()) })) }))),
     healthInsuranceOptions: v.optional(v.array(v.string())),

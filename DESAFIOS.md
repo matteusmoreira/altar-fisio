@@ -1,5 +1,51 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Exibição Confiável do Logotipo no Menu Lateral (Eliminação de Blobs no LocalStorage e Precedência do Servidor)
+- **Ponto de Fricção**:
+  1. Ao trocar o logotipo da clínica via upload em `SettingsPage.tsx`, o arquivo era enviado com sucesso ao Convex Storage (`data.storageId`), mas o estado local mantinha a prévia `URL.createObjectURL(file)` (`blob:http...`).
+  2. Ao clicar em "Salvar Todas as Configurações", a função `updateClinicInfo` repassava o `blob:` temporário para o `ThemeContext`, que o serializava no `localStorage` sob a chave `altar_fisio_theme`.
+  3. No `ThemeContext.tsx`, `userOverrides` lia o `localStorage` na inicialização e o `useMemo` dava precedência absoluta para `userOverrides.logoUrl !== undefined` sobre `serverLogo` vindo do Convex. Como os blobs expiram ou são inválidos após navegação/reloads, a tag `<img>` da sidebar disparava `onError={() => setLogoError(true)}`, ativando o fallback permanente do ícone verde `HeartPulse` com o texto da marca no menu lateral, enquanto na tela de configurações a logo continuava visível (pois lia diretamente `convexSettings.logoUrl`).
+  4. O upload no card de logotipo não gravava a alteração no banco de forma imediata, dependendo de o usuário rolar a página inteira e clicar no botão "Salvar Todas as Configurações" no rodapé.
+- **Mitigação / Regra**:
+  1. No `ThemeContext.tsx`:
+     - O `localStorage` (`altar_fisio_theme`) deve persistir EXCLUSIVAMENTE preferências de cliente do dispositivo (`mode`, `preset`, `customHex`). Dados institucionais (`logoUrl`, `clinicName`, `clinicSubtitle`, `phone`, `address`, `cnpj`) são de autoridade central do banco de dados Convex (`serverLogo`).
+     - Rejeitar na inicialização e na derivação qualquer URL que comece com `blob:`, garantindo que a URL oficial do storage (`serverLogo`) tenha precedência incondicional.
+  2. No `SettingsPage.tsx`:
+     - Implementar persistência imediata no `handleLogoFileUpload` e no `handleApplyCustomUrl`: ao concluir o envio binário para o storage, disparar imediatamente a mutation no Convex, sincronizando a nova logo no menu lateral no mesmo segundo.
+     - No salvamento, garantir que `logoUrl` nunca repasse strings de blob quando `logoStorageId` estiver definido.
+  3. No backend Convex (`convex/clinic.ts`):
+     - Sanitizar `args.logoUrl` em `updateSettings` para descartar qualquer valor `blob:` e limpar o campo caso `logoStorageId` esteja presente.
+     - Em `getSettings` e `getAdminSettings`, nunca expor `blob:`.
+- **Validação**: 2 novos testes dedicados em `tests/theme-logo-resilience.test.tsx` cobrindo sobrevivência contra blobs legados do `localStorage` e ausência de `logoUrl` no storage persistido. 286 testes Vitest em 51 arquivos e 3 testes de service worker aprovados 100%. TypeScript (`tsc -b`), build de produção com Vite e oxlint com 0 erros. Deploy Convex de produção `exuberant-guanaco-180` atualizado.
+
+### [2026-09-17] Dinamização Fidedigna dos Dados da Clínica na Central de Documentos Clínicos e Adição do Campo CNPJ
+- **Ponto de Fricção**:
+  1. Na Central de Emissão de Documentos Clínicos (`DocumentGeneratorModal.tsx`), o cabeçalho timbrado continha dados estáticos/mockados em código (CNPJ `45.123.789/0001-90`, endereço fictício `Av. Paulista, 1000 - Cj. 42 • Bela Vista \n São Paulo - SP • CEP 01310-100` e telefone `(11) 99123-4567`). Mesmo que a clínica configurasse seu endereço e WhatsApp próprios, os documentos gerados continuavam exibindo os dados falsos.
+  2. O schema do Convex (`convex/schema.ts`) e a tela de configurações (`SettingsPage.tsx`) não contemplavam o campo formal de CNPJ da clínica, impossibilitando que o gestor informasse seu registro legal.
+  3. No rodapé dos documentos, a data e praça estavam rigidamente gravadas como `São Paulo - SP, ...`, e o texto de consentimento da LGPD no modelo TCLE citava compulsoriamente a "Altar Fisio", ignorando clínicas que customizaram o nome do estabelecimento no sistema.
+- **Mitigação / Regra**:
+  1. Adicionar o campo `cnpj: v.optional(v.string())` à tabela `clinicSettings` no `convex/schema.ts`, expondo-o nas queries `getSettings`/`getAdminSettings` e na mutação `updateSettings` em `convex/clinic.ts`.
+  2. Criar os helpers universais `normalizeCnpj` e `formatCnpj` em `shared/patientIdentity.ts` e disponibilizar o campo com máscara no formulário de dados da clínica em `SettingsPage.tsx`.
+  3. Estender o `ClinicThemeConfig` e `ThemeContext.tsx` para derivar e propagar reativamente `phone`, `address` e `cnpj`.
+  4. Em `DocumentGeneratorModal.tsx`:
+     - Renderizar dinamicamente o CNPJ (omitindo o bloco caso não esteja configurado, sem exibir dados fictícios).
+     - Quebrar e renderizar de forma harmônica as linhas do endereço oficial configurado.
+     - Exibir o telefone/WhatsApp configurado da clínica.
+     - Derivar a Cidade - UF do endereço oficial da clínica para a praça timbrada de data (ex: `Campinas - SP, 17 de setembro de 2026.`).
+     - Substituir todas as menções estáticas a "Altar Fisio" no TCLE, assinaturas e autenticidade pelo nome oficial configurado da clínica (`clinicDisplayName`).
+- **Validação**: 4 novos testes unitários dedicados em `tests/clinical-document-clinic-info.test.tsx` cobrindo cabeçalho timbrado com CNPJ/endereço/telefone reais, derivação de praça/data, texto LGPD com nome customizado e ausência de dados fictícios quando sem CNPJ. 284 testes Vitest em 50 arquivos e 3 testes de service worker aprovados 100%. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint com 0 erros. Deploy Convex de produção `exuberant-guanaco-180` atualizado com sucesso.
+
+
+- **Ponto de Fricção**:
+  1. No Agendamento Rápido, a mensagem de confirmação enviada pelo WhatsApp utilizava texto fixo no código (`buildDefaultMessage`) e não consultava o template configurado em `clinicSettings.activeConfirmationTemplateId`, fazendo com que alterações salvas em "Modelos de Lembretes" não afetassem as mensagens geradas pelo balcão.
+  2. Na tela de Modelos de Lembretes (`MessageTemplateBuilder.tsx`), os modelos salvos na coluna esquerda não exibiam botão explícito de edição (apenas a lixeira), e o seletor superior ("Ao Agendar:") permitia apenas escolher uma opção, sem atalho direto para abrir o modelo no editor central, dificultando a localização da edição pelo administrador.
+  3. No TypeScript, declarar `let messageToSend = args.customMessage?.trim()` seguido de reatribuição condicional causou erro TS2322 em chamadas de mutation do Convex que exigem `v.string()`. Tipagem explícita com `string = ... || ''` assegura type safety em todo o fluxo.
+- **Mitigação / Regra**:
+  1. Implementar a query protegida `whatsapp:getActiveConfirmationTemplate` e conectar reativamente o modal de resumo (`WhatsAppSummaryModal.tsx`) e a mutation `quickBooking:sendQuickBookingWhatsApp`, interpolando tags inteligentes (`{{paciente}}`, `{{clinica}}`, `{{servico}}`, `{{profissional}}`, `{{sala}}`, `{{regras}}` e `{{datas}}`).
+  2. Na tela de Modelos de Lembretes, adicionar o botão `[ ✏️ Editar ]` ao lado do seletor superior "Ao Agendar" (e demais gatilhos) e em cada card salvo, acompanhado da badge informativa `📌 Ao Agendar (Agendamento Rápido)` e das novas tags (`{{datas}}`, `{{horario_fim}}`, `{{telefone_clinica}}`).
+  3. Quando "Texto Padrão da Clínica" estiver selecionado e o usuário clicar em "Editar", o sistema carrega o preset pronto no editor com a categoria correta para facilitar a customização imediata.
+- **Validação**: 280 testes Vitest em 49 arquivos (incluindo testes dedicados em `tests/quick-booking-whatsapp-summary.test.tsx` e `tests/message-template-builder.test.tsx`) e 3 testes de service worker aprovados 100%. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint com 0 erros. Backend Convex de produção `exuberant-guanaco-180` atualizado com sucesso.
+
 ### [2026-09-17] Remoção de Bloco Invasivo de Falhas de WhatsApp e Expurgos de Jobs na Manutenção do Convex
 - **Ponto de Fricção**:
   1. Na tela de Lembretes WhatsApp/Email (`NotificationsPage.tsx`), o componente `<AppointmentDeliveryProblems />` exibia um card amarelo permanente ("WhatsApp: envios que precisam de atenção") contendo registros repetidos de envios que falharam ou retornaram sem confirmação do provedor ("Envio não confirmado pelo provedor. Confira o WhatsApp antes de reenviar."). Não havia botão para dispensar, descartar ou limpar os avisos, mantendo o card eternamente travado na interface.

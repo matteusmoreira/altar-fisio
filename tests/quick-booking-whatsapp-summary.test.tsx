@@ -119,4 +119,84 @@ describe('WhatsApp Summary Modal & Policy', () => {
     expect(onClose).toHaveBeenCalled()
     expect(onSend).not.toHaveBeenCalled()
   })
+
+  it('uses templateContent and displays templateTitle when active template is configured', () => {
+    const items: WhatsAppScheduleItem[] = [
+      {
+        date: '2026-09-08',
+        dayOfWeek: 2,
+        startTime: '08:00',
+        endTime: '08:50',
+        specialty: 'pilates',
+        professionalName: 'Dr. Marcelo',
+        roomName: 'Studio Pilates',
+      },
+    ]
+
+    const customTemplate = 'Olá, {{paciente}}! Sua sessão de {{servico}} na {{clinica}} está confirmada com {{profissional}} para {{data}} às {{horario}}.'
+
+    render(
+      <WhatsAppSummaryModal
+        open={true}
+        onClose={() => {}}
+        onSend={async () => {}}
+        patientName="Matteus Moreira"
+        patientPhone="22999021889"
+        clinicName="Altar Fisio"
+        items={items}
+        templateContent={customTemplate}
+        templateTitle="Confirmação Imediata Customizada"
+      />
+    )
+
+    expect(screen.getByText(/Baseado no modelo/i)).toBeTruthy()
+    expect(screen.getByText(/"Confirmação Imediata Customizada"/i)).toBeTruthy()
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.value).toContain('Olá, Matteus Moreira!')
+    expect(textarea.value).toContain('Sua sessão de Pilates (Solo & Aparelhos) na Altar Fisio está confirmada com Dr. Marcelo')
+    expect(textarea.value).toContain('08:00')
+  })
+
+  it('interpolates {{datas}} and appends sessions list when multiple sessions are booked', () => {
+    const items: WhatsAppScheduleItem[] = [
+      {
+        date: '2026-09-08',
+        dayOfWeek: 2,
+        startTime: '08:00',
+        endTime: '08:50',
+        specialty: 'pilates',
+      },
+      {
+        date: '2026-09-10',
+        dayOfWeek: 4,
+        startTime: '08:00',
+        endTime: '08:50',
+        specialty: 'pilates',
+      },
+    ]
+
+    const templateWithDatas = 'Olá, *{{paciente}}*! Seus horários marcados na *{{clinica}}* são:\n{{datas}}\n\nTe esperamos!'
+
+    render(
+      <WhatsAppSummaryModal
+        open={true}
+        onClose={() => {}}
+        onSend={async () => {}}
+        patientName="Juliana Mendes"
+        patientPhone="22999021889"
+        clinicName="Altar Fisio"
+        items={items}
+        templateContent={templateWithDatas}
+        templateTitle="Confirmação de Pacote Recorrente"
+      />
+    )
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.value).toContain('Olá, *Juliana Mendes*!')
+    expect(textarea.value).toContain('(2 sessões)')
+    expect(textarea.value).toContain('08/09/2026 às 08:00')
+    expect(textarea.value).toContain('10/09/2026 às 08:00')
+    expect(textarea.value).toContain('Te esperamos!')
+  })
 })

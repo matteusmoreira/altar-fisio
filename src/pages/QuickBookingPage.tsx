@@ -152,6 +152,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   // ─── Queries ────────────────────────────────────────────────────────────
 
   const clinicSettings = useQuery(api.clinic.getSettings, {})
+  const activeConfirmationTemplate = useQuery(api.whatsapp.getActiveConfirmationTemplate, {})
 
   const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
   const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0
@@ -1009,6 +1010,8 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         items={whatsAppScheduleItems}
         initialCustomMessage={rescheduleWhatsAppMessage || undefined}
         title={rescheduleWhatsAppMessage ? 'Confirmar Remarcação no WhatsApp' : undefined}
+        templateContent={activeConfirmationTemplate?.content}
+        templateTitle={activeConfirmationTemplate?.title}
       />
 
       {whatsAppSuccessToast && (

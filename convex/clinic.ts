@@ -32,6 +32,8 @@ export const getSettings = query({
       if (storageUrl) {
         logoUrl = storageUrl
       }
+    } else if (logoUrl?.startsWith("blob:")) {
+      logoUrl = undefined
     }
 
     return {
@@ -42,6 +44,7 @@ export const getSettings = query({
       mode: settings.mode,
       phone: settings.phone,
       address: settings.address,
+      cnpj: settings.cnpj,
       cancellationNoticeHours: settings.cancellationNoticeHours,
       replacementExpiryDays: settings.replacementExpiryDays,
       logoUrl,
@@ -57,7 +60,9 @@ export const getAdminSettings = query({
     if (!settings) return null
     const { uazapiToken, uazapiAdminToken, activeWhatsappInstanceToken, resendApiKey, ...safe } = settings
     return { ...safe,
-      logoUrl: settings.logoStorageId ? await ctx.storage.getUrl(settings.logoStorageId) ?? undefined : settings.logoUrl,
+      logoUrl: settings.logoStorageId
+        ? (await ctx.storage.getUrl(settings.logoStorageId)) ?? undefined
+        : (settings.logoUrl?.startsWith("blob:") ? undefined : settings.logoUrl),
       uazapiConfigured: Boolean(uazapiToken || activeWhatsappInstanceToken),
       uazapiAdminConfigured: Boolean(uazapiAdminToken), resendConfigured: Boolean(resendApiKey),
     }
@@ -215,6 +220,7 @@ export const updateSettings = mutation({
     logoStorageId: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
+    cnpj: v.optional(v.string()),
     cancellationNoticeHours: v.number(),
     replacementExpiryDays: v.number(),
     uazapiEndpoint: v.optional(v.string()),
@@ -238,6 +244,13 @@ export const updateSettings = mutation({
       args.uazapiEndpoint = url.origin
     }
     if (!Number.isFinite(args.cancellationNoticeHours) || args.cancellationNoticeHours < 0 || !Number.isInteger(args.replacementExpiryDays) || args.replacementExpiryDays < 1) throw new Error('Regras de cancelamento inválidas.')
+    if (args.logoUrl?.startsWith("blob:")) {
+      delete args.logoUrl
+    }
+    if (args.logoStorageId) {
+      delete args.logoUrl
+    }
+
     const existing = await ctx.db.query("clinicSettings").first()
     if (existing) {
       // Se a logoStorageId mudou ou foi limpa, deletar o arquivo antigo do storage
@@ -249,7 +262,15 @@ export const updateSettings = mutation({
         await ctx.storage.delete(existing.logoStorageId).catch(() => {})
       }
 
-      await ctx.db.patch(existing._id, args)
+      const patchData: any = { ...args }
+      // Se temos logoStorageId ou o logoUrl anterior era um blob temporário, limpa no banco
+      if (args.logoStorageId || (args.logoStorageId === undefined && existing.logoStorageId)) {
+        if (existing.logoUrl?.startsWith("blob:") || args.logoUrl?.startsWith("blob:")) {
+          patchData.logoUrl = undefined
+        }
+      }
+
+      await ctx.db.patch(existing._id, patchData)
       return existing._id
     } else {
       return await ctx.db.insert("clinicSettings", args)

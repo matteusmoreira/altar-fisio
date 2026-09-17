@@ -3,6 +3,7 @@ import { PortalBookingSettings } from '@/components/patients/PortalMessage'
 import React, { useState, useEffect } from "react"
 import { useTheme, PRESET_COLORS, type ColorPreset, normalizeToHex } from "@/contexts/ThemeContext"
 import { useClinicData } from "@/contexts/ClinicDataContext"
+import { formatCnpj, formatPhone } from "../../shared/patientIdentity"
 import { AuditTrailViewer } from "@/components/clinical/AuditTrailViewer"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
@@ -46,8 +47,9 @@ export const SettingsPage: React.FC = () => {
 
   const [clinicName, setClinicName] = useState(theme.clinicName)
   const [clinicSubtitle, setClinicSubtitle] = useState(theme.clinicSubtitle)
-  const [phone, setPhone] = useState("(11) 98765-4321")
-  const [address, setAddress] = useState("Av. Paulista, 1000 - Bela Vista, São Paulo - SP")
+  const [phone, setPhone] = useState(theme.phone || "(11) 98765-4321")
+  const [address, setAddress] = useState(theme.address || "Av. Paulista, 1000 - Bela Vista, São Paulo - SP")
+  const [cnpj, setCnpj] = useState(theme.cnpj || "")
 
   // Logotipo da Clínica
   const [logoUrl, setLogoUrl] = useState<string | undefined>(theme.logoUrl)
@@ -84,6 +86,7 @@ export const SettingsPage: React.FC = () => {
       if (convexSettings.logoStorageId !== undefined) setLogoStorageId(convexSettings.logoStorageId)
       if (convexSettings.phone) setPhone(convexSettings.phone)
       if (convexSettings.address) setAddress(convexSettings.address)
+      if (convexSettings.cnpj !== undefined) setCnpj(convexSettings.cnpj || "")
       if (convexSettings.cancellationNoticeHours !== undefined)
         setNoticeHours(convexSettings.cancellationNoticeHours)
       if (convexSettings.replacementExpiryDays !== undefined)
@@ -136,7 +139,32 @@ export const SettingsPage: React.FC = () => {
       const data = await response.json()
       if (data && data.storageId) {
         setLogoStorageId(data.storageId)
-        showToast("Logotipo carregado com sucesso! Clique em 'Salvar Todas as Configurações' para consolidar.")
+
+        // Persistência Imediata: Salva o novo logotipo no Convex sem depender de scroll até o rodapé
+        await updateSettingsMutation({
+          clinicName,
+          clinicSubtitle,
+          logoStorageId: data.storageId,
+          primaryColor:
+            theme.preset === "custom"
+              ? normalizeToHex(theme.customHex, "#10b981")
+              : (PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]?.hex || "#10b981"),
+          colorPreset: theme.preset,
+          mode: theme.mode,
+          phone,
+          address,
+          cancellationNoticeHours: noticeHours,
+          replacementExpiryDays: expiryDays,
+          uazapiEndpoint: uazapiEndpoint.trim().includes("api.uazapi.com")
+            ? "https://whatpress.uazapi.com"
+            : (uazapiEndpoint.trim().replace(/\/+$/, "").replace(/\/(v1|api)$/i, "") || "https://whatpress.uazapi.com"),
+          uazapiToken,
+          uazapiAdminToken,
+          uazapiInstanceId,
+          resendApiKey,
+          resendFromEmail,
+        })
+        showToast("Logotipo carregado e atualizado no sistema com sucesso!")
       }
     } catch (err: any) {
       console.error("Erro no upload da logo:", err)
@@ -163,29 +191,65 @@ export const SettingsPage: React.FC = () => {
     }
   }
 
-  const handleApplyCustomUrl = (e: React.FormEvent) => {
+  const handleApplyCustomUrl = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!customUrlValue.trim()) {
+    const trimmed = customUrlValue.trim()
+    if (!trimmed) {
       showToast("Insira uma URL válida para a imagem.")
       return
     }
-    setLogoUrl(customUrlValue.trim())
+    setLogoUrl(trimmed)
     setLogoStorageId(undefined) // Limpa storageId para priorizar a URL direta
     setShowCustomUrlInput(false)
-    showToast("URL do logotipo aplicada! Clique em 'Salvar Todas as Configurações' para consolidar.")
+    updateClinicInfo(clinicName, clinicSubtitle, trimmed)
+
+    try {
+      setIsUploadingLogo(true)
+      await updateSettingsMutation({
+        clinicName,
+        clinicSubtitle,
+        logoUrl: trimmed,
+        logoStorageId: undefined,
+        primaryColor:
+          theme.preset === "custom"
+            ? normalizeToHex(theme.customHex, "#10b981")
+            : (PRESET_COLORS[theme.preset as keyof typeof PRESET_COLORS]?.hex || "#10b981"),
+        colorPreset: theme.preset,
+        mode: theme.mode,
+        phone,
+        address,
+        cancellationNoticeHours: noticeHours,
+        replacementExpiryDays: expiryDays,
+        uazapiEndpoint: uazapiEndpoint.trim().includes("api.uazapi.com")
+          ? "https://whatpress.uazapi.com"
+          : (uazapiEndpoint.trim().replace(/\/+$/, "").replace(/\/(v1|api)$/i, "") || "https://whatpress.uazapi.com"),
+        uazapiToken,
+        uazapiAdminToken,
+        uazapiInstanceId,
+        resendApiKey,
+        resendFromEmail,
+      })
+      showToast("URL do logotipo aplicada e salva no sistema!")
+    } catch (err: any) {
+      showToast("Erro ao salvar URL da logo: " + (err?.message || "Tente novamente."))
+    } finally {
+      setIsUploadingLogo(false)
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
 
-    updateClinicInfo(clinicName, clinicSubtitle, logoUrl)
+    // Se temos logoStorageId, o arquivo no Convex Storage é canônico; nunca enviar blob como logoUrl
+    const effectiveLogoUrl = logoStorageId ? undefined : (logoUrl?.startsWith("blob:") ? undefined : logoUrl)
+    updateClinicInfo(clinicName, clinicSubtitle, effectiveLogoUrl, phone, address, cnpj.trim() || undefined)
 
     try {
       await updateSettingsMutation({
         clinicName,
         clinicSubtitle,
-        logoUrl,
+        logoUrl: effectiveLogoUrl,
         logoStorageId,
         primaryColor:
           theme.preset === "custom"
@@ -195,6 +259,7 @@ export const SettingsPage: React.FC = () => {
         mode: theme.mode,
         phone,
         address,
+        cnpj: cnpj.trim() || undefined,
         cancellationNoticeHours: noticeHours,
         replacementExpiryDays: expiryDays,
         uazapiEndpoint: uazapiEndpoint.trim().includes("api.uazapi.com")
@@ -567,22 +632,31 @@ export const SettingsPage: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="font-semibold text-foreground">WhatsApp da Clínica (Com DDD)</label>
+                <label className="font-semibold text-foreground">CNPJ da Clínica (Opcional)</label>
                 <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(11) 98765-4321"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                  placeholder="00.000.000/0001-00"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-foreground">Endereço Completo</label>
+                <label className="font-semibold text-foreground">WhatsApp da Clínica (Com DDD)</label>
                 <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Av. Paulista, 1000 - São Paulo, SP"
+                  value={phone}
+                  onChange={(e) => setPhone(formatPhone(e.target.value))}
+                  placeholder="(11) 98765-4321"
                 />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground">Endereço Completo</label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
+              />
             </div>
           </CardContent>
         </Card>

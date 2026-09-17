@@ -480,6 +480,7 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "admin"
   ],
   "whatsapp:listTemplates": ["admin", "reception"],
+  "whatsapp:getActiveConfirmationTemplate": ["admin", "reception"],
   "whatsapp:saveTemplate": ["admin", "reception"],
   "whatsapp:deleteTemplate": ["admin", "reception"],
   "whatsapp:assignReminderTemplate": ["admin", "reception"],

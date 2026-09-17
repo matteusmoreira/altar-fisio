@@ -360,6 +360,26 @@ export const MessageTemplateBuilder: React.FC = () => {
     }
   }
 
+  // Carregar modelo atribuído para edição imediata
+  const handleEditAssignedTemplate = (
+    target: "booking_confirmation" | "reminder_24h" | "reminder_1h" | "reminder_30m" | "waitlist_booked",
+    templateId?: any
+  ) => {
+    if (templateId) {
+      const found = templates.find((t) => t._id === templateId)
+      if (found) {
+        handleSelectTemplate(found)
+        showToast(`Modelo "${found.title}" carregado para edição.`)
+        return
+      }
+    }
+    // Se não houver template vinculado, carrega o preset para personalizar
+    setEditingTemplateId(null)
+    setCategory(target)
+    applyCategoryPreset(target)
+    showToast(`Modelo padrão carregado no editor. Personalize e clique em "Salvar Modelo".`)
+  }
+
   // Formatador simples para Preview do WhatsApp (*negrito*, _itálico_)
   const renderFormattedPreview = (txt: string) => {
     const mockReplacements: Record<string, string> = {
@@ -367,6 +387,8 @@ export const MessageTemplateBuilder: React.FC = () => {
       "{{data}}": "04/09/2026",
       "{{horario}}": "08:00",
       "{{horario_fim}}": "09:00",
+      "{{datas}}": "04/09/2026 às 08:00",
+      "{{lista_agendamentos}}": "• Sex, 04/09 às 08:00\n• Seg, 07/09 às 08:00",
       "{{servico}}": "Pilates Studio (Aparelhos)",
       "{{atividade}}": "Pilates Studio (Aparelhos)",
       "{{profissional}}": "Dra. Camila Duarte",
@@ -440,10 +462,10 @@ export const MessageTemplateBuilder: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
             {/* Confirmação Imediata ao Agendar */}
-            <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
+            <div className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs">
               <span className="font-medium text-muted-foreground">Ao Agendar:</span>
               <select
-                className="bg-transparent font-semibold text-blue-700 dark:text-blue-400 outline-none cursor-pointer max-w-[160px] truncate"
+                className="bg-transparent font-semibold text-blue-700 dark:text-blue-400 outline-none cursor-pointer max-w-[150px] truncate"
                 value={clinicSettings?.activeConfirmationTemplateId || ""}
                 onChange={(e) => handleAssignReminder("booking_confirmation", e.target.value ? (e.target.value as any) : undefined)}
               >
@@ -454,13 +476,24 @@ export const MessageTemplateBuilder: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleEditAssignedTemplate("booking_confirmation", clinicSettings?.activeConfirmationTemplateId)}
+                className="h-6 px-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1 shrink-0"
+                title="Editar modelo de confirmação ao agendar (Agendamento Rápido)"
+              >
+                <Edit2 className="w-3 h-3" />
+                <span>Editar</span>
+              </Button>
             </div>
 
             {/* Lembrete 24h */}
-            <div className="flex items-center gap-2 bg-background/80 p-2 rounded-lg border shadow-xs">
+            <div className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs">
               <span className="font-medium text-muted-foreground">Lembrete 24h:</span>
               <select
-                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer max-w-[160px] truncate"
+                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer max-w-[150px] truncate"
                 value={clinicSettings?.activeReminder24hTemplateId || ""}
                 onChange={(e) => handleAssignReminder("reminder_24h", e.target.value ? (e.target.value as any) : undefined)}
               >
@@ -471,19 +504,47 @@ export const MessageTemplateBuilder: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleEditAssignedTemplate("reminder_24h", clinicSettings?.activeReminder24hTemplateId)}
+                className="h-6 px-1.5 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1 shrink-0"
+                title="Editar modelo de lembrete 24h"
+              >
+                <Edit2 className="w-3 h-3" />
+                <span>Editar</span>
+              </Button>
             </div>
 
             {([
               ['reminder_1h', 'Lembrete 1h', clinicSettings?.activeReminder1hTemplateId],
               ['reminder_30m', 'Lembrete 30 minutos', clinicSettings?.activeReminder30mTemplateId],
               ['waitlist_booked', 'Encaixe pela fila', clinicSettings?.activeWaitlistTemplateId],
-            ] as const).map(([target, label, value]) => <label key={target} className="flex flex-wrap items-center gap-2 bg-background/80 p-2 rounded-lg border text-xs">
-              {label}
-              <select className="bg-background max-w-[160px] truncate" value={value || ''} onChange={e => handleAssignReminder(target, e.target.value || undefined)}>
-                <option value="">Texto padrão</option>
-                {templates.map(t => <option key={t._id} value={t._id}>{t.title} ({t.type})</option>)}
-              </select>
-            </label>)}
+            ] as const).map(([target, label, value]) => (
+              <div key={target} className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs text-xs">
+                <span className="text-muted-foreground">{label}:</span>
+                <select
+                  className="bg-transparent max-w-[140px] truncate font-medium outline-none cursor-pointer"
+                  value={value || ''}
+                  onChange={e => handleAssignReminder(target, e.target.value || undefined)}
+                >
+                  <option value="">Texto padrão</option>
+                  {templates.map(t => <option key={t._id} value={t._id}>{t.title} ({t.type})</option>)}
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleEditAssignedTemplate(target as any, value)}
+                  className="h-6 px-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1 shrink-0"
+                  title={`Editar modelo de ${label}`}
+                >
+                  <Edit2 className="w-3 h-3" />
+                  <span>Editar</span>
+                </Button>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -538,17 +599,32 @@ export const MessageTemplateBuilder: React.FC = () => {
                     <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t text-[11px]">
                       <div className="flex flex-wrap items-center gap-1">
                         {isConfDefault && (
-                          <Badge className="bg-blue-600 text-white text-[9px] py-0">Ao Agendar Ativo</Badge>
+                          <Badge className="bg-blue-600 text-white text-[9px] py-0 font-medium">
+                            📌 Ao Agendar (Agendamento Rápido)
+                          </Badge>
                         )}
                         {is24hDefault && (
-                          <Badge className="bg-emerald-600 text-white text-[9px] py-0">24h Ativo</Badge>
+                          <Badge className="bg-emerald-600 text-white text-[9px] py-0 font-medium">24h Ativo</Badge>
                         )}
                         {is2hDefault && (
-                          <Badge className="bg-teal-600 text-white text-[9px] py-0">2h Desativado</Badge>
+                          <Badge className="bg-teal-600 text-white text-[9px] py-0 font-medium">2h Desativado</Badge>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 ml-auto">
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectTemplate(t)
+                          }}
+                          className="h-6 px-2 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1"
+                          title="Editar este modelo"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -557,8 +633,9 @@ export const MessageTemplateBuilder: React.FC = () => {
                             handleDelete(t._id)
                           }}
                           className="h-6 w-6 p-0 text-muted-foreground hover:text-red-600"
+                          title="Excluir modelo"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -604,7 +681,7 @@ export const MessageTemplateBuilder: React.FC = () => {
                       onChange={(e) => handleCategoryChange(e.target.value as MessageCategory)}
                       className="w-full h-8 px-2.5 rounded-md border bg-background text-xs outline-none"
                     >
-                      <option value="booking_confirmation">Confirmação ao Agendar (Imediata)</option>
+                      <option value="booking_confirmation">Confirmação ao Agendar (Agendamento Rápido)</option>
                       <option value="reminder_24h">Lembrete de Véspera (24h)</option>
                       <option value="reminder_2h">Lembrete 2h (legado, desativado)</option>
                       <option value="reminder_1h">Lembrete 1 hora</option>
@@ -615,6 +692,19 @@ export const MessageTemplateBuilder: React.FC = () => {
                     </select>
                   </div>
                 </div>
+
+                {/* Destaque contextual se for modelo de Confirmação ao Agendar */}
+                {category === "booking_confirmation" && (
+                  <div className="p-2.5 bg-blue-50/80 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/60 rounded-xl text-blue-800 dark:text-blue-300 text-[11px] flex items-start gap-2">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">Modelo do Agendamento Rápido:</p>
+                      <p>
+                        Este modelo define a mensagem gerada automaticamente no WhatsApp ao concluir agendamentos pelo balcão da clínica. Utilize a tag <code className="bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 px-1 py-0.5 rounded font-mono font-bold">{"{{datas}}"}</code> para exibir a data de aula única ou a lista completa de sessões em turmas recorrentes.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Seletor de Formato (Texto, Botões, Lista, Carrossel) */}
                 <div className="space-y-1">
@@ -648,13 +738,16 @@ export const MessageTemplateBuilder: React.FC = () => {
                   <div className="flex flex-wrap gap-1">
                     {[
                       { label: "+ Paciente", val: "paciente" },
-                      { label: "+ Data", val: "data" },
-                      { label: "+ Horário", val: "horario" },
+                      { label: "+ Lista de Sessões (Datas)", val: "datas" },
+                      { label: "+ Data Única", val: "data" },
+                      { label: "+ Horário Início", val: "horario" },
+                      { label: "+ Horário Fim", val: "horario_fim" },
                       { label: "+ Atividade / Serviço", val: "servico" },
                       { label: "+ Profissional", val: "profissional" },
                       { label: "+ Sala", val: "sala" },
                       { label: "+ Clínica", val: "clinica" },
                       { label: "+ Regras de Reposição", val: "regras" },
+                      { label: "+ Telefone Clínica", val: "telefone_clinica" },
                     ].map((v) => (
                       <button
                         key={v.val}

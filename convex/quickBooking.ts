@@ -750,7 +750,7 @@ export const sendQuickBookingWhatsApp = mutation({
     const patient = await ctx.db.get(args.patientId)
     if (!patient?.phone) return { success: false, error: 'Paciente sem telefone cadastrado.' }
 
-    let messageToSend = args.customMessage?.trim()
+    let messageToSend: string = args.customMessage?.trim() || ''
 
     if (!messageToSend) {
       const schedules = []
@@ -777,7 +777,49 @@ export const sendQuickBookingWhatsApp = mutation({
         return `• ${dayName}, ${formattedDate} às ${s.startTime}`
       }).join('\n')
 
-      messageToSend = `Olá, *${patient.name}*! 🎉\n\nConfirmamos seus agendamentos na *${clinicName}*:\n\n📌 *Atividade:* ${firstSchedule?.title || 'Sessão'}\n👨‍⚕️ *Profissional:* ${prof?.name || 'Profissional'}\n📍 *Local:* ${room?.name || 'Sala Clínica'}\n\n🗓 *Datas e Horários Marcados:* (${schedules.length} sessões)\n${datesList}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
+      let templateConf: any = null
+      if (settings?.activeConfirmationTemplateId) {
+        templateConf = await ctx.db.get(settings.activeConfirmationTemplateId)
+      }
+
+      if (templateConf?.content) {
+        const first = schedules[0]
+        const [y, m, d] = (first?.date || '').split('-').map(Number)
+        const dateObj = first?.date ? new Date(Date.UTC(y, m - 1, d, 12, 0, 0)) : null
+        const dayName = dateObj ? DAY_NAMES[dateObj.getUTCDay()] : ''
+        const formattedDate = dateObj ? `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}` : ''
+        const singleDateStr = `${dayName}, ${formattedDate}`
+
+        const vars: Record<string, string> = {
+          paciente: patient.name,
+          clinica: clinicName,
+          servico: firstSchedule?.title || 'Sessão',
+          atividade: firstSchedule?.title || 'Sessão',
+          profissional: prof?.name || 'Profissional',
+          sala: room?.name || 'Sala Clínica',
+          data: singleDateStr,
+          horario: firstSchedule?.startTime || '',
+          horario_fim: firstSchedule?.endTime || '',
+          regras: `Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.`,
+          telefone_clinica: settings?.phone || '',
+          datas: schedules.length > 1 ? `(${schedules.length} sessões)\n${datesList}` : `${singleDateStr} às ${firstSchedule?.startTime || ''}`,
+          lista_agendamentos: datesList,
+        }
+
+        let interpolated = templateConf.content
+        for (const [k, v] of Object.entries(vars)) {
+          const reg = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'gi')
+          interpolated = interpolated.replace(reg, v)
+        }
+
+        if (schedules.length > 1 && !/\{\{\s*(datas|lista_agendamentos)\s*\}\}/i.test(templateConf.content) && !interpolated.includes(datesList)) {
+          interpolated += `\n\n🗓 *Datas e Horários Marcados:* (${schedules.length} sessões)\n${datesList}`
+        }
+
+        messageToSend = interpolated
+      } else {
+        messageToSend = `Olá, *${patient.name}*! 🎉\n\nConfirmamos seus agendamentos na *${clinicName}*:\n\n📌 *Atividade:* ${firstSchedule?.title || 'Sessão'}\n👨‍⚕️ *Profissional:* ${prof?.name || 'Profissional'}\n📍 *Local:* ${room?.name || 'Sala Clínica'}\n\n🗓 *Datas e Horários Marcados:* (${schedules.length} sessões)\n${datesList}\n\n⚠️ *Regra de Desmarcação:* Caso precise desmarcar ou reagendar, faça com no mínimo *${noticeHours}h de antecedência* pelo Portal para liberar seu crédito de reposição automático.\n\nNos vemos na clínica!`
+      }
     }
 
     // Dispara APENAS 1 mensagem de WhatsApp com o resumo consolidado

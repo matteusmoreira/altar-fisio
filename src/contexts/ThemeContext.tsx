@@ -11,6 +11,9 @@ export interface ClinicThemeConfig {
   clinicName: string
   clinicSubtitle: string
   logoUrl?: string
+  phone?: string
+  address?: string
+  cnpj?: string
 }
 
 export const PRESET_COLORS: Record<
@@ -158,7 +161,14 @@ interface ThemeContextType {
   theme: ClinicThemeConfig
   setMode: (mode: "light" | "dark") => void
   setPreset: (preset: ColorPreset, customHex?: string) => void
-  updateClinicInfo: (name: string, subtitle: string, logoUrl?: string) => void
+  updateClinicInfo: (
+    name: string,
+    subtitle: string,
+    logoUrl?: string,
+    phone?: string,
+    address?: string,
+    cnpj?: string
+  ) => void
   updateLogoUrl: (logoUrl?: string) => void
   toggleMode: () => void
 }
@@ -170,6 +180,9 @@ const defaultTheme: ClinicThemeConfig = {
   clinicName: "Altar Fisio",
   clinicSubtitle: "Dr. Marcelo - Fisio, Pilates & RPG",
   logoUrl: undefined,
+  phone: undefined,
+  address: undefined,
+  cnpj: undefined,
 }
 
 const LOCAL_STORAGE_KEY = "altar_fisio_theme"
@@ -192,9 +205,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 ? parsed.preset
                 : undefined,
             customHex: parsed.customHex ? normalizeToHex(parsed.customHex) : undefined,
-            clinicName: parsed.clinicName || undefined,
-            clinicSubtitle: parsed.clinicSubtitle || undefined,
-            logoUrl: parsed.logoUrl,
           }
         }
       }
@@ -205,8 +215,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   })
 
   // Derivação reativa sem render cascata:
-  // As escolhas ativas do usuário têm precedência imediata sobre os defaults do servidor.
-  // Se o usuário ainda não personalizou uma propriedade, os valores do backend são utilizados.
+  // As escolhas ativas de modo e cor têm precedência imediata sobre os defaults do servidor.
+  // Dados institucionais (logotipo, nome, subtítulo) vêm diretamente do backend Convex.
   const theme: ClinicThemeConfig = useMemo(() => {
     const serverMode = convexSettings?.mode
     const serverPreset = convexSettings?.colorPreset as ColorPreset | undefined
@@ -214,6 +224,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const serverName = convexSettings?.clinicName
     const serverSubtitle = convexSettings?.clinicSubtitle
     const serverLogo = convexSettings?.logoUrl
+    const serverPhone = convexSettings?.phone
+    const serverAddress = convexSettings?.address
+    const serverCnpj = convexSettings?.cnpj
 
     const mode: "light" | "dark" = userOverrides.mode ?? serverMode ?? defaultTheme.mode
     const preset: ColorPreset =
@@ -231,8 +244,24 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const clinicName: string = userOverrides.clinicName ?? serverName ?? defaultTheme.clinicName
     const clinicSubtitle: string =
       userOverrides.clinicSubtitle ?? serverSubtitle ?? defaultTheme.clinicSubtitle
-    const logoUrl: string | undefined =
-      userOverrides.logoUrl !== undefined ? userOverrides.logoUrl : (serverLogo ?? defaultTheme.logoUrl)
+
+    // O logotipo institucional é resolvido pelo servidor Convex (serverLogo).
+    // Blobs só são considerados temporariamente em prévia ativa enquanto o serverLogo ainda não foi emitido.
+    let logoUrl: string | undefined = serverLogo ?? defaultTheme.logoUrl
+    if (userOverrides.logoUrl !== undefined) {
+      if (userOverrides.logoUrl.startsWith("blob:")) {
+        logoUrl = serverLogo || userOverrides.logoUrl
+      } else {
+        logoUrl = userOverrides.logoUrl || serverLogo || defaultTheme.logoUrl
+      }
+    }
+
+    const phone: string | undefined =
+      userOverrides.phone !== undefined ? userOverrides.phone : serverPhone
+    const address: string | undefined =
+      userOverrides.address !== undefined ? userOverrides.address : serverAddress
+    const cnpj: string | undefined =
+      userOverrides.cnpj !== undefined ? userOverrides.cnpj : serverCnpj
 
     return {
       mode,
@@ -241,6 +270,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       clinicName,
       clinicSubtitle,
       logoUrl,
+      phone,
+      address,
+      cnpj,
     }
   }, [convexSettings, userOverrides])
 
@@ -277,7 +309,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty("--sidebar-ring", activeHsl)
 
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(theme))
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({
+          mode: theme.mode,
+          preset: theme.preset,
+          customHex: theme.customHex,
+        })
+      )
     } catch {
       // ignore
     }
@@ -287,7 +326,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUserOverrides((prev) => {
       const next = { ...prev, mode }
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({
+            mode: next.mode ?? theme.mode,
+            preset: next.preset ?? theme.preset,
+            customHex: next.customHex ?? theme.customHex,
+          })
+        )
       } catch {}
       return next
     })
@@ -299,7 +345,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const nextMode: "light" | "dark" = currentMode === "light" ? "dark" : "light"
       const next: Partial<ClinicThemeConfig> = { ...prev, mode: nextMode }
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({
+            mode: nextMode,
+            preset: next.preset ?? theme.preset,
+            customHex: next.customHex ?? theme.customHex,
+          })
+        )
       } catch {}
       return next
     })
@@ -318,35 +371,40 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         customHex: validHex,
       }
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
+        localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({
+            mode: next.mode ?? theme.mode,
+            preset: next.preset,
+            customHex: next.customHex,
+          })
+        )
       } catch {}
       return next
     })
   }
 
-  const updateClinicInfo = (clinicName: string, clinicSubtitle: string, logoUrl?: string) => {
-    setUserOverrides((prev) => {
-      const next = {
-        ...prev,
-        clinicName,
-        clinicSubtitle,
-        ...(logoUrl !== undefined ? { logoUrl } : {}),
-      }
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
-      } catch {}
-      return next
-    })
+  const updateClinicInfo = (
+    clinicName: string,
+    clinicSubtitle: string,
+    logoUrl?: string,
+    phone?: string,
+    address?: string,
+    cnpj?: string
+  ) => {
+    setUserOverrides((prev) => ({
+      ...prev,
+      clinicName,
+      clinicSubtitle,
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(address !== undefined ? { address } : {}),
+      ...(cnpj !== undefined ? { cnpj } : {}),
+    }))
   }
 
   const updateLogoUrl = (logoUrl?: string) => {
-    setUserOverrides((prev) => {
-      const next = { ...prev, logoUrl }
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ ...theme, ...next }))
-      } catch {}
-      return next
-    })
+    setUserOverrides((prev) => ({ ...prev, logoUrl }))
   }
 
   return (

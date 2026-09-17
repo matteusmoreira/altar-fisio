@@ -84,3 +84,46 @@ test("trocar a categoria durante a edição preserva o conteúdo já salvo", () 
   expect(screen.getByDisplayValue("Meu modelo personalizado")).toBeTruthy()
   expect(getContentEditor().value).toBe("Conteúdo manual que não pode ser perdido")
 })
+
+test("clicar no botão Editar do card carrega o modelo para edição", () => {
+  mocks.templates = [
+    {
+      _id: "template-conf",
+      title: "Confirmação Imediata da Recepção",
+      category: "booking_confirmation",
+      type: "text",
+      content: "Olá {{paciente}}, sua consulta foi confirmada!",
+      footerText: "",
+    },
+  ]
+
+  render(<MessageTemplateBuilder />)
+  const editBtn = screen.getByTitle("Editar este modelo")
+  fireEvent.click(editBtn)
+
+  expect(screen.getByDisplayValue("Confirmação Imediata da Recepção")).toBeTruthy()
+  expect(getContentEditor().value).toContain("sua consulta foi confirmada!")
+})
+
+test("clicar no botão Editar ao lado do seletor Ao Agendar carrega o template atribuído", () => {
+  mocks.templates = [
+    {
+      _id: "template-conf-1",
+      title: "Modelo Ativo de Confirmação",
+      category: "booking_confirmation",
+      type: "text",
+      content: "Olá {{paciente}}, agendado com sucesso!",
+      footerText: "",
+    },
+  ]
+  mocks.settings = {
+    activeConfirmationTemplateId: "template-conf-1",
+  }
+
+  render(<MessageTemplateBuilder />)
+  const editBtn = screen.getByTitle("Editar modelo de confirmação ao agendar (Agendamento Rápido)")
+  fireEvent.click(editBtn)
+
+  expect(screen.getByDisplayValue("Modelo Ativo de Confirmação")).toBeTruthy()
+  expect(getContentEditor().value).toContain("agendado com sucesso!")
+})

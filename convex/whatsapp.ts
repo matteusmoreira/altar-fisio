@@ -845,6 +845,16 @@ export const getTemplateByIdInternal = internalQuery({
   },
 })
 
+export const getActiveConfirmationTemplate = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin", "reception"])
+    const settings = await ctx.db.query("clinicSettings").first()
+    if (!settings?.activeConfirmationTemplateId) return null
+    return await ctx.db.get(settings.activeConfirmationTemplateId)
+  },
+})
+
 export const saveTemplate = mutation({
   args: { sessionToken: v.string(),
     id: v.optional(v.id("messageTemplates")),
