@@ -115,7 +115,7 @@ export const getCashFlowSummary = query({
         .query("financialTransactions")
         .withIndex("by_dueDate")
         .order("desc")
-        .take(200)
+        .collect()
     }
     const todayStr = getTodayStr()
 

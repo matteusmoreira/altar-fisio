@@ -55,6 +55,10 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(self), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://viacep.com.br https://*.uazapi.com http://127.0.0.1:* ws://127.0.0.1:*; worker-src 'self' blob:; frame-ancestors 'self';"
         }
       ]
     }

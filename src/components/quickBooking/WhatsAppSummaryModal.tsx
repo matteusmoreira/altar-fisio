@@ -54,27 +54,32 @@ function buildDefaultMessage(
   items: WhatsAppScheduleItem[],
   templateContent?: string
 ): string {
+  if (!items || items.length === 0) return ''
   const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
   const first = sorted[0]
-  const specialty = first?.specialty ? formatSpecialtyName(first.specialty, null, first.roomName) : 'Sessão'
-  const prof = first?.professionalName || 'Dr(a). Fisioterapeuta'
-  const room = first?.roomName || 'Sala de Atendimento'
+  if (!first) return ''
+  const specialty = first.specialty ? formatSpecialtyName(first.specialty, null, first.roomName) : 'Sessão'
+  const prof = first.professionalName || 'Dr(a). Fisioterapeuta'
+  const room = first.roomName || 'Sala de Atendimento'
 
   const lines = sorted.map((s) => {
-    const [y, m, d] = s.date.split('-').map(Number)
+    const parts = (s.date || '').split('-').map(Number)
+    if (parts.length < 3 || parts.some(isNaN)) return `• ${s.date} às ${s.startTime}`
+    const [y, m, d] = parts
     const dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
-    const dayName = DAY_NAMES[dateObj.getUTCDay()]
+    const dayName = DAY_NAMES[dateObj.getUTCDay()] || ''
     const formattedDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
     return `• ${dayName}, ${formattedDate} às ${s.startTime}`
   })
 
   // Se houver um modelo personalizado ativo vinculado em Modelos de Lembretes
   if (templateContent?.trim()) {
-    const [y, m, d] = (first?.date || '').split('-').map(Number)
-    const dateObj = first?.date ? new Date(Date.UTC(y, m - 1, d, 12, 0, 0)) : null
+    const parts = (first.date || '').split('-').map(Number)
+    const [y, m, d] = parts.length === 3 && !parts.some(isNaN) ? parts : [0, 0, 0]
+    const dateObj = y && m && d ? new Date(Date.UTC(y, m - 1, d, 12, 0, 0)) : null
     const dayName = dateObj ? DAY_NAMES[dateObj.getUTCDay()] : ''
     const formattedDate = dateObj ? `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}` : ''
-    const singleDateStr = `${dayName}, ${formattedDate}`
+    const singleDateStr = dateObj ? `${dayName}, ${formattedDate}` : ''
 
     const vars: Record<string, string> = {
       paciente: patientName,

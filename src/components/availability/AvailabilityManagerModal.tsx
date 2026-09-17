@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -95,9 +95,18 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Toast / Feedback
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    }
+  }, [])
+
   const showToast = (type: "success" | "error", message: string) => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
     setFeedback({ type, message })
-    setTimeout(() => setFeedback(null), 4000)
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 4000)
   }
 
   // Estado do Form de Regra Semanal

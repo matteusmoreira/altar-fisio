@@ -10,5 +10,6 @@ export function clinicDateTime(now = Date.now()) {
 }
 
 export function isFutureBooking(date: string, time: string, now = Date.now()) {
-  return `${date}T${time}` > clinicDateTime(now)
+  const normalizedTime = time.length === 4 && time[1] === ':' ? `0${time}` : time
+  return `${date}T${normalizedTime}` > clinicDateTime(now)
 }

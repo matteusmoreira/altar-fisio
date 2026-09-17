@@ -23,14 +23,11 @@ export const reserveLoginAttempt = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
     const now = Date.now()
-    const global = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', 'login:global')).first()
     const account = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', `login:${email}`)).first()
-    if ((global && global.resetAt > now && global.count >= 100) || (account && account.resetAt > now && account.count >= 5)) throw new Error('Muitas tentativas. Aguarde 15 minutos.')
-    for (const [key, row] of [['login:global', global], [`login:${email}`, account]] as const) {
-      const data = { key, count: row && row.resetAt > now ? row.count + 1 : 1, resetAt: row && row.resetAt > now ? row.resetAt : now + 15 * 60_000 }
-      if (row) await ctx.db.patch(row._id, data)
-      else await ctx.db.insert('authAttempts', data)
-    }
+    if (account && account.resetAt > now && account.count >= 5) throw new Error('Muitas tentativas. Aguarde 15 minutos.')
+    const data = { key: `login:${email}`, count: account && account.resetAt > now ? account.count + 1 : 1, resetAt: account && account.resetAt > now ? account.resetAt : now + 15 * 60_000 }
+    if (account) await ctx.db.patch(account._id, data)
+    else await ctx.db.insert('authAttempts', data)
     return await ctx.db.query('users').withIndex('by_email', q => q.eq('email', email)).first()
   },
 })

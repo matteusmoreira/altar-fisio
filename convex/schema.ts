@@ -703,5 +703,6 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_date", ["date"])
-    .index("by_professional_date", ["professionalId", "date"]),
+    .index("by_professional_date", ["professionalId", "date"])
+    .index("by_room_date", ["roomId", "date"]),
 })

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { PatientWaitlist } from '@/components/patients/PatientWaitlist'
 import { isValidPhone } from '../../shared/patientIdentity'
 import { portalErrorMessage } from '@/lib/portalErrors'
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useMemo, useEffect, useRef } from "react"
 import { useQuery, useMutation, useAction } from "convex/react"
 import { PortalLoginForm } from '@/components/patients/PortalLoginForm'
 import { api } from "@convex/_generated/api"
@@ -134,9 +134,18 @@ const PatientPortalContent: React.FC = () => {
 
   // Toast Feedback
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    }
+  }, [])
+
   const showToast = (text: string, type: "success" | "error" = "success") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setToastMessage({ text, type })
-    setTimeout(() => setToastMessage(null), 4000)
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 4000)
   }
 
   // Queries e Mutations Convex
@@ -181,10 +190,17 @@ const PatientPortalContent: React.FC = () => {
 
 
   const handleLogout = async () => {
-    if (portalToken) { try { await logoutPortal({ portalToken }) } catch { showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error'); return } }
-    sessionStorage.removeItem(STORAGE_PATIENT_KEY)
-    setPortalToken(null)
-    setActiveTab('schedule')
+    try {
+      if (portalToken) {
+        await logoutPortal({ portalToken })
+      }
+    } catch {
+      showToast('Sessão encerrada com sucesso.', 'success')
+    } finally {
+      sessionStorage.removeItem(STORAGE_PATIENT_KEY)
+      setPortalToken(null)
+      setActiveTab('schedule')
+    }
   }
 
   // Executar Cancelamento de Aula

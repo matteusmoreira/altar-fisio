@@ -3,6 +3,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext"
 import { AuthProvider, useAuth } from "@/contexts/AuthContext"
 import { ClinicDataProvider } from "@/contexts/ClinicDataContext"
 import { AppLayout, type NavSection } from "@/components/layout/AppLayout"
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
 import { HeartPulse, Loader2 } from "lucide-react"
 
 // Code Splitting Dinâmico (Performance & Lazy Loading)
@@ -148,7 +149,9 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </AuthProvider>
     </ThemeProvider>
   )

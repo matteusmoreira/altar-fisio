@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useQuery, useMutation, useAction } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { useClinicData } from "@/contexts/ClinicDataContext"
@@ -81,10 +81,18 @@ export const BroadcastSender: React.FC = () => {
   // Feedback & Loading
   const [isSending, setIsSending] = useState(false)
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    }
+  }, [])
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
     setFeedback({ type, message })
-    setTimeout(() => setFeedback(null), 4500)
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 4500)
   }
 
   // Filtragem Dinâmica de Pacientes

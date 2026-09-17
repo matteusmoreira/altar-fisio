@@ -1,5 +1,22 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Blindagem Sistêmica: DoS em Rate Limit Global, Content-Security-Policy e Resiliência em Logout e Timers
+- **Ponto de Fricção**:
+  1. Em `convex/auth.ts`, a limitação de taxa de login aplicava uma chave compartilhada (`login:global`). Caso um ator malicioso disparasse 100 requisições incorretas seguidas, toda a equipe da clínica (administradores, médicos e recepção) ficava impedida de acessar o sistema por 15 minutos.
+  2. No `vercel.json`, a ausência de um cabeçalho explícito de `Content-Security-Policy` (CSP) deixava brechas teóricas para injeção de scripts e requisições a origens desconhecidas.
+  3. No Portal do Paciente (`PatientPortalPage.tsx`), caso a chamada de rede para invalidar a sessão no servidor falhasse (ex: queda de conexão móvel), o fluxo de logout era abortado precocemente por um `return` no bloco `catch`, retendo o token local no `sessionStorage` e impedindo o paciente de deslogar.
+  4. Múltiplos componentes modais (`AvailabilityManagerModal`, `BroadcastSender`, `MessageTemplateBuilder`, `PatientPortalPage`) disparavam `setTimeout` para limpeza de toasts de feedback sem reter a referência do timer para descarte (`clearTimeout`), provocando potenciais alertas de vazamento de memória e tentativas de atualização de estado após o desmonte.
+  5. Em `convex/finance.ts`, o resumo de fluxo de caixa quando solicitado para todo o histórico (`!args.monthYear`) truncava o cursor em `.take(200)`, corrompendo somatórios de faturamento se a clínica ultrapassasse 200 lançamentos.
+- **Mitigação / Regra**:
+  1. Em `convex/auth.ts`: remover a chave global `login:global` e manter a blindagem estrita de 5 tentativas por usuário específico (`login:${email}`) em janela de 15 minutos, impedindo negação de serviço a usuários legítimos.
+  2. No `vercel.json`: adicionar o header `Content-Security-Policy` restringindo origens e liberando apenas o backend oficial Convex (`*.convex.cloud`), conexões locais para desenvolvimento, ViaCEP (`viacep.com.br`), WhatsApp Uazapi e scripts locais da aplicação.
+  3. No `PatientPortalPage.tsx`: encapsular a limpeza de sessão do paciente (`sessionStorage.removeItem`) e os resets de aba em bloco `finally`, garantindo logout no dispositivo independentemente do status da rede.
+  4. Nos componentes com feedback assíncrono: implementar controle via `useRef` e descarte com `useEffect` de retorno (`clearTimeout`), prevenindo memory leaks.
+  5. Em `convex/finance.ts`: substituir `.take(200)` por `.collect()`, garantindo que os totais financeiros reflitam a integralidade das movimentações.
+  6. No `shared/bookingTime.ts`: assegurar preenchimento de hora (`09:00`) para ordenação e comparação lexicográfica robusta.
+  7. Manter a senha padrão `@mudar123` em `shared/patientIdentity.ts` conforme exigência operacional da clínica.
+- **Validação**: 286 testes Vitest em 51 arquivos e 3 testes de service worker aprovados com 100% de sucesso. Typecheck TypeScript (`tsc -b`) sem erros, oxlint com 0 erros, e build de produção Vite concluído com sucesso em 1.15s.
+
 ### [2026-09-17] Exibição Confiável do Logotipo no Menu Lateral (Eliminação de Blobs no LocalStorage e Precedência do Servidor)
 - **Ponto de Fricção**:
   1. Ao trocar o logotipo da clínica via upload em `SettingsPage.tsx`, o arquivo era enviado com sucesso ao Convex Storage (`data.storageId`), mas o estado local mantinha a prévia `URL.createObjectURL(file)` (`blob:http...`).

@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -201,10 +201,18 @@ export const MessageTemplateBuilder: React.FC = () => {
   const [previewCardIndex, setPreviewCardIndex] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    }
+  }, [])
 
   const showToast = (msg: string) => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
     setFeedback(msg)
-    setTimeout(() => setFeedback(null), 3500)
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 3500)
   }
 
   // Inserir variável no texto
