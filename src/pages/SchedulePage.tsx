@@ -71,7 +71,13 @@ function formatDuration(minutes: number) {
   return `${hours}h${remainder ? ` ${remainder}min` : ""}`
 }
 
-export const SchedulePage: React.FC = () => {
+import type { NavSection } from "@/components/layout/AppLayout"
+
+interface SchedulePageProps {
+  onNavigate?: (section: NavSection) => void
+}
+
+export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
   const { user, isProfessional, isAdmin } = useAuth()
   const {
     services,
@@ -416,7 +422,10 @@ export const SchedulePage: React.FC = () => {
             <span>{isProfessional ? "Minha Disponibilidade" : "Escalas & Horários"}</span>
           </Button>
 
-          <Button onClick={() => setIsNewModalOpen(true)} className="gap-2 shadow-sm">
+          <Button
+            onClick={() => (onNavigate ? onNavigate("quick_booking") : setIsNewModalOpen(true))}
+            className="gap-2 shadow-sm bg-primary text-primary-foreground font-semibold"
+          >
             <Plus className="h-4 w-4" />
             <span>Novo Agendamento / Turma</span>
           </Button>
@@ -581,7 +590,11 @@ export const SchedulePage: React.FC = () => {
           onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
           onCreateScheduleAtDate={(date) => {
             setSelectedDate(date)
-            setIsNewModalOpen(true)
+            if (onNavigate) {
+              onNavigate("quick_booking")
+            } else {
+              setIsNewModalOpen(true)
+            }
           }}
           onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
         />
@@ -592,7 +605,11 @@ export const SchedulePage: React.FC = () => {
           onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
           onCreateScheduleAtDate={(date) => {
             setSelectedDate(date)
-            setIsNewModalOpen(true)
+            if (onNavigate) {
+              onNavigate("quick_booking")
+            } else {
+              setIsNewModalOpen(true)
+            }
           }}
           onNavigateToDay={(date) => {
             setSelectedDate(date)
@@ -610,8 +627,8 @@ export const SchedulePage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsNewModalOpen(true)}
-            className="mt-4 gap-2 text-xs"
+            onClick={() => (onNavigate ? onNavigate("quick_booking") : setIsNewModalOpen(true))}
+            className="mt-4 gap-2 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Criar Agendamento</span>

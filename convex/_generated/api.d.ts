@@ -40,6 +40,7 @@ import type * as patients from "../patients.js";
 import type * as portalAccess from "../portalAccess.js";
 import type * as portalAuth from "../portalAuth.js";
 import type * as professionals from "../professionals.js";
+import type * as quickBooking from "../quickBooking.js";
 import type * as rooms from "../rooms.js";
 import type * as schedules from "../schedules.js";
 import type * as security from "../security.js";
@@ -87,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   portalAccess: typeof portalAccess;
   portalAuth: typeof portalAuth;
   professionals: typeof professionals;
+  quickBooking: typeof quickBooking;
   rooms: typeof rooms;
   schedules: typeof schedules;
   security: typeof security;

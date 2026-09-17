@@ -1,5 +1,18 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-16] Agendamento Rápido no Balcão: Remarcação sem Falta Indevida, Identificação de Séries Recorrentes e Compatibilidade com Node 25 no Convex
+- **Ponto de Fricção**:
+  1. Na mutação de remarcação rápida (`rescheduleParticipant`), desmatricular um paciente marcando seu registro anterior com `status: 'absence'` registra falta no prontuário e no relatório de frequência do paciente, além de não cancelar os jobs agendados de lembrete de WhatsApp (`cancelParticipantJobs`) e não acionar a fila de espera (`processWaitlist`) da vaga desocupada.
+  2. Ao gerar agendamentos com recorrência mensal em lote no balcão, a ausência do campo `recurringGroupId` nas sessões impedia que a tela de turmas (`ClassesPage`) e mutações de gestão em lote (`deleteSchedule(deleteSeries: true)`) reconhecessem que aquelas aulas pertenciam a uma mesma turma/série mensal.
+  3. No ambiente Windows com Node.js v25.x instalado, o backend local do Convex acusa `DeploymentNotConfiguredForNodeActions: Node.js v20, 22, or 24 is not installed` ao tentar inicializar ações locais com `"use node"`.
+  4. Na `SchedulePage`, o botão principal de agendamento continuava abrindo o modal antigo caso não estivesse conectado via prop `onNavigate` à nova rota do Agendamento Rápido (`quick_booking`).
+- **Mitigação / Regra**:
+  1. Em qualquer fluxo de remarcação ou transferência de horário, cancelar os lembretes pendentes com `cancelParticipantJobs`, remover a inscrição anterior com `ctx.db.delete` sem imputar falta indevida e acionar `processWaitlist(ctx, oldScheduleId)` para liberar a vaga para pacientes que aguardam reposição.
+  2. Ao criar agendamentos recorrentes em lote, gerar sempre um identificador único `recurringGroupId = rec_${Date.now()}_${random}` e gravar `isRecurring: true` nas sessões criadas.
+  3. Para o runtime local do Convex em desenvolvimento que utilize actions em Node, priorizar versões LTS (Node 20 ou 22), ou delegar a execução de actions ao ambiente gerenciado na nuvem (`npx convex deploy`).
+  4. Conectar sempre os botões de ação e gatilhos da agenda mãe (`SchedulePage`) à nova rota `quick_booking` passando `onNavigate={setCurrentSection}` e mantendo fallback caso o componente seja utilizado de forma isolada.
+- **Validação**: 227 testes Vitest em 38 arquivos e 3 testes de service worker aprovados 100%, typecheck TypeScript (`tsc --noEmit`) aprovado com 0 erros.
+
 ### [2026-09-16] Bloqueio Silencioso por accessPolicy.ts, Persistência Imediata de CRUD e Diálogo Dedicado vs Layout Embutido
 - **Ponto de Fricção**:
   1. No hook customizado `useQuery` de `src/lib/staffConvex.ts`, qualquer função do Convex que não esteja registrada no dicionário estático `accessPolicy` em `shared/accessPolicy.ts` é interceptada e recebe o valor `'skip'`. Isso fez `api.clinic.getClinicalSpecialties` retornar permanentemente `undefined` em tempo de execução no navegador (embora testes com mock passassem), deixando o estado da tela zerado ("Especialidades ativas (0)") e impossibilitando o carregamento da lista real salva no banco.

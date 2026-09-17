@@ -474,5 +474,11 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "whatsapp:createBroadcastCampaign": ["admin", "reception"],
   "whatsapp:toggleCampaignStatus": ["admin", "reception"],
   "whatsapp:deleteCampaign": ["admin", "reception"],
-  "whatsapp:dispatchBroadcastCampaignAction": ["admin", "reception"]
+  "whatsapp:dispatchBroadcastCampaignAction": ["admin", "reception"],
+  "quickBooking:getWeeklyGridData": ["admin", "reception"],
+  "quickBooking:getPatientBookingContext": ["admin", "reception"],
+  "quickBooking:confirmQuickBooking": ["admin", "reception"],
+  "quickBooking:rescheduleParticipant": ["admin", "reception"],
+  "quickBooking:addToWaitlistQuick": ["admin", "reception"],
+  "quickBooking:sendQuickBookingWhatsApp": ["admin", "reception"]
 }

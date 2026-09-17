@@ -29,6 +29,7 @@ import {
   Clock,
   ExternalLink,
   CalendarCheck,
+  CalendarPlus,
   Sparkles,
 } from "lucide-react"
 import { useQuery } from "@/lib/staffConvex"
@@ -46,6 +47,7 @@ export type NavSection =
   | "finance"
   | "notifications"
   | "booking_builder"
+  | "quick_booking"
   | "settings"
 
 interface AppLayoutProps {
@@ -107,6 +109,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   }> = [
     { id: "dashboard", label: "Visão Geral", shortLabel: "Início", icon: Activity, group: "atendimento" },
     { id: "schedule", label: "Agenda & Marcações", shortLabel: "Agenda", icon: Calendar, badge: "Hoje", group: "atendimento" },
+    { id: "quick_booking", label: "Agendamento Rápido", shortLabel: "Agendar", icon: CalendarPlus, group: "atendimento" },
     {
       id: "online_bookings",
       label: "Agendamentos Online",

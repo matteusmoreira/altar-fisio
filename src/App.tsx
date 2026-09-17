@@ -21,6 +21,7 @@ const PublicBookingPage = lazy(() => import("@/pages/PublicBookingPage").then((m
 const OnlineBookingsPage = lazy(() => import("@/pages/OnlineBookingsPage").then((m) => ({ default: m.OnlineBookingsPage })))
 const BookingBuilderPage = lazy(() => import("@/pages/BookingBuilderPage").then((m) => ({ default: m.BookingBuilderPage })))
 const PatientPortalPage = lazy(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })))
+const QuickBookingPage = lazy(() => import("@/pages/QuickBookingPage").then((m) => ({ default: m.QuickBookingPage })))
 
 
 function PageLoadingFallback() {
@@ -119,7 +120,7 @@ function AppContent() {
         {currentSection === "dashboard" && (
           <DashboardPage onNavigate={setCurrentSection} />
         )}
-        {currentSection === "schedule" && <SchedulePage />}
+        {currentSection === "schedule" && <SchedulePage onNavigate={setCurrentSection} />}
         {currentSection === "online_bookings" && <OnlineBookingsPage />}
         {currentSection === "classes" && <ClassesPage />}
         {currentSection === "patients" && (
@@ -134,6 +135,7 @@ function AppContent() {
         {currentSection === "finance" && canAccessSection("finance") && <FinancePage />}
         {currentSection === "notifications" && canAccessSection("notifications") && <NotificationsPage />}
         {currentSection === "booking_builder" && canAccessSection("booking_builder") && <BookingBuilderPage />}
+        {currentSection === "quick_booking" && canAccessSection("quick_booking") && <QuickBookingPage onNavigate={setCurrentSection} />}
         {currentSection === "settings" && canAccessSection("settings") && <SettingsPage />}
       </Suspense>
     </AppLayout></ClinicDataProvider>
