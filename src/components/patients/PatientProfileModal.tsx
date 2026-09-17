@@ -19,6 +19,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
 import { formatPhoneBR, cleanPhoneDigits } from "@/lib/utils"
 import { formatCep } from "../../../shared/patientIdentity"
+import { formatSpecialtyName, formatScheduleTitle, DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
 import {
   User,
   Phone,
@@ -105,6 +106,15 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     patient && isOpen ? { patientId: patient.id as any } : "skip"
   )
 
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties =
+    Array.isArray(dbClinicalSpecialties) &&
+    dbClinicalSpecialties.length > 0 &&
+    (dbClinicalSpecialties[0] as any)?.id &&
+    (dbClinicalSpecialties[0] as any)?.name
+      ? dbClinicalSpecialties
+      : DEFAULT_CLINICAL_SPECIALTIES
+
   // Cálculo da idade
   const age = useMemo(() => {
     if (!patient?.birthDate) return null
@@ -122,18 +132,25 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     return calculatedAge >= 0 ? calculatedAge : null
   }, [patient?.birthDate])
 
-  // Agendamentos e Presenças do Paciente
+  // Agendamentos e Presenças do Paciente (com títulos e modalidades higienizados sem underscores)
   const patientSchedules = useMemo(() => {
     if (!patient) return []
     return (storedPatientSchedules || [])
       .filter((s) => s.participants.some((p) => p.patientId === patient.id))
       .map((s) => {
         const participant = s.participants.find((p) => p.patientId === patient.id)!
+        const cleanTitle = formatScheduleTitle(s.title, {
+          roomName: s.roomName,
+          specialty: s.specialty,
+          startTime: s.startTime,
+          specialties: clinicalSpecialties,
+        })
+        const cleanSpecialty = formatSpecialtyName(s.specialty, clinicalSpecialties, s.roomName)
         return {
           scheduleId: s._id,
-          title: s.title,
+          title: cleanTitle,
           type: s.type,
-          specialty: s.specialty,
+          specialty: cleanSpecialty,
           date: s.date,
           startTime: s.startTime,
           endTime: s.endTime,
@@ -148,7 +165,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         }
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime))
-  }, [storedPatientSchedules, patient])
+  }, [storedPatientSchedules, patient, clinicalSpecialties])
 
   // Próximos agendamentos futuros do paciente (para visualização imediata)
   const upcomingSchedules = useMemo(() => {
@@ -1068,7 +1085,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                                   <span className="font-semibold text-foreground">
                                     {item.title}
                                   </span>
-                                  <div className="text-[10px] text-muted-foreground capitalize">
+                                  <div className="text-[10px] text-muted-foreground">
                                     {item.type === "turma" ? "Aula em Grupo" : "Individual"} • {item.specialty}
                                   </div>
                                 </td>

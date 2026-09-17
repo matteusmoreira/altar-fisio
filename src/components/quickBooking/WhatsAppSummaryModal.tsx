@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { formatPhoneBR } from '@/lib/utils'
+import { formatSpecialtyName } from '../../../shared/clinicalSpecialties'
 
 export interface WhatsAppScheduleItem {
   date: string
@@ -38,6 +39,8 @@ interface WhatsAppSummaryModalProps {
   noticeHours?: number
   items: WhatsAppScheduleItem[]
   isLoading?: boolean
+  initialCustomMessage?: string
+  title?: string
 }
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -54,7 +57,7 @@ function buildDefaultMessage(
 
   const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
   const first = sorted[0]
-  const specialty = first.specialty ? first.specialty.charAt(0).toUpperCase() + first.specialty.slice(1) : 'Sessão'
+  const specialty = first.specialty ? formatSpecialtyName(first.specialty, null, first.roomName) : 'Sessão'
   const prof = first.professionalName || 'Dr(a). Fisioterapeuta'
   const room = first.roomName || 'Sala de Atendimento'
 
@@ -88,10 +91,12 @@ export function WhatsAppSummaryModal({
   noticeHours = 2,
   items,
   isLoading = false,
+  initialCustomMessage,
+  title,
 }: WhatsAppSummaryModalProps) {
   const defaultText = useMemo(
-    () => buildDefaultMessage(patientName, clinicName, noticeHours, items),
-    [patientName, clinicName, noticeHours, items]
+    () => initialCustomMessage || buildDefaultMessage(patientName, clinicName, noticeHours, items),
+    [initialCustomMessage, patientName, clinicName, noticeHours, items]
   )
 
   const [message, setMessage] = useState(defaultText)
@@ -132,7 +137,7 @@ export function WhatsAppSummaryModal({
             </div>
             <div className="flex-1">
               <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-                <span>Enviar Resumo por WhatsApp</span>
+                <span>{title || 'Enviar Resumo por WhatsApp'}</span>
                 <Badge variant="outline" className="bg-emerald-600/10 text-emerald-700 border-emerald-600/30 text-[10px] font-semibold">
                   1 mensagem
                 </Badge>

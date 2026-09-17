@@ -1,5 +1,5 @@
 import { v, ConvexError } from 'convex/values'
-import { query, mutation } from './_generated/server'
+import { query, mutation, type MutationCtx } from './_generated/server'
 import { internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import { requireStaff } from './lib/security'
@@ -10,6 +10,7 @@ import { getPackageBookingBalance } from './lib/packageBookingBalance'
 import { cancelParticipantJobs, prepareReminders } from './lib/appointmentJobs'
 import { enterWaitlist, processWaitlist } from './lib/waitlist'
 import { monthDates } from '../shared/monthlySchedule'
+import { formatSpecialtyName, formatScheduleTitle } from '../shared/clinicalSpecialties'
 
 // ─── Queries ────────────────────────────────────────────────────────────────
 
@@ -164,7 +165,13 @@ export const getWeeklyGridData = query({
             professionalName: profMap[rule.professionalId] || 'Profissional',
             specialty: rule.specialty,
             scheduleId: existingSchedule?._id ?? null,
-            scheduleTitle: existingSchedule?.title ?? null,
+            scheduleTitle: existingSchedule
+              ? formatScheduleTitle(existingSchedule.title, {
+                  roomName: room.name,
+                  specialty: rule.specialty,
+                  startTime: slice.start,
+                })
+              : null,
             scheduleType: existingSchedule?.type ?? null,
             occupiedSeats: activeParticipants.length,
             totalCapacity: capacity,
@@ -228,10 +235,53 @@ export const getPatientBookingContext = query({
       .withIndex('by_patient_status', q => q.eq('patientId', args.patientId).eq('status', 'available'))
       .collect()
 
+    // ─── Próximas Sessões Agendadas do Paciente ─────────────────────────
+    const today = new Date(Date.now() - 3 * 3600000).toISOString().split('T')[0]
+    const participations = await ctx.db.query('scheduleParticipants')
+      .withIndex('by_patient', q => q.eq('patientId', args.patientId))
+      .collect()
+
+    const activeParticipations = participations.filter(
+      p => p.status === 'scheduled' || p.status === 'replacement'
+    )
+
+    const upcomingAppointmentsNested = await Promise.all(
+      activeParticipations.map(async (part) => {
+        const schedule = await ctx.db.get(part.scheduleId)
+        if (!schedule || schedule.status === 'cancelled') return null
+        if (schedule.date < today) return null
+
+        const room = await ctx.db.get(schedule.roomId)
+        const professional = await ctx.db.get(schedule.professionalId)
+
+        return {
+          participantId: part._id,
+          scheduleId: schedule._id,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          roomId: schedule.roomId,
+          roomName: room?.name || 'Sala',
+          roomColor: room?.color || '#10b981',
+          professionalId: schedule.professionalId,
+          professionalName: professional?.name || 'Profissional',
+          specialty: schedule.specialty,
+          isRecurring: !!(schedule.isRecurring || schedule.recurringGroupId),
+          recurringGroupId: schedule.recurringGroupId,
+          status: part.status,
+        }
+      })
+    )
+
+    const upcomingAppointments = upcomingAppointmentsNested
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+
     return {
       patient: { id: patient._id, name: patient.name, phone: patient.phone, cpf: patient.documentCpf },
       packages: packagesWithBalance,
       availableCredits: credits.length,
+      upcomingAppointments,
     }
   },
 })
@@ -360,9 +410,11 @@ async function enrollInSlot(ctx: any, args: {
       throw new ConvexError('Horário lotado.')
     }
   } else {
-    // Cria novo schedule com vínculo correto
+    // Cria novo schedule com vínculo correto e título limpo (sem underscores)
+    const specialtyDisplayName = formatSpecialtyName(args.specialty, null, room.name)
+    const scheduleTitle = `${room.name || specialtyDisplayName} ${args.startTime}`
     const scheduleId = await ctx.db.insert('schedules', {
-      title: `${args.specialty.charAt(0).toUpperCase() + args.specialty.slice(1)} ${args.startTime}`,
+      title: scheduleTitle,
       type: room.capacity > 1 ? 'turma' as const : 'individual' as const,
       specialty: args.specialty,
       roomId: args.roomId,
@@ -391,8 +443,94 @@ async function enrollInSlot(ctx: any, args: {
   return schedule!._id
 }
 
+/** Helper interno compartilhado para remarcação pontual de participante */
+async function executeRescheduleSingle(
+  ctx: MutationCtx,
+  participantId: Id<'scheduleParticipants'>,
+  args: {
+    newDate: string
+    newStartTime: string
+    newEndTime: string
+    newRoomId: Id<'rooms'>
+    newProfessionalId: Id<'professionals'>
+    specialty: string
+  }
+) {
+  const participant = await ctx.db.get(participantId)
+  if (!participant) throw new ConvexError('Participante não encontrado.')
+
+  const oldScheduleId = participant.scheduleId
+  const oldSchedule = await ctx.db.get(oldScheduleId)
+  const oldRoom = oldSchedule ? await ctx.db.get(oldSchedule.roomId) : null
+  const oldProf = oldSchedule ? await ctx.db.get(oldSchedule.professionalId) : null
+  const newRoom = await ctx.db.get(args.newRoomId)
+  const newProf = await ctx.db.get(args.newProfessionalId)
+
+  // 1. Cancela jobs agendados de lembrete do horário antigo
+  await cancelParticipantJobs(ctx, participant._id)
+
+  // 2. Remove o registro do horário anterior (NÃO marca como absence para não imputar falta indevida)
+  await ctx.db.delete(participantId)
+
+  // 3. Processa fila de espera no horário antigo desocupado
+  await processWaitlist(ctx, oldScheduleId)
+
+  // 4. Matricula no novo horário
+  const newScheduleId = await enrollInSlot(ctx, {
+    patientId: participant.patientId,
+    patientPackageId: participant.patientPackageId ?? undefined,
+    date: args.newDate,
+    startTime: args.newStartTime,
+    endTime: args.newEndTime,
+    roomId: args.newRoomId,
+    professionalId: args.newProfessionalId,
+    specialty: args.specialty,
+  })
+
+  return {
+    newScheduleId,
+    oldSchedule: oldSchedule
+      ? {
+          date: oldSchedule.date,
+          startTime: oldSchedule.startTime,
+          endTime: oldSchedule.endTime,
+          roomName: oldRoom?.name || 'Sala',
+          professionalName: oldProf?.name || 'Profissional',
+          specialty: oldSchedule.specialty,
+        }
+      : null,
+    newSchedule: {
+      date: args.newDate,
+      startTime: args.newStartTime,
+      endTime: args.newEndTime,
+      roomName: newRoom?.name || 'Sala',
+      professionalName: newProf?.name || 'Profissional',
+      specialty: args.specialty,
+    },
+  }
+}
+
 /** Remarcar participante de um horário para outro com cancelamento limpo do anterior */
 export const rescheduleParticipant = mutation({
+  args: {
+    sessionToken: v.string(),
+    participantId: v.id('scheduleParticipants'),
+    newDate: v.string(),
+    newStartTime: v.string(),
+    newEndTime: v.string(),
+    newRoomId: v.id('rooms'),
+    newProfessionalId: v.id('professionals'),
+    specialty: v.string(),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ['admin', 'reception'])
+    return await executeRescheduleSingle(ctx, args.participantId, args)
+  },
+})
+
+/** Remarcar série recorrente de um participante a partir de uma data para um novo dia da semana/horário */
+export const rescheduleSeriesParticipant = mutation({
   args: {
     sessionToken: v.string(),
     participantId: v.id('scheduleParticipants'),
@@ -410,30 +548,134 @@ export const rescheduleParticipant = mutation({
     const participant = await ctx.db.get(args.participantId)
     if (!participant) throw new ConvexError('Participante não encontrado.')
 
-    const oldScheduleId = participant.scheduleId
+    const oldSchedule = await ctx.db.get(participant.scheduleId)
+    if (!oldSchedule) throw new ConvexError('Agendamento de origem não encontrado.')
 
-    // 1. Cancela jobs agendados de lembrete do horário antigo
+    const recurringGroupId = oldSchedule.recurringGroupId
+    if (!recurringGroupId) {
+      // Fallback para remarcação pontual caso não pertença a série
+      return await executeRescheduleSingle(ctx, args.participantId, args)
+    }
+
+    // Busca todos os schedules da série a partir da data do agendamento atual
+    const seriesSchedules = await ctx.db.query('schedules')
+      .withIndex('by_recurring_group', q => q.eq('recurringGroupId', recurringGroupId))
+      .collect()
+
+    const futureSeriesSchedules = seriesSchedules
+      .filter(s => s.date >= oldSchedule.date && s.status !== 'cancelled')
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    // Busca todas as participações do paciente nessa série
+    const oldParticipations = await Promise.all(
+      futureSeriesSchedules.map(async s => {
+        const parts = await ctx.db.query('scheduleParticipants')
+          .withIndex('by_schedule', q => q.eq('scheduleId', s._id))
+          .collect()
+        const part = parts.find(p => p.patientId === participant.patientId)
+        return part ? { schedule: s, participant: part } : null
+      })
+    )
+
+    const validParticipations = oldParticipations.filter(
+      (item): item is NonNullable<typeof item> => item !== null
+    )
+
+    const sessionCount = validParticipations.length
+
+    // Cancela e remove cada participação anterior
+    for (const item of validParticipations) {
+      await cancelParticipantJobs(ctx, item.participant._id)
+      await ctx.db.delete(item.participant._id)
+      await processWaitlist(ctx, item.schedule._id)
+    }
+
+    // Calcula as novas datas para as N semanas a partir de newDate
+    const [newYear, newMonth, newDay] = args.newDate.split('-').map(Number)
+    const newScheduleIds: Id<'schedules'>[] = []
+
+    for (let i = 0; i < sessionCount; i++) {
+      const d = new Date(Date.UTC(newYear, newMonth - 1, newDay + i * 7, 12, 0, 0))
+      const targetDate = d.toISOString().split('T')[0]
+
+      const newSid = await enrollInSlot(ctx, {
+        patientId: participant.patientId,
+        patientPackageId: participant.patientPackageId ?? undefined,
+        date: targetDate,
+        startTime: args.newStartTime,
+        endTime: args.newEndTime,
+        roomId: args.newRoomId,
+        professionalId: args.newProfessionalId,
+        specialty: args.specialty,
+      })
+      newScheduleIds.push(newSid)
+    }
+
+    const oldRoom = await ctx.db.get(oldSchedule.roomId)
+    const oldProf = await ctx.db.get(oldSchedule.professionalId)
+    const newRoom = await ctx.db.get(args.newRoomId)
+    const newProf = await ctx.db.get(args.newProfessionalId)
+
+    return {
+      newScheduleId: newScheduleIds[0],
+      count: newScheduleIds.length,
+      oldSchedule: {
+        date: oldSchedule.date,
+        startTime: oldSchedule.startTime,
+        endTime: oldSchedule.endTime,
+        roomName: oldRoom?.name || 'Sala',
+        professionalName: oldProf?.name || 'Profissional',
+        specialty: oldSchedule.specialty,
+      },
+      newSchedule: {
+        date: args.newDate,
+        startTime: args.newStartTime,
+        endTime: args.newEndTime,
+        roomName: newRoom?.name || 'Sala',
+        professionalName: newProf?.name || 'Profissional',
+        specialty: args.specialty,
+      },
+    }
+  },
+})
+
+/** Desmarcar participante sem imputar falta indevida, liberando a vaga para lista de espera */
+export const cancelQuickBookingParticipant = mutation({
+  args: {
+    sessionToken: v.string(),
+    participantId: v.id('scheduleParticipants'),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ['admin', 'reception'])
+
+    const participant = await ctx.db.get(args.participantId)
+    if (!participant) throw new ConvexError('Participante não encontrado.')
+
+    const schedule = await ctx.db.get(participant.scheduleId)
+    const room = schedule ? await ctx.db.get(schedule.roomId) : null
+    const professional = schedule ? await ctx.db.get(schedule.professionalId) : null
+
     await cancelParticipantJobs(ctx, participant._id)
-
-    // 2. Remove o registro do horário anterior (NÃO marca como absence para não imputar falta indevida)
     await ctx.db.delete(args.participantId)
 
-    // 3. Processa fila de espera no horário antigo desocupado
-    await processWaitlist(ctx, oldScheduleId)
+    if (schedule) {
+      await processWaitlist(ctx, schedule._id)
+    }
 
-    // 4. Matricula no novo horário
-    const newScheduleId = await enrollInSlot(ctx, {
-      patientId: participant.patientId,
-      patientPackageId: participant.patientPackageId ?? undefined,
-      date: args.newDate,
-      startTime: args.newStartTime,
-      endTime: args.newEndTime,
-      roomId: args.newRoomId,
-      professionalId: args.newProfessionalId,
-      specialty: args.specialty,
-    })
-
-    return { newScheduleId }
+    return {
+      success: true,
+      cancelledSchedule: schedule
+        ? {
+            date: schedule.date,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            roomName: room?.name || 'Sala',
+            professionalName: professional?.name || 'Profissional',
+            specialty: schedule.specialty,
+          }
+        : null,
+    }
   },
 })
 
@@ -459,8 +701,10 @@ export const addToWaitlistQuick = mutation({
     // Se o slot ainda não tiver um schedule materializado, cria agora para receber a fila de espera
     if (!targetScheduleId && args.roomId && args.professionalId && args.date && args.startTime && args.endTime && args.specialty) {
       const room = await ctx.db.get(args.roomId)
+      const specialtyDisplayName = formatSpecialtyName(args.specialty, null, room?.name)
+      const scheduleTitle = `${room?.name || specialtyDisplayName} ${args.startTime}`
       targetScheduleId = await ctx.db.insert('schedules', {
-        title: `${args.specialty.charAt(0).toUpperCase() + args.specialty.slice(1)} ${args.startTime}`,
+        title: scheduleTitle,
         type: (room?.capacity ?? 1) > 1 ? 'turma' as const : 'individual' as const,
         specialty: args.specialty,
         roomId: args.roomId,

@@ -112,3 +112,16 @@ test('renderiza o painel de alto destaque de "Lotação das Salas" com dados de 
   expect(screen.getByText('/5')).toBeTruthy()
   expect(screen.getAllByText('/8')).toHaveLength(2)
 })
+
+test('o card "Central WhatsApp (UAZAPI)" foi removido do dashboard', () => {
+  render(<DashboardPage onNavigate={vi.fn()} />)
+
+  // O card "Central WhatsApp (UAZAPI)" e seus elementos não devem existir no dashboard
+  expect(screen.queryByText('Central WhatsApp (UAZAPI)')).toBeNull()
+  expect(screen.queryByText('Disparar Lembretes de Hoje')).toBeNull()
+  expect(screen.queryByText('Lembretes automatizados de presença e avisos')).toBeNull()
+
+  // O card de Ações Rápidas da Clínica deve continuar presente
+  expect(screen.getByText('Ações Rápidas da Clínica')).toBeTruthy()
+})
+

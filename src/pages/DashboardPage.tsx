@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -1322,52 +1322,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
 
         {/* ======================================================================= */}
-        {/* COLUNA 3: CENTRAL WHATSAPP & AÇÕES RÁPIDAS DA CLÍNICA                    */}
+        {/* COLUNA 3: AÇÕES RÁPIDAS DA CLÍNICA                                      */}
         {/* ======================================================================= */}
         <div className="space-y-6">
-
-          {/* Card: Central Omnicanal WhatsApp (UAZAPI) */}
-          <Card className="rounded-2xl border-border/80 shadow-2xs bg-gradient-to-br from-card via-card to-emerald-500/5">
-            <CardHeader className="p-4 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Send className="h-4 w-4 text-emerald-600" />
-                  <span>Central WhatsApp (UAZAPI)</span>
-                </CardTitle>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/15 px-2 py-0.5 rounded-full">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Ativo
-                </span>
-              </div>
-              <CardDescription className="text-xs">
-                Lembretes automatizados de presença e avisos
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-3">
-              <div className="p-3 rounded-xl bg-background/80 border border-border text-xs space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-muted-foreground">Lembrete de 24h & 2h:</span>
-                  <span className="font-semibold text-emerald-600">Disparo Automático</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-muted-foreground">Pacientes aguardando:</span>
-                  <span className="font-bold text-foreground">{pendingToday} hoje</span>
-                </div>
-              </div>
-
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleBatchReminders}
-                disabled={isActionLoading || pendingToday === 0}
-                className="w-full text-xs font-semibold rounded-xl h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-              >
-                <Send className={`h-3.5 w-3.5 ${isActionLoading ? "animate-spin" : ""}`} />
-                <span>Disparar Lembretes de Hoje</span>
-              </Button>
-            </CardContent>
-          </Card>
-
           {/* Card: Ações Clínicas e Administrativas Rápidas */}
           <Card className="rounded-2xl border-border/80 shadow-2xs">
             <CardHeader className="p-4 pb-3">

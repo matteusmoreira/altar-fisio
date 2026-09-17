@@ -1,5 +1,50 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Exibição Exclusiva de Logotipo sem Textos Redundantes na Identidade Visual do Sistema
+- **Ponto de Fricção**:
+  1. No cabeçalho da barra lateral desktop, cabeçalho mobile e tela de login, quando uma clínica configurava ou alterava o logotipo do sistema (`theme.logoUrl`), a imagem ficava confinada em um quadrado rígido reduzido (40x40px), e ao lado eram exibidos o nome e o subtítulo da clínica (`theme.clinicName` e `theme.clinicSubtitle`), causando truncamento de texto ("Clínica de Fisioterapi..."), poluição visual e redundância gráfica (a maioria dos logotipos de clínicas já inclui o nome da empresa na própria imagem).
+  2. Em caso de URLs externas quebradas ou indisponíveis, a tag `<img>` nativa exibia o ícone padrão de imagem quebrada do navegador acompanhado do texto alternativo `alt` cortado dentro do box.
+- **Mitigação / Regra**:
+  1. Em `AppLayout.tsx` (sidebar desktop, mobile header e mobile drawer) e `LoginPage.tsx`: quando `theme.logoUrl` estiver definido e for válido (`hasValidLogo`), remover todo o texto da marca (`clinicName` e `clinicSubtitle`) e renderizar exclusivamente o logotipo.
+  2. Na sidebar desktop, o logotipo recebe espaço livre amplo (`max-h-11 w-auto max-w-full object-contain object-left`), sem background ou bordas comprimidas, com clique rápido para direcionar ao Dashboard. Quando a sidebar é recolhida, o logotipo é centralizado de forma harmônica (`max-h-9 max-w-9 object-contain`).
+  3. Implementar controle de erro reativo com `onError={() => setLogoError(true)}`: caso a URL da imagem esteja inacessível ou falhe na rede, o sistema ativa um fallback suave para o ícone padrão `HeartPulse` e os textos, evitando quebras visuais na tela.
+  4. Em `SettingsPage.tsx`, atualizar a prévia contextual "Na Sidebar:" para refletir fielmente a exibição ampla e exclusiva do logotipo sem a caixinha reduzida.
+- **Validação**: 5 novos testes dedicados em `tests/layout-logo-display.test.tsx` cobrindo exibição exclusiva da logo, remoção do texto da marca, fallback por `onError` e comportamento na tela de login. 272 testes Vitest em 48 arquivos e 3 testes de service worker aprovados 100%, typecheck TypeScript (`tsc -b`) com 0 erros, oxlint com 0 erros e build Vite de produção gerado com sucesso.
+
+### [2026-09-17] Remarcação e Desmarcação Ágil na Agenda Rápida (Sem Créditos/Portal) e Isolamento de Handlers Convex
+- **Ponto de Fricção**:
+  1. Pacientes solicitam remarcações com alta frequência e a clínica não utiliza portal do cliente nem sistema de créditos; todos os agendamentos são operados pela recepção na Agenda Rápida. Faltava uma forma direta e sem burocracia de visualizar as próximas aulas do paciente e realizar a transferência para um novo horário ou cancelamento imediato de vaga.
+  2. Em Convex, funções declaradas com `mutation({...})` são exportadas como `RegisteredMutation` e não expõem `.handler` invocável internamente por outras mutações. Tentar reutilizar mutações existentes dentro de novas mutações (ex: série recorrente) causa erros de execução/tipagem.
+  3. A tabela `scheduleParticipants` não possui o índice composto `by_schedule_patient`, apenas `by_schedule` e `by_patient`, exigindo filtragem de paciente em memória nas consultas de sessão.
+  4. Em agendamentos recorrentes (`recurringGroupId`), o operador precisava de controle explícito para escolher entre transferir apenas uma data avulsa ou mudar o dia fixo da semana para todas as semanas seguintes.
+- **Mitigação / Regra**:
+  1. No backend Convex (`convex/quickBooking.ts`):
+     - Isolar a lógica atômica de remarcação no helper assíncrono interno `executeRescheduleSingle(ctx, { sessionToken, ... })`, reutilizado tanto por `rescheduleParticipant` quanto por `rescheduleSeriesParticipant`.
+     - Criar a mutação `rescheduleSeriesParticipant` para recalcular e mover todas as participações futuras de uma série mantendo a integridade de turmas e salas.
+     - Criar `cancelQuickBookingParticipant` para liberar a vaga no ato, cancelar lembretes agendados e disparar processamento da fila de espera (`processWaitlist`).
+     - Enriquecer `getPatientBookingContext` com `upcomingAppointments` (datas a partir de hoje com sala, horário, status e flag de turma fixa).
+     - Adicionar permissões em `shared/accessPolicy.ts` para perfis `admin` e `reception`.
+  2. No frontend (`QuickBookingPage.tsx` e componentes):
+     - Adicionar o card `PatientUpcomingSessionsCard` logo abaixo da seleção de paciente, exibindo as próximas aulas e botões diretos de `Remarcar` e `Desmarcar`.
+     - Ao clicar em `Remarcar`, se a sessão pertencer a uma série recorrente, abrir `RescheduleScopeDialog` para o atendente escolher entre "Apenas esta data" ou "Mudar dia fixo da semana para todas as semanas seguintes".
+     - Ativar o modo de remarcação visual na grade semanal com banner superior contextual e clique direto em horário com vaga disponível para confirmar a transferência.
+     - Ao concluir a transferência, abrir automaticamente o `WhatsAppSummaryModal` com mensagem personalizada pronta para envio informando a data/horário anterior e a nova marcação.
+- **Validação**: 272 testes Vitest em 48 arquivos aprovados 100% (incluindo `tests/quick-booking-rescheduling.test.tsx` e `tests/quick-booking-enhancements.test.tsx`), typecheck TypeScript (`tsc -b`) sem erros, oxlint com 0 erros e build Vite de produção gerado com sucesso.
+
+### [2026-09-17] Higienização de Títulos de Turmas e Nomes Legíveis de Modalidades (Eliminação de Underscores de Slugs)
+- **Ponto de Fricção**:
+  1. No Agendamento Rápido (`convex/quickBooking.ts`), ao materializar uma turma ou agendamento, o título era gerado diretamente a partir do identificador da especialidade (`args.specialty.charAt(0).toUpperCase() + args.specialty.slice(1)`). Quando a especialidade cadastrada possuía slug interno (ex: `pilates_e_fortalecimento_muscula`), o título gerado exibia underscores (`Pilates_e_fortalecimento_muscula 09:00`), divergindo do nome oficial da sala ("Pilates e Fortalecimento Muscular").
+  2. Na Ficha do Paciente (`PatientProfileModal.tsx`), a coluna "TURMA / MODALIDADE" e o card de "Próximas Sessões Marcadas" exibiam diretamente `item.specialty` e `sched.title` brutos do banco, expondo `Pilates_e_fortalecimento_muscula` em vez do nome amigável da modalidade e da sala.
+  3. No modal de resumo de WhatsApp (`WhatsAppSummaryModal.tsx`) e detalhes do slot (`RoomDrawer.tsx`), a especialidade também herdava o slug técnico com underscores.
+- **Mitigação / Regra**:
+  1. Criar helpers universais em `shared/clinicalSpecialties.ts`:
+     - `formatSpecialtyName`: resolve o nome da especialidade priorizando o catálogo da clínica (`clinicSettings.clinicalSpecialties`), salas ou conversão limpa de underscores para texto natural com conectivos em caixa baixa.
+     - `formatScheduleTitle`: normaliza títulos que contenham underscores ou slugs técnicos, associando-os ao nome da sala correspondente e preservando horários (ex: `Pilates e Fortalecimento Muscular 09:00`).
+  2. No backend Convex (`convex/quickBooking.ts`), gerar títulos limpos na criação (`${room.name || specialtyDisplayName} ${args.startTime}`) e higienizar na query da grade semanal.
+  3. No `convex/schedules.ts`, normalizar reativamente `enrichSchedule` e `listSchedulesForPatient`, além de disponibilizar a mutation administrativa `schedules:sanitizeScheduleTitles` e rotina preventiva em `convex/maintenance.ts` para registros persistidos no banco.
+  4. No frontend (`PatientProfileModal.tsx`, `RoomDrawer.tsx`, `WhatsAppSummaryModal.tsx`), higienizar exibições de título e modalidade para garantir consistência visual idêntica à lista de salas.
+- **Validação**: 262 testes Vitest em 46 arquivos aprovados 100% (incluindo `tests/class-modality-formatting.test.tsx`), typecheck TypeScript (`tsc -b`) sem erros, oxlint com 0 erros e build Vite de produção gerado com sucesso.
+
 ### [2026-09-17] Resumo Único de WhatsApp no Agendamento Rápido e Clareza de Marcações na Ficha do Paciente
 - **Ponto de Fricção**:
   1. No Agendamento Rápido, ao agendar sessões recorrentes (ex: segundas e quartas ao longo do mês), o sistema disparava múltiplos WhatsApps individuais (um para cada dia agendado, totalizando 8 a 10 mensagens simultâneas), gerando spam ao paciente, e não permitia ao operador revisar ou editar o texto antes do disparo.

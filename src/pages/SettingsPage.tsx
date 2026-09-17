@@ -472,15 +472,20 @@ export const SettingsPage: React.FC = () => {
                     </span>
 
                     {/* Preview Contextual da Sidebar */}
-                    <div className="mt-1.5 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <span className="text-[10px] font-semibold text-muted-foreground">Na Sidebar:</span>
-                      <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs">
-                        {logoUrl ? (
-                          <img src={logoUrl} alt="Mini" className="h-full w-full object-contain p-0.5" />
-                        ) : (
-                          <HeartPulse className="h-3.5 w-3.5" />
-                        )}
-                      </div>
+                      {logoUrl ? (
+                        <div className="h-7 max-w-[140px] px-2 py-0.5 rounded-lg border border-border bg-card flex items-center justify-start overflow-hidden shadow-2xs">
+                          <img src={logoUrl} alt="Preview Sidebar" className="max-h-5 w-auto object-contain" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs">
+                            <HeartPulse className="h-3.5 w-3.5" />
+                          </div>
+                          <span className="text-[10px] font-medium truncate max-w-[100px]">{clinicName || "Altar Fisio"}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

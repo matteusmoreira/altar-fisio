@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react'
 import { test, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { getFunctionName } from 'convex/server'
 import { formatProfessionalDisplayName } from '@/lib/professionalUtils'
 import { PatientSearchPanel } from '@/components/quickBooking/PatientSearchPanel'
@@ -42,6 +42,24 @@ const mocks = vi.hoisted(() => ({
       { id: 'pkg1', serviceName: 'Pilates Clínico', freeBalance: 8, totalSessions: 10, usedSessions: 2 }
     ],
     availableCredits: 1,
+    upcomingAppointments: [
+      {
+        participantId: 'part1',
+        scheduleId: 'sch1',
+        date: '2026-09-22',
+        startTime: '08:00',
+        endTime: '08:50',
+        roomId: 'r1',
+        roomName: 'Studio Pilates',
+        roomColor: '#10B981',
+        professionalId: 'prof1',
+        professionalName: 'Dr. Marcelo Santos',
+        specialty: 'pilates',
+        isRecurring: true,
+        recurringGroupId: 'rec-1',
+        status: 'scheduled',
+      }
+    ],
   },
   specialties: [
     { id: 'pilates', name: 'Pilates' },
@@ -75,6 +93,9 @@ const mocks = vi.hoisted(() => ({
     ]
   },
   confirmBooking: vi.fn().mockResolvedValue({ scheduleIds: ['s1'], errors: [] }),
+  rescheduleParticipant: vi.fn().mockResolvedValue({ newScheduleId: 'new-sch-1' }),
+  rescheduleSeriesParticipant: vi.fn().mockResolvedValue({ newScheduleId: 'new-sch-1', count: 4 }),
+  cancelQuickBookingParticipant: vi.fn().mockResolvedValue({ success: true }),
   createPatientAction: vi.fn().mockResolvedValue('new-patient-id'),
 }))
 
@@ -100,6 +121,9 @@ vi.mock('@/lib/staffConvex', () => ({
   useMutation: (ref: any) => {
     const name = getFunctionName(ref)
     if (name === 'quickBooking:confirmQuickBooking') return mocks.confirmBooking
+    if (name === 'quickBooking:rescheduleParticipant') return mocks.rescheduleParticipant
+    if (name === 'quickBooking:rescheduleSeriesParticipant') return mocks.rescheduleSeriesParticipant
+    if (name === 'quickBooking:cancelQuickBookingParticipant') return mocks.cancelQuickBookingParticipant
     return vi.fn().mockResolvedValue({})
   },
   useAction: () => mocks.createPatientAction,
@@ -316,4 +340,52 @@ test('QuickPatientForm submete com dados limpos e aciona onPatientCreated', asyn
     birthDate: '2000-01-01',
   })
 })
+
+// ─── Testes de Remarcação & Desmarcação na QuickBookingPage ─────────────────
+
+test('QuickBookingPage exibe Próximas Sessões do paciente e gerencia fluxo completo de remarcação com WhatsApp', async () => {
+  mocks.rescheduleParticipant.mockClear()
+
+  render(<QuickBookingPage />)
+
+  // 1. Seleciona o paciente "Ana Carolina Souza"
+  const searchInput = screen.getByPlaceholderText(/Clique para listar todos/i)
+  fireEvent.focus(searchInput)
+  fireEvent.click(screen.getByText('Ana Carolina Souza'))
+
+  // 2. Card de Próximas Sessões deve ser exibido
+  expect(screen.getByText(/Próximas Sessões de Ana Carolina Souza/i)).toBeTruthy()
+  expect(screen.getAllByText('Dr Marcelo').length).toBeGreaterThanOrEqual(1)
+  expect(screen.getByText('Turma Fixa')).toBeTruthy()
+
+  // 3. Clica em "Remarcar" na aula recorrente
+  const rescheduleBtn = screen.getByRole('button', { name: /Remarcar/i })
+  fireEvent.click(rescheduleBtn)
+
+  // 4. Modal de escolha de escopo deve abrir
+  expect(screen.getByText('Remarcação de Turma Recorrente')).toBeTruthy()
+  const singleScopeBtn = screen.getByText(/Apenas esta data/i)
+  fireEvent.click(singleScopeBtn)
+
+  // 5. Banner de Modo Remarcação Ativo deve estar visível
+  expect(screen.getByText(/Modo Remarcação Ativo:/i)).toBeTruthy()
+  expect(screen.getByText(/Aula de origem:/i)).toBeTruthy()
+
+  // 6. Clica em um slot da grade semanal
+  const slotBadge = screen.getByText('2/8')
+  fireEvent.click(slotBadge)
+
+  // 7. Drawer de sala abre com botão de transferir para uma das vagas
+  const transferBtn = screen.getByRole('button', { name: /Transferir Vaga 3/i })
+  fireEvent.click(transferBtn)
+
+  // 8. Deve acionar a mutação rescheduleParticipant
+  expect(mocks.rescheduleParticipant).toHaveBeenCalled()
+
+  // 9. Modal de WhatsApp de confirmação de remarcação deve abrir
+  await waitFor(() => {
+    expect(screen.getByText('Confirmar Remarcação no WhatsApp')).toBeTruthy()
+  })
+})
+
 

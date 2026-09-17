@@ -59,20 +59,24 @@ export const LoginPage: React.FC = () => {
 
           <div className="space-y-3">
             <div className="flex items-center justify-center lg:justify-start gap-3">
-              <div className="h-12 w-12 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shadow-md border border-primary/20 overflow-hidden">
-                {theme.logoUrl ? (
+              {theme.logoUrl ? (
+                <div className="flex items-center justify-center lg:justify-start">
                   <img
                     src={theme.logoUrl}
                     alt={theme.clinicName}
-                    className="h-full w-full object-contain p-1"
+                    className="max-h-16 w-auto max-w-[280px] object-contain"
                   />
-                ) : (
-                  <HeartPulse className="h-7 w-7 text-primary" />
-                )}
-              </div>
-              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
-                {theme.clinicName}
-              </h1>
+                </div>
+              ) : (
+                <>
+                  <div className="h-12 w-12 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shadow-md border border-primary/20 overflow-hidden">
+                    <HeartPulse className="h-7 w-7 text-primary" />
+                  </div>
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+                    {theme.clinicName}
+                  </h1>
+                </>
+              )}
             </div>
             <p className="text-sm sm:text-base text-muted-foreground font-medium leading-relaxed max-w-lg mx-auto lg:mx-0">
               {theme.clinicSubtitle} — Gestão integrada de capacidade de salas, prontuário SOAP digital e controle de turmas de Pilates.

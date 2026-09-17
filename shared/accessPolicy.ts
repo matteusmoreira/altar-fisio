@@ -1,5 +1,6 @@
 // UI query gating only. Server guards independently enforce these permissions.
 export const accessPolicy: Record<string, 'public' | 'patient' | readonly string[]> = {
+  'schedules:sanitizeScheduleTitles': ['admin'],
   'schedules:unlinkedClassSeries': ['admin'],
   'schedules:linkClassSeriesService': ['admin'],
   'schedules:previewRecurringMonth': ['admin', 'professional', 'reception'],
@@ -490,6 +491,8 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "quickBooking:getPatientBookingContext": ["admin", "reception"],
   "quickBooking:confirmQuickBooking": ["admin", "reception"],
   "quickBooking:rescheduleParticipant": ["admin", "reception"],
+  "quickBooking:rescheduleSeriesParticipant": ["admin", "reception"],
+  "quickBooking:cancelQuickBookingParticipant": ["admin", "reception"],
   "quickBooking:addToWaitlistQuick": ["admin", "reception"],
   "quickBooking:sendQuickBookingWhatsApp": ["admin", "reception"]
 }

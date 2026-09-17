@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, User, Check, AlertCircle, Clock, MapPin, Stethoscope } from 'lucide-react';
 import type { GridSlot, SelectedSlot } from './WeeklyScheduleGrid';
 import { formatDateBR } from '@/lib/dateUtils';
+import { formatSpecialtyName } from '../../../shared/clinicalSpecialties';
 
 interface RoomDrawerProps {
   open: boolean;
@@ -18,9 +19,10 @@ interface RoomDrawerProps {
   slot: GridSlot | null;
   selectedPatientName: string | null;
   onAllocatePatient: (slot: SelectedSlot) => void;
-  onReschedulePatient: (participantId: string, patientName: string) => void;
+  onReschedulePatient: (participantId: string, patientName: string, patientId?: string) => void;
   onAddToWaitlist: (slot: GridSlot) => void;
   isSlotSelected: boolean;
+  isRescheduling?: boolean;
 }
 
 export function RoomDrawer({
@@ -32,6 +34,7 @@ export function RoomDrawer({
   onReschedulePatient,
   onAddToWaitlist,
   isSlotSelected,
+  isRescheduling = false,
 }: RoomDrawerProps) {
   if (!slot) return null;
 
@@ -91,8 +94,8 @@ export function RoomDrawer({
                 <Stethoscope className="w-3.5 h-3.5 text-primary" />
                 {slot.professionalName}
               </span>
-              <span className="capitalize">
-                Especialidade: <strong>{slot.specialty}</strong>
+              <span>
+                Especialidade: <strong>{formatSpecialtyName(slot.specialty, null, slot.roomName)}</strong>
               </span>
             </div>
           </DialogDescription>
@@ -150,7 +153,8 @@ export function RoomDrawer({
                     onClick={() =>
                       onReschedulePatient(
                         slot.participants[0].participantId,
-                        slot.participants[0].patientName
+                        slot.participants[0].patientName,
+                        slot.participants[0].patientId
                       )
                     }
                     className="text-xs font-semibold text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
@@ -169,7 +173,11 @@ export function RoomDrawer({
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    {isSlotSelected ? 'Horário Já Selecionado' : `Alocar ${selectedPatientName || 'Paciente'}`}
+                    {isSlotSelected
+                      ? 'Horário Já Selecionado'
+                      : isRescheduling
+                      ? `Transferir ${selectedPatientName || 'Paciente'} para cá`
+                      : `Alocar ${selectedPatientName || 'Paciente'}`}
                   </Button>
                 </div>
               )}
@@ -219,7 +227,8 @@ export function RoomDrawer({
                           onClick={() =>
                             onReschedulePatient(
                               participant.participantId,
-                              participant.patientName
+                              participant.patientName,
+                              participant.patientId
                             )
                           }
                           className="text-[11px] h-6 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10 mt-1"
@@ -245,7 +254,9 @@ export function RoomDrawer({
                       <div className="w-9 h-9 rounded-full bg-emerald-500/15 group-hover:bg-emerald-500/25 flex items-center justify-center font-bold text-xs mb-1">
                         <Plus className="w-4 h-4 text-emerald-600" />
                       </div>
-                      <span className="text-xs font-semibold text-foreground">Vaga {index + 1}</span>
+                      <span className="text-xs font-semibold text-foreground">
+                        {isRescheduling ? `Transferir Vaga ${index + 1}` : `Vaga ${index + 1}`}
+                      </span>
                       <span className="text-[10px] text-muted-foreground mt-0.5">
                         {isSlotSelected ? 'Selecionado' : 'Disponível'}
                       </span>

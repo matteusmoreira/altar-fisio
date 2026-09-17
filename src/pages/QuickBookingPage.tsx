@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   CalendarRange,
   CalendarDays,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { PatientSearchPanel } from '@/components/quickBooking/PatientSearchPanel'
 import { QuickPatientForm } from '@/components/quickBooking/QuickPatientForm'
@@ -27,6 +28,8 @@ import { WeeklyScheduleGrid, type GridSlot, type SelectedSlot } from '@/componen
 import { RoomDrawer } from '@/components/quickBooking/RoomDrawer'
 import { ConfirmBookingModal } from '@/components/quickBooking/ConfirmBookingModal'
 import { WhatsAppSummaryModal, type WhatsAppScheduleItem } from '@/components/quickBooking/WhatsAppSummaryModal'
+import { PatientUpcomingSessionsCard } from '@/components/quickBooking/PatientUpcomingSessionsCard'
+import { RescheduleScopeDialog, type UpcomingAppointment } from '@/components/quickBooking/RescheduleScopeDialog'
 import { monthDates } from '../../shared/monthlySchedule'
 import {
   getTodayDateString,
@@ -34,6 +37,7 @@ import {
   addMonthsSafe,
   formatDateWithWeekdayBR,
   formatMonthYearBR,
+  formatDateBR,
 } from '@/lib/dateUtils'
 import { formatProfessionalDisplayName } from '@/lib/professionalUtils'
 import { DEFAULT_CLINICAL_SPECIALTIES } from '../../shared/clinicalSpecialties'
@@ -125,11 +129,25 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   const [lastBookingResult, setLastBookingResult] = useState<{ scheduleIds: string[] } | null>(null)
   const [whatsAppSuccessToast, setWhatsAppSuccessToast] = useState(false)
 
-  // State: Remarcação
-  const [reschedulingParticipant, setReschedulingParticipant] = useState<{
+  // State: Remarcação Ágil
+  const [activeReschedule, setActiveReschedule] = useState<{
     participantId: string
     patientName: string
+    originDate: string
+    originStartTime: string
+    originEndTime: string
+    originRoomName: string
+    originProfessionalName: string
+    originSpecialty: string
+    isRecurring: boolean
+    recurringGroupId?: string
+    scope: 'single' | 'series'
   } | null>(null)
+  const [rescheduleScopeAppointment, setRescheduleScopeAppointment] = useState<UpcomingAppointment | null>(null)
+  const [isReschedulingLoading, setIsReschedulingLoading] = useState(false)
+  const [isCancellingLoading, setIsCancellingLoading] = useState(false)
+  const [rescheduleWhatsAppMessage, setRescheduleWhatsAppMessage] = useState<string | null>(null)
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   // ─── Queries ────────────────────────────────────────────────────────────
 
@@ -160,6 +178,8 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
 
   const confirmBooking = useMutation(api.quickBooking.confirmQuickBooking)
   const reschedule = useMutation(api.quickBooking.rescheduleParticipant)
+  const rescheduleSeries = useMutation(api.quickBooking.rescheduleSeriesParticipant)
+  const cancelQuickBooking = useMutation(api.quickBooking.cancelQuickBookingParticipant)
   const addToWaitlist = useMutation(api.quickBooking.addToWaitlistQuick)
   const sendWhatsApp = useMutation(api.quickBooking.sendQuickBookingWhatsApp)
 
@@ -178,6 +198,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
     setSelectedPackageId(null)
     setSessionCount(0)
     setShowQuickRegister(false)
+    setActiveReschedule(null)
   }, [])
 
   const handleClearPatient = useCallback(() => {
@@ -185,29 +206,147 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
     setSelectedSlots([])
     setSelectedPackageId(null)
     setSessionCount(0)
-    setReschedulingParticipant(null)
+    setActiveReschedule(null)
   }, [])
 
   const handleSlotClick = useCallback((slot: GridSlot) => {
-    if (!selectedPatientId && !reschedulingParticipant) return
+    if (!selectedPatientId && !activeReschedule) return
     setDrawerSlot(slot)
-  }, [selectedPatientId, reschedulingParticipant])
+  }, [selectedPatientId, activeReschedule])
 
-  const handleAllocatePatient = useCallback((slot: SelectedSlot) => {
-    if (reschedulingParticipant) {
-      // Remarcação limpa
-      reschedule({
-        participantId: reschedulingParticipant.participantId as any,
-        newDate: slot.day,
-        newStartTime: slot.startTime,
-        newEndTime: slot.endTime,
-        newRoomId: slot.roomId as any,
-        newProfessionalId: slot.professionalId as any,
-        specialty: slot.specialty,
-      }).then(() => {
-        setReschedulingParticipant(null)
+  const handleReschedulePatient = useCallback((participantId: string, patientName: string, patientId?: string) => {
+    if (patientId && !selectedPatientId) {
+      setSelectedPatientId(patientId)
+    }
+    const slot = drawerSlot
+    setActiveReschedule({
+      participantId,
+      patientName,
+      originDate: slot?.day || '',
+      originStartTime: slot?.startTime || '',
+      originEndTime: slot?.endTime || '',
+      originRoomName: slot?.roomName || '',
+      originProfessionalName: slot?.professionalName || '',
+      originSpecialty: slot?.specialty || '',
+      isRecurring: !!slot?.scheduleType && slot?.scheduleType === 'turma',
+      scope: 'single',
+    })
+    setDrawerSlot(null)
+  }, [drawerSlot, selectedPatientId])
+
+  const handleUpcomingRescheduleClick = useCallback((apt: UpcomingAppointment) => {
+    if (apt.isRecurring && apt.recurringGroupId) {
+      setRescheduleScopeAppointment(apt)
+    } else {
+      setActiveReschedule({
+        participantId: apt.participantId,
+        patientName: patientContext?.patient.name || 'Paciente',
+        originDate: apt.date,
+        originStartTime: apt.startTime,
+        originEndTime: apt.endTime,
+        originRoomName: apt.roomName,
+        originProfessionalName: apt.professionalName,
+        originSpecialty: apt.specialty,
+        isRecurring: false,
+        scope: 'single',
+      })
+    }
+  }, [patientContext?.patient.name])
+
+  const handleScopeSelected = useCallback((scope: 'single' | 'series') => {
+    if (!rescheduleScopeAppointment) return
+    setActiveReschedule({
+      participantId: rescheduleScopeAppointment.participantId,
+      patientName: patientContext?.patient.name || 'Paciente',
+      originDate: rescheduleScopeAppointment.date,
+      originStartTime: rescheduleScopeAppointment.startTime,
+      originEndTime: rescheduleScopeAppointment.endTime,
+      originRoomName: rescheduleScopeAppointment.roomName,
+      originProfessionalName: rescheduleScopeAppointment.professionalName,
+      originSpecialty: rescheduleScopeAppointment.specialty,
+      isRecurring: rescheduleScopeAppointment.isRecurring,
+      recurringGroupId: rescheduleScopeAppointment.recurringGroupId,
+      scope,
+    })
+    setRescheduleScopeAppointment(null)
+  }, [rescheduleScopeAppointment, patientContext?.patient.name])
+
+  const handleCancelUpcoming = useCallback(async (apt: UpcomingAppointment) => {
+    setIsCancellingLoading(true)
+    try {
+      await cancelQuickBooking({
+        participantId: apt.participantId as any,
+      })
+      const [y, m, d] = apt.date.split('-').map(Number)
+      const dateStr = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
+      setFeedbackToast({
+        message: `Aula de ${dateStr} às ${apt.startTime} desmarcada com sucesso. Vaga liberada!`,
+        type: 'success',
+      })
+      setTimeout(() => setFeedbackToast(null), 4000)
+    } catch (e: any) {
+      alert(`Erro ao desmarcar aula: ${e.message}`)
+    } finally {
+      setIsCancellingLoading(false)
+    }
+  }, [cancelQuickBooking])
+
+  const handleAllocatePatient = useCallback(async (slot: SelectedSlot) => {
+    if (activeReschedule) {
+      setIsReschedulingLoading(true)
+      try {
+        let resultScheduleId: string | undefined
+        const clinicName = clinicSettings?.clinicName || 'Altar Fisio'
+        const oldDateFormatted = formatDateBR(activeReschedule.originDate)
+        const newDateFormatted = formatDateBR(slot.day)
+        const oldInfo = `${oldDateFormatted} às ${activeReschedule.originStartTime}`
+        const newInfo = `${newDateFormatted} às ${slot.startTime} (${slot.specialty} com ${formatProfessionalDisplayName(slot.professionalName)} na ${slot.roomName})`
+
+        if (activeReschedule.scope === 'series') {
+          const res = await rescheduleSeries({
+            participantId: activeReschedule.participantId as any,
+            newDate: slot.day,
+            newStartTime: slot.startTime,
+            newEndTime: slot.endTime,
+            newRoomId: slot.roomId as any,
+            newProfessionalId: slot.professionalId as any,
+            specialty: slot.specialty,
+          })
+          resultScheduleId = res.newScheduleId
+        } else {
+          const res = await reschedule({
+            participantId: activeReschedule.participantId as any,
+            newDate: slot.day,
+            newStartTime: slot.startTime,
+            newEndTime: slot.endTime,
+            newRoomId: slot.roomId as any,
+            newProfessionalId: slot.professionalId as any,
+            specialty: slot.specialty,
+          })
+          resultScheduleId = res.newScheduleId
+        }
+
+        const whatsAppMsg = `Olá, *${activeReschedule.patientName}*! 👋\n\nConfirmamos a remarcação da sua aula na *${clinicName}*:\n\n• *Horário anterior:* ${oldInfo}\n• *Novo horário:* ${newInfo}\n\nTe aguardamos! ✨`
+
+        setLastBookingResult(resultScheduleId ? { scheduleIds: [resultScheduleId] } : null)
+        setRescheduleWhatsAppMessage(whatsAppMsg)
+        setWhatsAppScheduleItems([{
+          date: slot.day,
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          specialty: slot.specialty,
+          roomName: slot.roomName,
+          professionalName: slot.professionalName,
+        }])
+        setActiveReschedule(null)
         setDrawerSlot(null)
-      }).catch((e) => alert(e.message))
+        setShowWhatsAppModal(true)
+      } catch (e: any) {
+        alert(`Erro ao remarcar: ${e.message}`)
+      } finally {
+        setIsReschedulingLoading(false)
+      }
       return
     }
 
@@ -219,15 +358,10 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
       setSelectedSlots((prev) => [...prev, slot])
     }
     setDrawerSlot(null)
-  }, [selectedSlots, reschedulingParticipant, reschedule])
+  }, [activeReschedule, clinicSettings?.clinicName, reschedule, rescheduleSeries, selectedSlots])
 
   const handleRemoveSlot = useCallback((index: number) => {
     setSelectedSlots((prev) => prev.filter((_, i) => i !== index))
-  }, [])
-
-  const handleReschedulePatient = useCallback((participantId: string, patientName: string) => {
-    setReschedulingParticipant({ participantId, patientName })
-    setDrawerSlot(null)
   }, [])
 
   const handleAddToWaitlist = useCallback((slot: GridSlot) => {
@@ -598,6 +732,19 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
             </div>
           )}
 
+          {/* Próximas Sessões Marcadas do Paciente */}
+          {selectedPatientId && patientContext?.patient && patientContext.upcomingAppointments && patientContext.upcomingAppointments.length > 0 && (
+            <div className="pt-3 border-t border-border/60">
+              <PatientUpcomingSessionsCard
+                patientName={patientContext.patient.name}
+                appointments={patientContext.upcomingAppointments}
+                onRescheduleClick={handleUpcomingRescheduleClick}
+                onCancelClick={handleCancelUpcoming}
+                isCancelling={isCancellingLoading}
+              />
+            </div>
+          )}
+
           {/* Horários Selecionados (Chips compactos) */}
           {selectedSlots.length > 0 && (
             <div className="pt-2 border-t border-border/40">
@@ -641,24 +788,41 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
           )}
 
           {/* Modo Remarcação Ativo */}
-          {reschedulingParticipant && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
-                  Modo Remarcação Ativo:
-                </span>
-                <span className="ml-1.5 text-sm font-semibold text-foreground">
-                  {reschedulingParticipant.patientName}
-                </span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Clique em um horário vago na grade abaixo para transferir o paciente.
-                </p>
+          {activeReschedule && (
+            <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 shrink-0 mt-0.5">
+                  <ArrowLeftRight className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
+                      Modo Remarcação Ativo:
+                    </span>
+                    <span className="text-sm font-bold text-foreground">
+                      {activeReschedule.patientName}
+                    </span>
+                    {activeReschedule.scope === 'series' && (
+                      <Badge className="bg-indigo-500/15 text-indigo-600 border-indigo-500/30 text-[10px] font-semibold">
+                        Série Recorrente
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-foreground/90 mt-1">
+                    Aula de origem: <strong>{formatDateBR(activeReschedule.originDate)} às {activeReschedule.originStartTime}</strong>
+                    {activeReschedule.originRoomName ? ` (${activeReschedule.originSpecialty} • ${activeReschedule.originRoomName})` : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    👉 Clique em qualquer horário vago na grade abaixo para transferir o paciente.
+                  </p>
+                </div>
               </div>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setReschedulingParticipant(null)}
-                className="text-xs text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
+                onClick={() => setActiveReschedule(null)}
+                className="text-xs font-semibold text-amber-600 border-amber-500/30 hover:bg-amber-500/20 shrink-0 self-end sm:self-center"
               >
                 Cancelar
               </Button>
@@ -780,7 +944,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
               }
             }}
             onSlotClick={handleSlotClick}
-            hasPatientSelected={!!selectedPatientId || !!reschedulingParticipant}
+            hasPatientSelected={!!selectedPatientId || !!activeReschedule}
           />
         )}
       </div>
@@ -791,11 +955,12 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         onClose={() => setDrawerSlot(null)}
         slot={drawerSlot}
         selectedPatientName={
-          reschedulingParticipant?.patientName || patientContext?.patient.name || null
+          activeReschedule?.patientName || patientContext?.patient.name || null
         }
         onAllocatePatient={handleAllocatePatient}
         onReschedulePatient={handleReschedulePatient}
         onAddToWaitlist={handleAddToWaitlist}
+        isRescheduling={!!activeReschedule}
         isSlotSelected={
           !!drawerSlot &&
           selectedSlots.some(
@@ -805,6 +970,14 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
               s.roomId === drawerSlot.roomId
           )
         }
+      />
+
+      {/* ─── MODAL DE ESCOPO DE REMARCAÇÃO (AULA ÚNICA VS SÉRIE) ─── */}
+      <RescheduleScopeDialog
+        open={!!rescheduleScopeAppointment}
+        onClose={() => setRescheduleScopeAppointment(null)}
+        appointment={rescheduleScopeAppointment}
+        onSelectScope={handleScopeSelected}
       />
 
       {/* ─── MODAL DE CONFIRMAÇÃO ─── */}
@@ -826,13 +999,16 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         onClose={() => {
           setShowWhatsAppModal(false)
           setLastBookingResult(null)
+          setRescheduleWhatsAppMessage(null)
         }}
         onSend={handleSendWhatsApp}
-        patientName={patientContext?.patient.name || ''}
+        patientName={patientContext?.patient.name || activeReschedule?.patientName || ''}
         patientPhone={patientContext?.patient.phone}
         clinicName={clinicSettings?.clinicName || 'Altar Fisio'}
         noticeHours={clinicSettings?.cancellationNoticeHours ?? 2}
         items={whatsAppScheduleItems}
+        initialCustomMessage={rescheduleWhatsAppMessage || undefined}
+        title={rescheduleWhatsAppMessage ? 'Confirmar Remarcação no WhatsApp' : undefined}
       />
 
       {whatsAppSuccessToast && (
@@ -840,6 +1016,19 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
           <div className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs sm:text-sm font-medium">
             <Check className="h-4 w-4" />
             <span>WhatsApp com o resumo dos agendamentos enviado com sucesso!</span>
+          </div>
+        </div>
+      )}
+
+      {feedbackToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+          <div
+            className={`px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs sm:text-sm font-medium ${
+              feedbackToast.type === 'error' ? 'bg-destructive text-white' : 'bg-emerald-600 text-white'
+            }`}
+          >
+            <Check className="h-4 w-4" />
+            <span>{feedbackToast.message}</span>
           </div>
         </div>
       )}

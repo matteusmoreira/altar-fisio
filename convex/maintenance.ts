@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server"
+import { formatScheduleTitle } from "../shared/clinicalSpecialties"
 
 /**
  * Rotina diária de manutenção do banco de dados Convex
@@ -76,6 +77,27 @@ export const runDailyMaintenance = internalMutation({
       }
     }
 
+    // 6. Higienização de títulos de turmas/agendamentos futuros com underscores
+    const futureSchedules = await ctx.db
+      .query("schedules")
+      .withIndex("by_date", (q) => q.gte("date", todayStr))
+      .take(100)
+    let sanitizedSchedulesCount = 0
+    for (const sched of futureSchedules) {
+      if (sched.title && sched.title.includes("_")) {
+        const room = await ctx.db.get(sched.roomId)
+        const clean = formatScheduleTitle(sched.title, {
+          roomName: room?.name,
+          specialty: sched.specialty,
+          startTime: sched.startTime,
+        })
+        if (clean !== sched.title) {
+          await ctx.db.patch(sched._id, { title: clean })
+          sanitizedSchedulesCount++
+        }
+      }
+    }
+
     return {
       success: true,
       clearedSessions: expiredSessions.length + expiredPatientSessions.length,
@@ -83,6 +105,7 @@ export const runDailyMaintenance = internalMutation({
       clearedAuditLogs: oldAuditLogs.length,
       clearedAppointmentJobs: oldSentJobs.length + oldSkippedJobs.length,
       expiredCredits: expiredCreditsCount,
+      sanitizedSchedules: sanitizedSchedulesCount,
       executedAt: now,
     }
   },

@@ -51,6 +51,7 @@ import { cancelParticipantJobs, occupiesSeat, prepareReminders, scheduleFingerpr
 import { query, mutation } from "./_generated/server"
 import { api, internal } from "./_generated/api"
 import { ConvexError, v } from "convex/values"
+import { formatSpecialtyName, formatScheduleTitle } from "../shared/clinicalSpecialties"
 
 // Função utilitária para checar sobreposição de horários
 export function checkTimeOverlap(
@@ -185,8 +186,15 @@ export async function enrichSchedule(ctx: any, schedule: any, cache?: ScheduleEn
     occupiesSeat
   ).length
 
+  const cleanTitle = formatScheduleTitle(schedule.title, {
+    roomName: room?.name,
+    specialty: schedule.specialty,
+    startTime: schedule.startTime,
+  })
+
   return {
     ...schedule,
+    title: cleanTitle,
     roomName: room?.name || "Sala",
     roomColor: room?.color || "#10b981",
     roomCapacity: room?.capacity || 4,
@@ -312,8 +320,16 @@ export const listSchedulesForPatient = query({
         if (!schedule) return null
         const room = await ctx.db.get(schedule.roomId)
         const professional = await ctx.db.get(schedule.professionalId)
+        const cleanTitle = formatScheduleTitle(schedule.title, {
+          roomName: room?.name,
+          specialty: schedule.specialty,
+          startTime: schedule.startTime,
+        })
+        const cleanSpecialty = formatSpecialtyName(schedule.specialty, null, room?.name)
         return {
           ...schedule,
+          title: cleanTitle,
+          specialtyName: cleanSpecialty,
           roomName: room?.name || "Sala",
           roomColor: room?.color || "#10b981",
           professionalName: professional?.name || "Profissional",
@@ -1369,5 +1385,32 @@ export const getAttendanceReport = query({
   },
 })
 
+/**
+ * Mutação administrativa para higienizar títulos de agendamentos existentes no banco,
+ * removendo underscores e aplicando o nome legível da sala/especialidade.
+ */
+export const sanitizeScheduleTitles = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin"])
+    const schedules = await ctx.db.query("schedules").collect()
+    let updatedCount = 0
 
+    for (const schedule of schedules) {
+      if (schedule.title && schedule.title.includes("_")) {
+        const room = await ctx.db.get(schedule.roomId)
+        const cleanTitle = formatScheduleTitle(schedule.title, {
+          roomName: room?.name,
+          specialty: schedule.specialty,
+          startTime: schedule.startTime,
+        })
+        if (cleanTitle !== schedule.title) {
+          await ctx.db.patch(schedule._id, { title: cleanTitle })
+          updatedCount++
+        }
+      }
+    }
 
+    return { updatedCount, totalScanned: schedules.length }
+  },
+})

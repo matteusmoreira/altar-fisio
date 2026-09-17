@@ -68,6 +68,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [themeModalOpen, setThemeModalOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [logoError, setLogoError] = useState(false)
+
+  useEffect(() => {
+    setLogoError(false)
+  }, [theme.logoUrl])
+
+  const hasValidLogo = Boolean(theme.logoUrl && !logoError)
 
   const [currentTimeInfo, setCurrentTimeInfo] = useState(() => {
     const now = new Date()
@@ -96,8 +103,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   }, [])
 
   const publicBookings = useQuery(api.bookingBuilder.listPublicBookings, {})
-  const pendingOnlineCount =
-    publicBookings?.filter((b) => b.status === "pending_approval").length || 0
+  const pendingOnlineCount = Array.isArray(publicBookings)
+    ? publicBookings.filter((b) => b.status === "pending_approval").length
+    : 0
 
   const allNavItems: Array<{
     id: NavSection
@@ -172,40 +180,54 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         {/* Header da Sidebar com Marca da Clínica */}
         <div className="h-16 flex items-center px-4 border-b border-border justify-between overflow-hidden">
           {!sidebarCollapsed ? (
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/20 overflow-hidden">
-                {theme.logoUrl ? (
-                  <img
-                    src={theme.logoUrl}
-                    alt={theme.clinicName}
-                    className="h-full w-full object-contain p-0.5"
-                  />
-                ) : (
+            hasValidLogo ? (
+              <div
+                onClick={() => handleNavClick("dashboard")}
+                className="flex items-center min-w-0 flex-1 mr-2 overflow-hidden py-1 cursor-pointer"
+                title={theme.clinicName}
+              >
+                <img
+                  src={theme.logoUrl}
+                  alt={theme.clinicName}
+                  onError={() => setLogoError(true)}
+                  className="max-h-11 w-auto max-w-full object-contain object-left"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/20 overflow-hidden">
                   <HeartPulse className="h-6 w-6" />
-                )}
+                </div>
+                <div className="flex flex-col truncate">
+                  <span className="font-bold text-sm leading-tight text-foreground truncate tracking-tight">
+                    {theme.clinicName}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground truncate font-medium">
+                    {theme.clinicSubtitle}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col truncate">
-                <span className="font-bold text-sm leading-tight text-foreground truncate tracking-tight">
-                  {theme.clinicName}
-                </span>
-                <span className="text-[11px] text-muted-foreground truncate font-medium">
-                  {theme.clinicSubtitle}
-                </span>
-              </div>
-            </div>
+            )
           ) : (
-            <div className="mx-auto">
-              <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shadow-sm border border-primary/20 overflow-hidden">
-                {theme.logoUrl ? (
+            <div
+              onClick={() => handleNavClick("dashboard")}
+              className="mx-auto flex items-center justify-center cursor-pointer"
+              title={theme.clinicName}
+            >
+              {hasValidLogo ? (
+                <div className="h-10 w-10 flex items-center justify-center overflow-hidden">
                   <img
                     src={theme.logoUrl}
                     alt={theme.clinicName}
-                    className="h-full w-full object-contain p-0.5"
+                    onError={() => setLogoError(true)}
+                    className="max-h-9 max-w-9 object-contain"
                   />
-                ) : (
+                </div>
+              ) : (
+                <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shadow-sm border border-primary/20 overflow-hidden">
                   <HeartPulse className="h-6 w-6" />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -473,25 +495,34 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
-            {theme.logoUrl ? (
+          {hasValidLogo ? (
+            <div
+              onClick={() => handleNavClick("dashboard")}
+              className="flex items-center min-w-0 cursor-pointer"
+              title={theme.clinicName}
+            >
               <img
                 src={theme.logoUrl}
                 alt={theme.clinicName}
-                className="h-full w-full object-contain p-0.5"
+                onError={() => setLogoError(true)}
+                className="max-h-8 w-auto max-w-[140px] sm:max-w-[200px] object-contain object-left"
               />
-            ) : (
-              <HeartPulse className="h-5 w-5" />
-            )}
-          </div>
-          <div className="flex flex-col truncate">
-            <span className="font-bold text-xs leading-tight text-foreground truncate">
-              {theme.clinicName}
-            </span>
-            <span className="text-[10px] text-muted-foreground truncate">
-              {navItems.find((n) => n.id === currentSection)?.label || "Altar Fisio"}
-            </span>
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="h-8 w-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
+                <HeartPulse className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col truncate">
+                <span className="font-bold text-xs leading-tight text-foreground truncate">
+                  {theme.clinicName}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate">
+                  {navItems.find((n) => n.id === currentSection)?.label || "Altar Fisio"}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -553,23 +584,33 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Drawer content */}
           <div className="relative w-4/5 max-w-xs bg-card border-r border-border h-full flex flex-col z-10 shadow-2xl">
             <div className="h-16 px-4 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden">
-                  {theme.logoUrl ? (
-                    <img
-                      src={theme.logoUrl}
-                      alt={theme.clinicName}
-                      className="h-full w-full object-contain p-0.5"
-                    />
-                  ) : (
+              {hasValidLogo ? (
+                <div
+                  onClick={() => {
+                    handleNavClick("dashboard")
+                    setMobileMenuOpen(false)
+                  }}
+                  className="flex items-center min-w-0 flex-1 mr-2 overflow-hidden py-1 cursor-pointer"
+                  title={theme.clinicName}
+                >
+                  <img
+                    src={theme.logoUrl}
+                    alt={theme.clinicName}
+                    onError={() => setLogoError(true)}
+                    className="max-h-10 w-auto max-w-full object-contain object-left"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden">
                     <HeartPulse className="h-5 w-5" />
-                  )}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">{theme.clinicName}</h3>
+                    <p className="text-[10px] text-muted-foreground">{theme.clinicSubtitle}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-foreground">{theme.clinicName}</h3>
-                  <p className="text-[10px] text-muted-foreground">{theme.clinicSubtitle}</p>
-                </div>
-              </div>
+              )}
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
