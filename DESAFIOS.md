@@ -1,5 +1,14 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Provisionamento de Usuário Administrador e Escapamento de Argumentos JSON no PowerShell
+- **Ponto de Fricção**:
+  1. Ao executar comandos do CLI do Convex (`npx convex run [action] [args]`) via PowerShell no Windows para provisionar usuários com senhas complexas que incluem `@` (ex: `@clinica2026`), o PowerShell interpreta o `@` como operador de splatting/array caso não esteja explicitamente entre aspas, e ao passar argumentos JSON com aspas simples `'{"..."}'`, o PowerShell remove as aspas internas antes de entregar ao binário, causando erro de parsing de JSON5.
+  2. A criação de usuários via `authActions:provisionUser` exige senha com no mínimo 12 caracteres (conforme hardening de segurança) e hash scrypt com salt criptográfico único, além de invalidação proativa de sessões antigas.
+- **Mitigação / Regra**:
+  1. Para invocar actions do Convex com JSON no PowerShell sem risco de stripping de aspas ou interpretação indevida de caracteres especiais (`@`), encapsular o payload com escape `\"` ou executar via script Node (`child_process.spawnSync`).
+  2. O usuário admin `marcelo@gmail.com` foi provisionado com perfil `admin` e vinculado ao registro profissional do Dr. Marcelo tanto no deployment de produção (`exuberant-guanaco-180`) quanto no ambiente de desenvolvimento local, validado com teste de autenticação real via `authActions:login` e encerramento imediato de sessão de teste.
+- **Validação**: Login com credenciais conferido e aprovado retornando token de sessão e perfil `admin`. 286 testes Vitest em 51 arquivos e 3 testes de service worker aprovados com 100% de sucesso.
+
 ### [2026-09-17] Blindagem Sistêmica: DoS em Rate Limit Global, Content-Security-Policy e Resiliência em Logout e Timers
 - **Ponto de Fricção**:
   1. Em `convex/auth.ts`, a limitação de taxa de login aplicava uma chave compartilhada (`login:global`). Caso um ator malicioso disparasse 100 requisições incorretas seguidas, toda a equipe da clínica (administradores, médicos e recepção) ficava impedida de acessar o sistema por 15 minutos.
