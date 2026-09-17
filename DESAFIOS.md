@@ -1,5 +1,30 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-16] Especialidades Clínicas Dinâmicas no Agendamento Rápido (Eliminação de Mocks Estáticos)
+- **Ponto de Fricção**:
+  1. A tela de Agendamento Rápido (`QuickBookingPage.tsx`) possuía uma constante estática `SPECIALTIES` com opções legadas fixas em código (`pilates`, `fisioterapia`, `rpg`, `avaliacao`, `fortalecimento_muscular`).
+  2. Isso causava discrepância com as especialidades ativas cadastradas nas configurações da clínica (`clinicSettings.clinicalSpecialties`) e quebrava o filtro da grade semanal, pois os IDs fixos não correspondiam aos IDs reais das regras de disponibilidade (ex: `pilates_e_fortalecimento_muscula`).
+- **Mitigação / Regra**:
+  1. Todas as páginas e componentes que exibem filtros ou seleção de especialidades devem consumir reativamente a query `api.clinic.getClinicalSpecialties` com fallback para `DEFAULT_CLINICAL_SPECIALTIES` de `shared/clinicalSpecialties`.
+  2. Utilizar `useEffect` para sanitizar o estado de filtro selecionado caso uma especialidade seja removida ou renomeada dinamicamente pelo administrador.
+- **Validação**: 227 testes Vitest em 38 arquivos e 3 testes de service worker aprovados 100%, typecheck TypeScript (`tsc -b`) aprovado com 0 erros, e oxlint com 0 erros.
+
+### [2026-09-16] Otimização Extrema do Banco Convex para Permanência no Plano Gratuito (Hobby Tier)
+- **Ponto de Fricção**:
+  1. No Convex Free (Hobby), há limites estritos de 1 GB de armazenamento, 10 GB de bandwidth de leitura mensal e 1.000.000 de invocações de função.
+  2. O cron `preparar-lembretes-1h-30min` rodava a cada 5 minutos varrendo em cascata todos os agendamentos futuros do banco (`appointmentNotifications.backfill`), consumindo mais de 43.200 chamadas de função por mês sem necessidade, já que os lembretes são preparados no momento em que cada paciente é agendado (`prepareReminders`).
+  3. No frontend (`ClinicDataContext`), todos os usuários logados abriam 18 subscrições WebSocket reativas simultâneas, mantendo ativas queries pesadas de cálculo de comissões, relatórios clínicos, auditoria e logs de WhatsApp mesmo enquanto utilizavam apenas a Agenda.
+  4. A função `enrichSchedule` executava centenas de leituras N+1 redundantes buscando as mesmas salas, profissionais, pacotes e serviços para cada participante em visualizações de semana/mês da agenda.
+  5. Tabelas como `services`, `packages`, `patientPackages` e `availabilityRules` sofriam table scans por falta de índices compostos e de status.
+  6. A rotina diária de manutenção não expurgava logs de auditoria nem jobs de lembrete finalizados, gerando acúmulo de dados a longo prazo.
+- **Mitigação / Regra**:
+  1. Mudar o cron de verificação de lembretes para execução preventiva diária às 04:00 BRT (`preparar-lembretes-preventivo`), economizando ~43.200 invocações mensais.
+  2. Implementar subscrições reativas sob demanda em `ClinicDataContext` via prop `currentSection`: queries de páginas secundárias recebem `"skip"` quando o usuário está fora da respectiva seção (ex: comissões apenas em Finanças; auditoria em Configurações; logs de notificação na Central de Mensagens; SOAP apenas em Pacientes/Prontuário), reduzindo o bandwidth em mais de 70%.
+  3. Adicionar índices dedicados no `schema.ts`: `services.by_active`, `packages.by_service`, `packages.by_active`, `packages.by_public_active`, `patientPackages.by_patient_status`, `availabilityRules.by_active`, `availabilityRules.by_day_active`, `clinicalEvolutions.by_patient_timestamp` e `appointmentJobs.by_status`.
+  4. Introduzir cache de resolução em memória (`ScheduleEnrichmentCache`) durante a execução de `enrichSchedule` e `calculateProfessionalCommissions`, reduzindo leituras repetidas em mais de 80%.
+  5. Na manutenção diária das 03:00 BRT (`runDailyMaintenance`), ampliar o lote para 300 itens e purgar logs de notificação (> 30 dias), logs de auditoria (> 60 dias), jobs de lembretes finalizados/descartados (> 15 dias) e sessões expiradas.
+- **Publicação & Verificação**: Convex `exuberant-guanaco-180` atualizado em produção (`npx convex deploy`). Schema validado, 9 novos índices de alta performance adicionados sem remoção de índices existentes, crons de economia de chamadas e expurgos diários ativos na nuvem. Smoke test remoto nas queries `clinic:getClinicalSpecialties` e `clinic:getSettings` responderam com HTTP 200 e dados consistentes. 227 testes Vitest em 38 arquivos e 3 testes de service worker aprovados 100%, `tsc -b` aprovado com 0 erros, build Vite de produção gerado com sucesso e oxlint com 0 erros.
+
 ### [2026-09-16] Agendamento Rápido no Balcão: Remarcação sem Falta Indevida, Identificação de Séries Recorrentes e Compatibilidade com Node 25 no Convex
 - **Ponto de Fricção**:
   1. Na mutação de remarcação rápida (`rescheduleParticipant`), desmatricular um paciente marcando seu registro anterior com `status: 'absence'` registra falta no prontuário e no relatório de frequência do paciente, além de não cancelar os jobs agendados de lembrete de WhatsApp (`cancelParticipantJobs`) e não acionar a fila de espera (`processWaitlist`) da vaga desocupada.

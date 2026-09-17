@@ -117,7 +117,7 @@ export default defineSchema({
     packagePricePerSession: v.optional(v.number()), // Referência unitária quando vendido em pacote
     description: v.optional(v.string()),
     active: v.boolean(),
-  }),
+  }).index("by_active", ["active"]),
 
   // Planos e Pacotes de Sessões
   packages: defineTable({
@@ -137,7 +137,10 @@ export default defineSchema({
     showInPublicBooking: v.optional(v.boolean()), // Exibir no agendamento público
     description: v.optional(v.string()),
     active: v.boolean(),
-  }),
+  })
+    .index("by_service", ["serviceId"])
+    .index("by_active", ["active"])
+    .index("by_public_active", ["showInPublicBooking", "active"]),
 
   // Pacotes Adquiridos pelos Pacientes
   patientPackages: defineTable({
@@ -150,7 +153,10 @@ export default defineSchema({
     startDate: v.string(),
     expiryDate: v.string(),
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("expired")),
-  }).index("by_patient", ["patientId"]).index("by_status", ["status"]),
+  })
+    .index("by_patient", ["patientId"])
+    .index("by_status", ["status"])
+    .index("by_patient_status", ["patientId", "status"]),
 
   // Agendamentos & Aulas
   schedules: defineTable({
@@ -227,6 +233,7 @@ export default defineSchema({
     attemptedAt: v.optional(v.number()),
   }).index("by_participant", ["participantId"])
     .index("by_schedule", ["scheduleId"])
+    .index("by_status", ["status"])
     .index("by_status_due", ["status", "dueAt"]),
 
   replacementCredits: defineTable({
@@ -286,7 +293,10 @@ export default defineSchema({
     // Integridade Legal COFFITO
     isLocked: v.optional(v.boolean()), // Trava de integridade inalterável
     signatureHash: v.optional(v.string()), // Assinatura digital auditável
-  }).index("by_patient", ["patientId"]).index("by_professional", ["professionalId"]),
+  })
+    .index("by_patient", ["patientId"])
+    .index("by_professional", ["professionalId"])
+    .index("by_patient_timestamp", ["patientId", "timestamp"]),
 
   // Financeiro Interno: Contas a Pagar e Receber & Vendas
   financialTransactions: defineTable({
@@ -675,7 +685,9 @@ export default defineSchema({
     .index("by_professional", ["professionalId"])
     .index("by_room", ["roomId"])
     .index("by_day_specialty", ["dayOfWeek", "specialty"])
-    .index("by_professional_day", ["professionalId", "dayOfWeek"]),
+    .index("by_professional_day", ["professionalId", "dayOfWeek"])
+    .index("by_active", ["isActive"])
+    .index("by_day_active", ["dayOfWeek", "isActive"]),
 
   // Exceções Pontuais de Disponibilidade (Bloqueios de Folga/Férias e Plantões Extras)
   availabilityOverrides: defineTable({

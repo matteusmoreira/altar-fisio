@@ -50,19 +50,32 @@ export const listTransactions = query({
       transactions = transactions.filter((t) => t.category.toLowerCase().includes(args.category!.toLowerCase()))
     }
 
-    // Enriquecimento com nomes de pacientes, profissionais e cálculo de atraso
+    // Enriquecimento com nomes de pacientes, profissionais e cálculo de atraso com cache em memória
+    const patientCache = new Map<string, string | undefined>()
+    const profCache = new Map<string, string | undefined>()
+
     return await Promise.all(
       transactions.map(async (t) => {
-        let patientName = undefined
-        let professionalName = undefined
+        let patientName: string | undefined
+        let professionalName: string | undefined
 
         if (t.patientId) {
-          const p = await ctx.db.get(t.patientId)
-          patientName = p?.name
+          if (patientCache.has(t.patientId)) {
+            patientName = patientCache.get(t.patientId)
+          } else {
+            const p = await ctx.db.get(t.patientId)
+            patientName = p?.name
+            patientCache.set(t.patientId, patientName)
+          }
         }
         if (t.professionalId) {
-          const prof = await ctx.db.get(t.professionalId)
-          professionalName = prof?.name
+          if (profCache.has(t.professionalId)) {
+            professionalName = profCache.get(t.professionalId)
+          } else {
+            const prof = await ctx.db.get(t.professionalId)
+            professionalName = prof?.name
+            profCache.set(t.professionalId, professionalName)
+          }
         }
 
         const isOverdue = t.status === "pending" && t.dueDate < todayStr
@@ -305,6 +318,9 @@ export const calculateProfessionalCommissions = query({
     const professionals = await ctx.db.query("professionals").collect()
     const services = await ctx.db.query("services").collect()
 
+    const patientPkgCache = new Map<string, any>()
+    const pkgDefCache = new Map<string, any>()
+
     const results = await Promise.all(
       professionals.map(async (prof) => {
         // Verifica se já existe fechamento formal na tabela commissions
@@ -355,13 +371,21 @@ export const calculateProfessionalCommissions = query({
           for (const part of confirmedParticipants) {
             totalAttendedCount++
 
-            // Resolução do valor da sessão (Pacote proporcional ou Tabela de Serviço)
+            // Resolução do valor da sessão (Pacote proporcional ou Tabela de Serviço) com cache
             let sessionPrice = schedule.type === "turma" ? 95 : 180
 
             if (part.patientPackageId) {
-              const patientPkg = await ctx.db.get(part.patientPackageId)
+              let patientPkg = patientPkgCache.get(part.patientPackageId)
+              if (patientPkg === undefined) {
+                patientPkg = await ctx.db.get(part.patientPackageId)
+                patientPkgCache.set(part.patientPackageId, patientPkg)
+              }
               if (patientPkg) {
-                const pkgDef = await ctx.db.get(patientPkg.packageId)
+                let pkgDef = pkgDefCache.get(patientPkg.packageId)
+                if (pkgDef === undefined) {
+                  pkgDef = await ctx.db.get(patientPkg.packageId)
+                  pkgDefCache.set(patientPkg.packageId, pkgDef)
+                }
                 if (pkgDef && pkgDef.sessionCount > 0) {
                   sessionPrice = Math.round(pkgDef.price / pkgDef.sessionCount)
                 }

@@ -32,12 +32,12 @@ export const getWeeklyGridData = query({
       dates.push(d.toISOString().split('T')[0])
     }
 
-    const rooms = (await ctx.db.query('rooms').collect()).filter(r => r.isActive)
-    const professionals = (await ctx.db.query('professionals').collect()).filter(p => p.active)
+    const rooms = await ctx.db.query('rooms').withIndex('by_active', q => q.eq('isActive', true)).collect()
+    const professionals = await ctx.db.query('professionals').withIndex('by_active', q => q.eq('active', true)).collect()
     const profMap = Object.fromEntries(professionals.map(p => [p._id, p.name]))
 
-    // Busca todas as regras de disponibilidade ativas
-    const allRules = (await ctx.db.query('availabilityRules').collect()).filter(r => r.isActive)
+    // Busca todas as regras de disponibilidade ativas via índice
+    const allRules = await ctx.db.query('availabilityRules').withIndex('by_active', q => q.eq('isActive', true)).collect()
 
     // Busca todos os schedules da semana em paralelo
     const daySchedulesArray = await Promise.all(

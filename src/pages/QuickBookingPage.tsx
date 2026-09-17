@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useAction } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ import { RoomDrawer } from '@/components/quickBooking/RoomDrawer'
 import { ConfirmBookingModal } from '@/components/quickBooking/ConfirmBookingModal'
 import { WhatsAppCountdownToast } from '@/components/quickBooking/WhatsAppCountdownToast'
 import { getTodayDateString } from '@/lib/dateUtils'
+import { DEFAULT_CLINICAL_SPECIALTIES } from '../../shared/clinicalSpecialties'
 
 // ─── Helpers de Data (timezone-safe) ────────────────────────────────────────
 
@@ -72,17 +73,6 @@ function estimateRecurringSessions(slots: SelectedSlot[], month: string): number
   return total
 }
 
-// ─── Especialidades ─────────────────────────────────────────────────────────
-
-const SPECIALTIES = [
-  { value: '', label: 'Todas as especialidades' },
-  { value: 'pilates', label: 'Pilates' },
-  { value: 'fisioterapia', label: 'Fisioterapia' },
-  { value: 'rpg', label: 'RPG' },
-  { value: 'avaliacao', label: 'Avaliação' },
-  { value: 'fortalecimento_muscular', label: 'Fortalecimento Muscular' },
-]
-
 // ─── Componente Principal ───────────────────────────────────────────────────
 
 interface QuickBookingPageProps {
@@ -127,6 +117,17 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   } | null>(null)
 
   // ─── Queries ────────────────────────────────────────────────────────────
+
+  const dbClinicalSpecialties = useQuery(api.clinic.getClinicalSpecialties, {})
+  const clinicalSpecialties = dbClinicalSpecialties && dbClinicalSpecialties.length > 0
+    ? dbClinicalSpecialties
+    : DEFAULT_CLINICAL_SPECIALTIES
+
+  useEffect(() => {
+    if (specialtyFilter && !clinicalSpecialties.some((s) => s.id === specialtyFilter)) {
+      setSpecialtyFilter('')
+    }
+  }, [clinicalSpecialties, specialtyFilter])
 
   const gridData = useQuery(api.quickBooking.getWeeklyGridData, {
     weekStart,
@@ -423,8 +424,9 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
               Especialidade
             </label>
             <Select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-              {SPECIALTIES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+              <option value="">Todas as especialidades</option>
+              {clinicalSpecialties.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </Select>
           </div>

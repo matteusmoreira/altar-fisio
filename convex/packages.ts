@@ -21,10 +21,15 @@ export const listPackages = query({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     const packages = await ctx.db.query("packages").collect()
+    const svcCache = new Map<string, any>()
 
     return await Promise.all(
       packages.map(async (pkg) => {
-        const service = await ctx.db.get(pkg.serviceId)
+        let service = svcCache.get(pkg.serviceId)
+        if (service === undefined) {
+          service = await ctx.db.get(pkg.serviceId)
+          svcCache.set(pkg.serviceId, service)
+        }
         return {
           ...pkg,
           serviceName: service?.name || "Serviço",
@@ -161,14 +166,16 @@ export const listPatientPackages = query({
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
     let patientPackages
-    if (args.patientId) {
+    if (args.patientId && args.status) {
+      patientPackages = await ctx.db
+        .query("patientPackages")
+        .withIndex("by_patient_status", (q) => q.eq("patientId", args.patientId!).eq("status", args.status!))
+        .collect()
+    } else if (args.patientId) {
       patientPackages = await ctx.db
         .query("patientPackages")
         .withIndex("by_patient", (q) => q.eq("patientId", args.patientId!))
         .collect()
-      if (args.status) {
-        patientPackages = patientPackages.filter((p) => p.status === args.status)
-      }
     } else if (args.status) {
       patientPackages = await ctx.db
         .query("patientPackages")
@@ -179,14 +186,32 @@ export const listPatientPackages = query({
     }
 
     const todayStr = new Date().toISOString().split("T")[0]
+    const patientCache = new Map<string, any>()
+    const pkgCache = new Map<string, any>()
+    const svcCache = new Map<string, any>()
 
     const enriched = await Promise.all(
       patientPackages.map(async (item) => {
-        const patient = await ctx.db.get(item.patientId)
-        const pkg = await ctx.db.get(item.packageId)
+        let patient = patientCache.get(item.patientId)
+        if (patient === undefined) {
+          patient = await ctx.db.get(item.patientId)
+          patientCache.set(item.patientId, patient)
+        }
+
+        let pkg = pkgCache.get(item.packageId)
+        if (pkg === undefined) {
+          pkg = await ctx.db.get(item.packageId)
+          pkgCache.set(item.packageId, pkg)
+        }
+
         let service = null
         if (pkg?.serviceId) {
-          service = await ctx.db.get(pkg.serviceId)
+          if (svcCache.has(pkg.serviceId)) {
+            service = svcCache.get(pkg.serviceId)
+          } else {
+            service = await ctx.db.get(pkg.serviceId)
+            svcCache.set(pkg.serviceId, service)
+          }
         }
 
         const isExpired = item.status === "active" && item.expiryDate < todayStr

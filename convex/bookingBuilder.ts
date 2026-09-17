@@ -268,14 +268,22 @@ export const listPublicAvailableSlots = query({
 // 4.1 Listar Pacotes e Planos Ativos para Agendamento Público
 export const listPublicPackages = query({
   handler: async (ctx) => {
-    const packages = await ctx.db.query("packages").collect()
-    const activePublicPackages = packages.filter(
-      (pkg) => pkg.active && pkg.showInPublicBooking !== false
+    const activePackages = await ctx.db
+      .query("packages")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect()
+    const activePublicPackages = activePackages.filter(
+      (pkg) => pkg.showInPublicBooking !== false
     )
 
+    const svcCache = new Map<string, any>()
     const publicPackages = await Promise.all(
       activePublicPackages.map(async (pkg) => {
-        const service = await ctx.db.get(pkg.serviceId)
+        let service = svcCache.get(pkg.serviceId)
+        if (service === undefined) {
+          service = await ctx.db.get(pkg.serviceId)
+          svcCache.set(pkg.serviceId, service)
+        }
         if (!service?.active || !service.isEvaluation || service.modality !== 'individual') return null
         return {
           ...pkg,

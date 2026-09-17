@@ -11,39 +11,62 @@ export const runDailyMaintenance = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now()
-    const todayStr = new Date().toISOString().split("T")[0]
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now)
+    const fifteenDaysAgoMs = now - 15 * 24 * 60 * 60 * 1000
+    const thirtyDaysAgoMs = now - 30 * 24 * 60 * 60 * 1000
     const sixtyDaysAgoMs = now - 60 * 24 * 60 * 60 * 1000
 
-    // 1. Limpeza de sessões expiradas (lote de até 100 por execução)
+    // 1. Limpeza de sessões expiradas de staff e pacientes (lote de até 250 por execução)
     const expiredSessions = await ctx.db
       .query("userSessions")
       .withIndex("by_expiresAt", (q) => q.lte("expiresAt", now))
-      .take(100)
+      .take(250)
+    for (const session of expiredSessions) await ctx.db.delete(session._id)
 
-    for (const session of expiredSessions) {
-      await ctx.db.delete(session._id)
-    }
-
-    const expiredPatientSessions = await ctx.db.query('patientSessions').withIndex('by_expiresAt', q => q.lte('expiresAt', now)).take(100)
+    const expiredPatientSessions = await ctx.db
+      .query("patientSessions")
+      .withIndex("by_expiresAt", (q) => q.lte("expiresAt", now))
+      .take(250)
     for (const session of expiredPatientSessions) await ctx.db.delete(session._id)
-    const oldAttempts = await ctx.db.query('authAttempts').withIndex('by_resetAt', q => q.lte('resetAt', now)).take(100)
+
+    const oldAttempts = await ctx.db
+      .query("authAttempts")
+      .withIndex("by_resetAt", (q) => q.lte("resetAt", now))
+      .take(250)
     for (const attempt of oldAttempts) await ctx.db.delete(attempt._id)
 
-    // 2. Limpeza de logs de notificação com mais de 60 dias (lote de até 100 por execução)
+    // 2. Limpeza de logs de notificação com mais de 30 dias (lote de até 300)
     const oldLogs = await ctx.db
       .query("notificationLogs")
+      .withIndex("by_timestamp", (q) => q.lte("timestamp", thirtyDaysAgoMs))
+      .take(300)
+    for (const log of oldLogs) await ctx.db.delete(log._id)
+
+    // 3. Limpeza de logs de auditoria LGPD/COFFITO com mais de 60 dias (lote de até 300)
+    const oldAuditLogs = await ctx.db
+      .query("auditLogs")
       .withIndex("by_timestamp", (q) => q.lte("timestamp", sixtyDaysAgoMs))
-      .take(100)
+      .take(300)
+    for (const audit of oldAuditLogs) await ctx.db.delete(audit._id)
 
-    for (const log of oldLogs) {
-      await ctx.db.delete(log._id)
-    }
+    // 4. Limpeza de jobs de lembretes concluídos ou pulados com mais de 15 dias (lote de até 250)
+    const oldSentJobs = await ctx.db
+      .query("appointmentJobs")
+      .withIndex("by_status_due", (q) => q.eq("status", "sent").lte("dueAt", fifteenDaysAgoMs))
+      .take(150)
+    for (const job of oldSentJobs) await ctx.db.delete(job._id)
 
-    // 3. Expiração de créditos de reposição vencidos
+    const oldSkippedJobs = await ctx.db
+      .query("appointmentJobs")
+      .withIndex("by_status_due", (q) => q.eq("status", "skipped").lte("dueAt", fifteenDaysAgoMs))
+      .take(150)
+    for (const job of oldSkippedJobs) await ctx.db.delete(job._id)
+
+    // 5. Expiração de créditos de reposição vencidos
     const availableCredits = await ctx.db
       .query("replacementCredits")
       .withIndex("by_status", (q) => q.eq("status", "available"))
-      .take(100)
+      .take(150)
 
     let expiredCreditsCount = 0
     for (const credit of availableCredits) {
@@ -55,8 +78,10 @@ export const runDailyMaintenance = internalMutation({
 
     return {
       success: true,
-      clearedSessions: expiredSessions.length,
-      clearedLogs: oldLogs.length,
+      clearedSessions: expiredSessions.length + expiredPatientSessions.length,
+      clearedNotificationLogs: oldLogs.length,
+      clearedAuditLogs: oldAuditLogs.length,
+      clearedAppointmentJobs: oldSentJobs.length + oldSkippedJobs.length,
       expiredCredits: expiredCreditsCount,
       executedAt: now,
     }

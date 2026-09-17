@@ -256,7 +256,10 @@ const todayStr = getTodayDateString()
 
 const ClinicDataContext = createContext<ClinicDataContextType | undefined>(undefined)
 
-export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSection?: string }> = ({
+  children,
+  currentSection,
+}) => {
   const { user } = useAuth()
   const [rooms, setRooms] = useState<Room[]>([])
 
@@ -297,7 +300,9 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     getCurrentMonthString()
   )
 
-  // Convex Real-Time Queries (WebSocket)
+  const isSection = (sections: string[]) => !currentSection || sections.includes(currentSection)
+
+  // Convex Real-Time Queries (WebSocket) com subscrições inteligentes sob demanda
   const convexRooms = useQuery(api.rooms.listRooms)
   const convexProfessionals = useQuery(api.professionals.listProfessionals)
   const convexPatients = useQuery(api.patients.listPatients, {})
@@ -317,26 +322,56 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const convexReplacementCredits = useQuery(api.schedules.listAvailableReplacementCredits, {})
   const convexTransactions = useQuery(
     api.finance.listTransactions,
-    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {}
+    isSection(["finance", "dashboard", "packages"])
+      ? (selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {})
+      : "skip"
   )
   const convexCashFlow = useQuery(
     api.finance.getCashFlowSummary,
-    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {}
+    isSection(["finance", "dashboard"])
+      ? (selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : {})
+      : "skip"
   )
   const convexCommissions = useQuery(
     api.finance.calculateProfessionalCommissions,
-    selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : { monthYear: getCurrentMonthString() }
+    isSection(["finance"])
+      ? (selectedFinanceMonth && selectedFinanceMonth !== "all" ? { monthYear: selectedFinanceMonth } : { monthYear: getCurrentMonthString() })
+      : "skip"
   )
-  const convexClosedCommissions = useQuery(api.finance.listCommissions)
-  const convexLogs = useQuery(api.notifications.listLogs, { limit: 50 })
-  const convexNotificationStats = useQuery(api.notifications.getNotificationStats, {})
+  const convexClosedCommissions = useQuery(
+    api.finance.listCommissions,
+    isSection(["finance"]) ? {} : "skip"
+  )
+  const convexLogs = useQuery(
+    api.notifications.listLogs,
+    isSection(["notifications"]) ? { limit: 50 } : "skip"
+  )
+  const convexNotificationStats = useQuery(
+    api.notifications.getNotificationStats,
+    isSection(["notifications"]) ? {} : "skip"
+  )
   const convexServices = useQuery(api.services.listServices)
   const convexPackages = useQuery(api.packages.listPackages)
-  const convexPatientPackages = useQuery(api.packages.listPatientPackages, {})
-  const convexRenewalAlerts = useQuery(api.packages.listRenewalAlerts)
-  const convexAuditLogs = useQuery(api.audit.listAuditLogs, { limit: 50 })
-  const convexClinicalOverview = useQuery(api.clinical.listAllClinicalOverview)
-  const convexClinicalReports = useQuery(api.clinical.listClinicalReports, {})
+  const convexPatientPackages = useQuery(
+    api.packages.listPatientPackages,
+    isSection(["packages", "dashboard", "patients"]) ? {} : "skip"
+  )
+  const convexRenewalAlerts = useQuery(
+    api.packages.listRenewalAlerts,
+    isSection(["packages", "dashboard"]) ? {} : "skip"
+  )
+  const convexAuditLogs = useQuery(
+    api.audit.listAuditLogs,
+    isSection(["settings"]) ? { limit: 50 } : "skip"
+  )
+  const convexClinicalOverview = useQuery(
+    api.clinical.listAllClinicalOverview,
+    isSection(["clinical", "patients"]) ? {} : "skip"
+  )
+  const convexClinicalReports = useQuery(
+    api.clinical.listClinicalReports,
+    isSection(["clinical", "patients"]) ? {} : "skip"
+  )
 
   // Convex Mutations
   const createServiceMutation = useMutation(api.services.createService)

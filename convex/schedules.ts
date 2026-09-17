@@ -67,10 +67,34 @@ export function parseDateTimeToMs(dateStr: string, timeStr: string): number {
   return new Date(`${dateStr}T${timeStr}:00-03:00`).getTime()
 }
 
+export interface ScheduleEnrichmentCache {
+  rooms?: Map<string, any>
+  professionals?: Map<string, any>
+  patients?: Map<string, any>
+  pkgDefs?: Map<string, any>
+  services?: Map<string, any>
+}
+
 // Helper para enriquecer agendamento com sala, profissional e participantes
-export async function enrichSchedule(ctx: any, schedule: any) {
-  const room = await ctx.db.get(schedule.roomId)
-  const professional = await ctx.db.get(schedule.professionalId)
+export async function enrichSchedule(ctx: any, schedule: any, cache?: ScheduleEnrichmentCache) {
+  const roomCache = cache?.rooms
+  const profCache = cache?.professionals
+  const patientCache = cache?.patients
+  const pkgDefCache = cache?.pkgDefs
+  const serviceCache = cache?.services
+
+  let room = roomCache?.get(schedule.roomId)
+  if (room === undefined) {
+    room = await ctx.db.get(schedule.roomId)
+    roomCache?.set(schedule.roomId, room)
+  }
+
+  let professional = profCache?.get(schedule.professionalId)
+  if (professional === undefined) {
+    professional = await ctx.db.get(schedule.professionalId)
+    profCache?.set(schedule.professionalId, professional)
+  }
+
   const participants = await ctx.db
     .query("scheduleParticipants")
     .withIndex("by_schedule", (q: any) => q.eq("scheduleId", schedule._id))
@@ -80,21 +104,54 @@ export async function enrichSchedule(ctx: any, schedule: any) {
 
   const enrichedParticipants = await Promise.all(
     participants.map(async (p: any) => {
-      const patient = await ctx.db.get(p.patientId)
+      let patient = patientCache?.get(p.patientId)
+      if (patient === undefined) {
+        patient = await ctx.db.get(p.patientId)
+        patientCache?.set(p.patientId, patient)
+      }
 
-      // Buscar se o paciente tem pacote ativo correspondente à especialidade
+      // Se o participante já tem vínculo direto com um pacote específico:
+      if (p.patientPackageId) {
+        const directPkg = await ctx.db.get(p.patientPackageId)
+        if (directPkg && directPkg.status === "active" && directPkg.remainingSessions > 0) {
+          let pkgDef = pkgDefCache?.get(directPkg.packageId)
+          if (pkgDef === undefined) {
+            pkgDef = await ctx.db.get(directPkg.packageId)
+            pkgDefCache?.set(directPkg.packageId, pkgDef)
+          }
+          return {
+            ...p,
+            patientName: patient?.name || "Paciente",
+            patientPhone: patient?.phone || "",
+            hasActivePackage: true,
+            activePackageName: pkgDef?.name || "Pacote",
+            remainingSessions: directPkg.remainingSessions,
+            totalSessions: directPkg.totalSessions,
+          }
+        }
+      }
+
+      // Buscar se o paciente tem pacote ativo correspondente à especialidade pelo índice otimizado
       const patientPkgs = await ctx.db
         .query("patientPackages")
-        .withIndex("by_patient", (q: any) => q.eq("patientId", p.patientId))
+        .withIndex("by_patient_status", (q: any) => q.eq("patientId", p.patientId).eq("status", "active"))
         .collect()
 
       const validPkgs = []
       for (const item of patientPkgs) {
-        if (item.status === "active" && item.remainingSessions > 0 && item.expiryDate >= todayStr) {
-          const pkgDef = await ctx.db.get(item.packageId)
+        if (item.remainingSessions > 0 && item.expiryDate >= todayStr) {
+          let pkgDef = pkgDefCache?.get(item.packageId)
+          if (pkgDef === undefined) {
+            pkgDef = await ctx.db.get(item.packageId)
+            pkgDefCache?.set(item.packageId, pkgDef)
+          }
           let matchesSpecialty = true
           if (pkgDef?.serviceId) {
-            const svc = await ctx.db.get(pkgDef.serviceId)
+            let svc = serviceCache?.get(pkgDef.serviceId)
+            if (svc === undefined) {
+              svc = await ctx.db.get(pkgDef.serviceId)
+              serviceCache?.set(pkgDef.serviceId, svc)
+            }
             if (svc && svc.specialty !== schedule.specialty) {
               matchesSpecialty = false
             }
@@ -151,14 +208,21 @@ export const listSchedulesByDate = query({
       .withIndex("by_date", (q) => q.eq("date", args.date))
       .collect()
 
-    const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s)))
+    const cache: ScheduleEnrichmentCache = {
+      rooms: new Map(),
+      professionals: new Map(),
+      patients: new Map(),
+      pkgDefs: new Map(),
+      services: new Map(),
+    }
+    const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s, cache)))
 
     // Ordenar por horário de início
     return enriched.sort((a, b) => a.startTime.localeCompare(b.startTime))
   },
 })
 
-// Query Otimizada por Faixa de Datas (Semana / Mês) com Suporte a Filtros
+// Query Otimizada por Faixa de Datas (Semana / Mês) com Suporte a Filtros e Índices Compostos
 export const listSchedulesByDateRange = query({
   args: { sessionToken: v.string(),
     startDate: v.string(), // YYYY-MM-DD
@@ -170,22 +234,52 @@ export const listSchedulesByDateRange = query({
     const { sessionToken, ...args } = input
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
-    const schedules = await ctx.db
-      .query("schedules")
-      .withIndex("by_date", (q) =>
-        q.gte("date", args.startDate).lte("date", args.endDate)
-      )
-      .collect()
+    const profId = args.professionalId && args.professionalId !== "all"
+      ? ctx.db.normalizeId("professionals", args.professionalId)
+      : null
+    const roomId = args.roomId && args.roomId !== "all"
+      ? ctx.db.normalizeId("rooms", args.roomId)
+      : null
 
-    let filtered = schedules
-    if (args.roomId && args.roomId !== "all") {
-      filtered = filtered.filter((s) => s.roomId === args.roomId)
-    }
-    if (args.professionalId && args.professionalId !== "all") {
-      filtered = filtered.filter((s) => s.professionalId === args.professionalId)
+    let schedules
+    if (profId) {
+      schedules = await ctx.db
+        .query("schedules")
+        .withIndex("by_professional_date", (q) =>
+          q.eq("professionalId", profId)
+            .gte("date", args.startDate)
+            .lte("date", args.endDate)
+        )
+        .collect()
+      if (roomId) {
+        schedules = schedules.filter((s) => s.roomId === roomId)
+      }
+    } else if (roomId) {
+      schedules = await ctx.db
+        .query("schedules")
+        .withIndex("by_room_date", (q) =>
+          q.eq("roomId", roomId)
+            .gte("date", args.startDate)
+            .lte("date", args.endDate)
+        )
+        .collect()
+    } else {
+      schedules = await ctx.db
+        .query("schedules")
+        .withIndex("by_date", (q) =>
+          q.gte("date", args.startDate).lte("date", args.endDate)
+        )
+        .collect()
     }
 
-    const enriched = await Promise.all(filtered.map((s) => enrichSchedule(ctx, s)))
+    const cache: ScheduleEnrichmentCache = {
+      rooms: new Map(),
+      professionals: new Map(),
+      patients: new Map(),
+      pkgDefs: new Map(),
+      services: new Map(),
+    }
+    const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s, cache)))
 
     // Ordenar por data e por horário de início
     return enriched.sort((a, b) => {

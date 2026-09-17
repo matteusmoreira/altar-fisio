@@ -11,12 +11,12 @@ crons.daily(
   {}
 )
 
-// Prepara lembretes futuros existentes sem disparar janelas já vencidas.
-crons.interval(
-  "preparar-lembretes-1h-30min",
-  { minutes: 5 },
+// 2. Diariamente às 04:00 BRT (07:00 UTC) executa verificação preventiva de lembretes futuros (otimização plano free)
+crons.daily(
+  "preparar-lembretes-preventivo",
+  { hourUTC: 7, minuteUTC: 0 },
   internal.appointmentNotifications.backfill,
-  { paginationOpts: { numItems: 10, cursor: null } }
+  { paginationOpts: { numItems: 25, cursor: null } }
 )
 
 // 3. A cada 30 minutos processa campanhas recorrentes do disparador em massa

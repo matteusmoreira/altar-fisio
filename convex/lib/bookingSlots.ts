@@ -37,12 +37,15 @@ export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingS
     const participants = await ctx.db.query('scheduleParticipants').withIndex('by_schedule', q => q.eq('scheduleId', s._id)).collect()
     return [s._id, participants.filter(occupiesSeat).length] as const
   })))
-  const configuredRules = await ctx.db.query('availabilityRules').collect()
-  const overrides = await ctx.db.query('availabilityOverrides').withIndex('by_date', q => q.eq('date', args.date)).collect()
   const day = new Date(`${args.date}T12:00:00-03:00`).getUTCDay()
+  const dayRules = await ctx.db
+    .query('availabilityRules')
+    .withIndex('by_day_active', q => q.eq('dayOfWeek', day).eq('isActive', true))
+    .collect()
+  const overrides = await ctx.db.query('availabilityOverrides').withIndex('by_date', q => q.eq('date', args.date)).collect()
   type Candidate = { start: string; end: string; roomId: Id<'rooms'>; professionalId: Id<'professionals'>; specialty: Specialty }
   const candidates: Candidate[] = []
-  for (const rule of configuredRules.filter(r => r.isActive && r.dayOfWeek === day)) {
+  for (const rule of dayRules) {
     for (const slice of sliceTimeWindowIntoSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes ?? 50, rule.breakMinutes ?? 10)) {
       candidates.push({ ...slice, roomId: rule.roomId, professionalId: rule.professionalId, specialty: rule.specialty })
     }
@@ -54,7 +57,8 @@ export async function getPublicSlots(ctx: QueryCtx | MutationCtx, args: BookingS
     }
   }
   // Compatibility for clinics that have never configured a weekly schedule.
-  if (configuredRules.length === 0) {
+  const hasConfiguredRules = (await ctx.db.query('availabilityRules').first()) !== null
+  if (!hasConfiguredRules) {
     for (const room of rooms) {
       const roomSpecialty = room.type.startsWith('pilates') ? 'pilates' : room.type === 'rpg' ? 'rpg' : 'fisioterapia'
       for (const professional of professionals) {

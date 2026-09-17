@@ -115,7 +115,8 @@ function AppContent() {
   }
 
   return (
-    <ClinicDataProvider key={user?.id}><AppLayout currentSection={currentSection} onNavigate={setCurrentSection}>
+    <ClinicDataProvider key={user?.id} currentSection={currentSection}>
+      <AppLayout currentSection={currentSection} onNavigate={setCurrentSection}>
       <Suspense fallback={<PageLoadingFallback />}>
         {currentSection === "dashboard" && (
           <DashboardPage onNavigate={setCurrentSection} />

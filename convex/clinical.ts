@@ -277,10 +277,14 @@ export const listAllClinicalOverview = query({
           .order("desc")
           .first()
 
-        const recentEvos = await ctx.db
-          .query("clinicalEvolutions")
-          .withIndex("by_patient", (q) => q.eq("patientId", p._id))
-          .take(50)
+        let evolutionsCount = 0
+        if (lastEvo) {
+          const recentEvos = await ctx.db
+            .query("clinicalEvolutions")
+            .withIndex("by_patient", (q) => q.eq("patientId", p._id))
+            .take(50)
+          evolutionsCount = recentEvos.length
+        }
 
         return {
           patientId: p._id,
@@ -294,7 +298,7 @@ export const listAllClinicalOverview = query({
           painScaleEva: record?.painScaleEva ?? null,
           clinicalGoals: record?.clinicalGoals || "",
           posturalNotes: record?.posturalNotes || "",
-          evolutionsCount: recentEvos.length,
+          evolutionsCount,
           lastEvolutionDate: lastEvo?.date || null,
           lastTechnique: lastEvo?.techniqueCategory || null,
           lastPainAfter: lastEvo?.painScaleAfter ?? null,
