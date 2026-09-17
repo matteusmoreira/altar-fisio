@@ -1,5 +1,18 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Remoção de Bloco Invasivo de Falhas de WhatsApp e Expurgos de Jobs na Manutenção do Convex
+- **Ponto de Fricção**:
+  1. Na tela de Lembretes WhatsApp/Email (`NotificationsPage.tsx`), o componente `<AppointmentDeliveryProblems />` exibia um card amarelo permanente ("WhatsApp: envios que precisam de atenção") contendo registros repetidos de envios que falharam ou retornaram sem confirmação do provedor ("Envio não confirmado pelo provedor. Confira o WhatsApp antes de reenviar."). Não havia botão para dispensar, descartar ou limpar os avisos, mantendo o card eternamente travado na interface.
+  2. Na rotina de manutenção diária (`convex/maintenance.ts`), apenas jobs de lembretes com status `sent` e `skipped` eram expurgados; jobs com status `failed` e `uncertain` nunca eram limpos pelo lote automático, gerando acúmulo de dados na tabela `appointmentJobs`.
+  3. Para o deploy Convex na nuvem (`npx convex deploy`), o `.env.local` contém `CONVEX_DEPLOYMENT=anonymous:...`, o que faz o CLI tentar publicar no ambiente local anônimo a menos que a variável seja explicitamente sobrescrita como `$env:CONVEX_DEPLOYMENT="exuberant-guanaco-180"`.
+- **Mitigação / Regra**:
+  1. Remover `<AppointmentDeliveryProblems />` da `NotificationsPage.tsx` e deletar o componente órfão `src/components/whatsapp/AppointmentDeliveryProblems.tsx`, mantendo a tela limpa e direcionando a visualização de falhas exclusivamente para a aba "Histórico & Auditoria".
+  2. Implementar as mutações `appointmentNotifications:clearProblems` (para uso autenticado por admin/reception) e `appointmentNotifications:clearProblemsInternal` (para execução interna/CLI) no backend Convex, autorizadas em `shared/accessPolicy.ts`.
+  3. Atualizar a rotina de manutenção diária em `convex/maintenance.ts` para também expurgar jobs com status `failed` e `uncertain` com mais de 15 dias, evitando retenção indefinida no tier gratuito do Convex.
+  4. Executar com sucesso a limpeza remota em produção (`appointmentNotifications:clearProblemsInternal`), eliminando os 10 registros travados na nuvem.
+- **Validação**: 276 testes Vitest em 49 arquivos (incluindo testes dedicados em `tests/notifications-problems-removed.test.ts` e `tests/notification-logs-ui.test.tsx`) e 3 testes de service worker aprovados 100%. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint com 0 erros. Deploy Convex de produção `exuberant-guanaco-180` atualizado e commit enviado para a branch `main` no GitHub.
+
+
 ### [2026-09-17] Exibição Exclusiva de Logotipo sem Textos Redundantes na Identidade Visual do Sistema
 - **Ponto de Fricção**:
   1. No cabeçalho da barra lateral desktop, cabeçalho mobile e tela de login, quando uma clínica configurava ou alterava o logotipo do sistema (`theme.logoUrl`), a imagem ficava confinada em um quadrado rígido reduzido (40x40px), e ao lado eram exibidos o nome e o subtítulo da clínica (`theme.clinicName` e `theme.clinicSubtitle`), causando truncamento de texto ("Clínica de Fisioterapi..."), poluição visual e redundância gráfica (a maioria dos logotipos de clínicas já inclui o nome da empresa na própria imagem).
