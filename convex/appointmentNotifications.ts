@@ -110,6 +110,33 @@ export const problems = query({
   },
 })
 
+export const clearProblems = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'reception'])
+    const jobs = (await Promise.all((['failed', 'uncertain', 'sending'] as const).map(status => ctx.db.query('appointmentJobs').withIndex('by_status_due', q => q.eq('status', status)).take(100)))).flat()
+    let count = 0
+    for (const job of jobs) {
+      await ctx.db.delete(job._id)
+      count++
+    }
+    return { count }
+  },
+})
+
+export const clearProblemsInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const jobs = (await Promise.all((['failed', 'uncertain', 'sending'] as const).map(status => ctx.db.query('appointmentJobs').withIndex('by_status_due', q => q.eq('status', status)).take(100)))).flat()
+    let count = 0
+    for (const job of jobs) {
+      await ctx.db.delete(job._id)
+      count++
+    }
+    return { count }
+  },
+})
+
 // Bootstrap paginado e idempotente: também recupera agendamentos feitos por integrações antigas.
 export const backfill = internalMutation({
   args: { paginationOpts: paginationOptsValidator },

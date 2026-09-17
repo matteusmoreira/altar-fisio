@@ -180,3 +180,10 @@ test('non-admin user does not see Excluir Todos os Logs or row trash buttons', (
   // Botões de exclusão individual NÃO devem existir
   expect(screen.queryAllByTitle('Excluir este log').length).toBe(0)
 })
+
+test('NotificationsPage does not render AppointmentDeliveryProblems banner', () => {
+  render(<NotificationsPage />)
+  expect(screen.queryByText(/WhatsApp: envios que precisam de atenção/i)).toBeNull()
+  expect(screen.queryByLabelText(/Envios que precisam de atenção/i)).toBeNull()
+})
+

@@ -50,7 +50,7 @@ export const runDailyMaintenance = internalMutation({
       .take(300)
     for (const audit of oldAuditLogs) await ctx.db.delete(audit._id)
 
-    // 4. Limpeza de jobs de lembretes concluídos ou pulados com mais de 15 dias (lote de até 250)
+    // 4. Limpeza de jobs de lembretes concluídos, pulados ou com falha com mais de 15 dias (lote de até 300)
     const oldSentJobs = await ctx.db
       .query("appointmentJobs")
       .withIndex("by_status_due", (q) => q.eq("status", "sent").lte("dueAt", fifteenDaysAgoMs))
@@ -62,6 +62,18 @@ export const runDailyMaintenance = internalMutation({
       .withIndex("by_status_due", (q) => q.eq("status", "skipped").lte("dueAt", fifteenDaysAgoMs))
       .take(150)
     for (const job of oldSkippedJobs) await ctx.db.delete(job._id)
+
+    const oldFailedJobs = await ctx.db
+      .query("appointmentJobs")
+      .withIndex("by_status_due", (q) => q.eq("status", "failed").lte("dueAt", fifteenDaysAgoMs))
+      .take(100)
+    for (const job of oldFailedJobs) await ctx.db.delete(job._id)
+
+    const oldUncertainJobs = await ctx.db
+      .query("appointmentJobs")
+      .withIndex("by_status_due", (q) => q.eq("status", "uncertain").lte("dueAt", fifteenDaysAgoMs))
+      .take(100)
+    for (const job of oldUncertainJobs) await ctx.db.delete(job._id)
 
     // 5. Expiração de créditos de reposição vencidos
     const availableCredits = await ctx.db
@@ -102,9 +114,11 @@ export const runDailyMaintenance = internalMutation({
       success: true,
       clearedSessions: expiredSessions.length + expiredPatientSessions.length,
       clearedNotificationLogs: oldLogs.length,
-      clearedAuditLogs: oldAuditLogs.length,
-      clearedAppointmentJobs: oldSentJobs.length + oldSkippedJobs.length,
-      expiredCredits: expiredCreditsCount,
+      clearedAppointmentJobs:
+        oldSentJobs.length +
+        oldSkippedJobs.length +
+        oldFailedJobs.length +
+        oldUncertainJobs.length,
       sanitizedSchedules: sanitizedSchedulesCount,
       executedAt: now,
     }

@@ -1,5 +1,4 @@
 import { useAuth } from '@/contexts/AuthContext'
-import { AppointmentDeliveryProblems } from '@/components/whatsapp/AppointmentDeliveryProblems'
 import React, { useState, useMemo } from "react"
 import { useQuery, useAction, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
@@ -308,7 +307,6 @@ export const NotificationsPage: React.FC = () => {
 
 
       {/* Abas Principais do Módulo */}
-      <AppointmentDeliveryProblems />
       <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
         <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex flex-wrap gap-1">
           <TabsTrigger

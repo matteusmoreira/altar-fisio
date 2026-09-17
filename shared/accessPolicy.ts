@@ -20,6 +20,7 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "appointmentNotifications:problems": ["admin", "reception"],
   "appointmentNotifications:retry": ["admin", "reception"],
   "appointmentNotifications:scan": ["admin", "reception"],
+  "appointmentNotifications:clearProblems": ["admin", "reception"],
   "clinic:getNotificationSettings": ["admin", "reception"],
   "clinic:getHealthInsuranceOptions": ["admin", "professional", "reception"],
   "clinic:updateHealthInsuranceOptions": ["admin"],
