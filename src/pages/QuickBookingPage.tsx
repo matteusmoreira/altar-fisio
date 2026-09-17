@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
-import { useQuery, useMutation, useAction } from '@/lib/staffConvex'
+import { useQuery, useMutation } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Loader2,
   ArrowLeft,
+  CalendarRange,
+  CalendarDays,
 } from 'lucide-react'
 import { PatientSearchPanel } from '@/components/quickBooking/PatientSearchPanel'
 import { QuickPatientForm } from '@/components/quickBooking/QuickPatientForm'
@@ -25,7 +27,14 @@ import { WeeklyScheduleGrid, type GridSlot, type SelectedSlot } from '@/componen
 import { RoomDrawer } from '@/components/quickBooking/RoomDrawer'
 import { ConfirmBookingModal } from '@/components/quickBooking/ConfirmBookingModal'
 import { WhatsAppCountdownToast } from '@/components/quickBooking/WhatsAppCountdownToast'
-import { getTodayDateString } from '@/lib/dateUtils'
+import {
+  getTodayDateString,
+  addDaysSafe,
+  addMonthsSafe,
+  formatDateWithWeekdayBR,
+  formatMonthYearBR,
+} from '@/lib/dateUtils'
+import { formatProfessionalDisplayName } from '@/lib/professionalUtils'
 import { DEFAULT_CLINICAL_SPECIALTIES } from '../../shared/clinicalSpecialties'
 
 // ─── Helpers de Data (timezone-safe) ────────────────────────────────────────
@@ -89,6 +98,9 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [isRecurring, setIsRecurring] = useState(false)
   const [specialtyFilter, setSpecialtyFilter] = useState('')
+
+  // State: Modo de Período [ Dia | Semana | Mês ]
+  const [periodMode, setPeriodMode] = useState<'day' | 'week' | 'month'>('week')
 
   // State: Navegação da grade (alinhada rigorosamente com America/Sao_Paulo)
   const today = useMemo(() => getTodayDateString(), [])
@@ -283,20 +295,79 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   }, [])
 
   // Auto-seleciona pacote caso o paciente tenha apenas um ativo
-  React.useEffect(() => {
+  useEffect(() => {
     if (patientContext?.packages.length === 1 && !selectedPackageId) {
       setSelectedPackageId(patientContext.packages[0].id)
       setSessionCount(patientContext.packages[0].freeBalance)
     }
   }, [patientContext?.packages, selectedPackageId])
 
+  // ─── Navegação Temporal ───────────────────────────────────────────────
+
+  const handlePrevPeriod = useCallback(() => {
+    if (periodMode === 'day') {
+      const prev = addDaysSafe(selectedDay, -1)
+      setSelectedDay(prev)
+      setWeekStart(getMonday(prev))
+    } else if (periodMode === 'week') {
+      const newWeek = shiftWeek(weekStart, -1)
+      setWeekStart(newWeek)
+      setSelectedDay(newWeek)
+    } else {
+      const prevMonth = addMonthsSafe(selectedDay, -1)
+      setSelectedDay(prevMonth)
+      setWeekStart(getMonday(prevMonth))
+    }
+  }, [periodMode, selectedDay, weekStart])
+
+  const handleNextPeriod = useCallback(() => {
+    if (periodMode === 'day') {
+      const next = addDaysSafe(selectedDay, 1)
+      setSelectedDay(next)
+      setWeekStart(getMonday(next))
+    } else if (periodMode === 'week') {
+      const newWeek = shiftWeek(weekStart, 1)
+      setWeekStart(newWeek)
+      setSelectedDay(newWeek)
+    } else {
+      const nextMonth = addMonthsSafe(selectedDay, 1)
+      setSelectedDay(nextMonth)
+      setWeekStart(getMonday(nextMonth))
+    }
+  }, [periodMode, selectedDay, weekStart])
+
+  const handleGoToToday = useCallback(() => {
+    setSelectedDay(today)
+    setWeekStart(getMonday(today))
+  }, [today])
+
+  const periodLabel = useMemo(() => {
+    if (periodMode === 'day') {
+      return formatDateWithWeekdayBR(selectedDay)
+    }
+    if (periodMode === 'month') {
+      return formatMonthYearBR(selectedDay)
+    }
+    return formatMonthLabel(month)
+  }, [periodMode, selectedDay, month])
+
+  const periodSubLabel = useMemo(() => {
+    if (periodMode === 'day') {
+      return 'Visualização diária'
+    }
+    if (periodMode === 'month') {
+      return 'Selecione qualquer dia no calendário para visualizar os horários'
+    }
+    return `Semana a partir de ${weekStart.split('-').reverse().join('/')}`
+  }, [periodMode, weekStart])
+
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background text-foreground antialiased">
-      {/* ─── SIDEBAR ─── */}
-      <aside className="w-84 border-r border-border bg-card flex flex-col overflow-y-auto shrink-0 shadow-sm">
-        <div className="p-4 border-b border-border space-y-1">
+    <div className="w-full min-h-screen bg-background text-foreground antialiased p-4 md:p-6 space-y-5 pb-20">
+      {/* ─── CABEÇALHO DA PÁGINA ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-border">
+        <div className="space-y-1">
           {onNavigate && (
             <Button
               variant="ghost"
@@ -308,304 +379,370 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
               <span>Voltar à Agenda</span>
             </Button>
           )}
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-primary" />
             Agendamento Rápido
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Fluxo prático para recepção com reserva em lote e salas.
+          </h1>
+          <p className="text-xs md:text-sm text-muted-foreground">
+            Fluxo prático para recepção com reserva em lote, turmas e salas em coluna única.
           </p>
         </div>
 
-        <div className="p-4 space-y-5 flex-1">
-          {/* 1. Paciente */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Paciente
-            </label>
-            {showQuickRegister ? (
-              <QuickPatientForm
-                onPatientCreated={handleSelectPatient}
-                onCancel={() => setShowQuickRegister(false)}
-              />
-            ) : (
-              <PatientSearchPanel
-                selectedPatientId={selectedPatientId}
-                onSelectPatient={handleSelectPatient}
-                onClearPatient={handleClearPatient}
-                onOpenQuickRegister={() => setShowQuickRegister(true)}
-              />
-            )}
+        {/* Ação de confirmação no topo */}
+        <div className="flex items-center gap-3">
+          <Button
+            size="lg"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm h-11 px-5 text-sm gap-2"
+            disabled={!selectedPatientId || selectedSlots.length === 0 || isSubmitting}
+            onClick={() => setShowConfirm(true)}
+          >
+            <Check className="w-4 h-4" />
+            <span>Confirmar Agendamento ({selectedSlots.length})</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* ─── PAINEL SUPERIOR: SELEÇÃO DE PACIENTE E CONTROLES (1 COLUNA / GRID) ─── */}
+      <Card className="border-border shadow-xs bg-card">
+        <CardContent className="p-4 md:p-5 space-y-4">
+          {/* Linha 1: Paciente, Especialidade e Recorrência */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            {/* Paciente (coluna maior) */}
+            <div className="md:col-span-6 lg:col-span-6">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                Paciente
+              </label>
+              {showQuickRegister ? (
+                <QuickPatientForm
+                  onPatientCreated={handleSelectPatient}
+                  onCancel={() => setShowQuickRegister(false)}
+                />
+              ) : (
+                <PatientSearchPanel
+                  selectedPatientId={selectedPatientId}
+                  onSelectPatient={handleSelectPatient}
+                  onClearPatient={handleClearPatient}
+                  onOpenQuickRegister={() => setShowQuickRegister(true)}
+                />
+              )}
+            </div>
+
+            {/* Especialidade */}
+            <div className="md:col-span-3 lg:col-span-3">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                Especialidade
+              </label>
+              <Select
+                value={specialtyFilter}
+                onChange={(e) => setSpecialtyFilter(e.target.value)}
+                className="h-10"
+              >
+                <option value="">Todas as especialidades</option>
+                {clinicalSpecialties.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Recorrência Mensal Compacta (SEM texto explicativo longo) */}
+            <div className="md:col-span-3 lg:col-span-3">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                Recorrência
+              </label>
+              <div className="flex items-center h-10 px-3 bg-muted/40 rounded-xl border border-border">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-foreground w-full">
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                  />
+                  <Repeat className="w-4 h-4 text-primary shrink-0" />
+                  <span className="truncate">Recorrência Mensal</span>
+                </label>
+              </div>
+            </div>
           </div>
 
-          {/* 2. Pacote e Saldo */}
-          {selectedPatientId && patientContext && (
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                <Package className="w-3.5 h-3.5 inline mr-1 text-primary" />
-                Pacote & Saldo Disponível
-              </label>
-              {patientContext.packages.length === 0 ? (
-                <div className="p-3 bg-muted/40 rounded-xl border border-border text-xs text-muted-foreground">
-                  Nenhum pacote ativo. O agendamento poderá ser criado de forma avulsa.
-                </div>
-              ) : (
-                <>
-                  {patientContext.packages.length > 1 && (
-                    <Select
-                      value={selectedPackageId || ''}
-                      onChange={(e) => {
-                        setSelectedPackageId(e.target.value || null)
-                        const pkg = patientContext.packages.find((p) => p.id === e.target.value)
-                        if (pkg) setSessionCount(pkg.freeBalance)
-                      }}
-                    >
-                      <option value="">Selecionar pacote do paciente...</option>
-                      {patientContext.packages.map((pkg) => (
-                        <option key={pkg.id} value={pkg.id}>
-                          {pkg.serviceName} ({pkg.freeBalance} livres de {pkg.totalSessions})
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                  {selectedPackage && (
-                    <div className="mt-2 p-3 bg-muted/50 rounded-xl border border-border">
-                      <p className="text-xs font-semibold text-foreground truncate">{selectedPackage.serviceName}</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge variant="outline" className="text-[11px] font-medium">
+          {/* Linha 2 (Condicional quando paciente selecionado): Pacote, Sessões e Resumo */}
+          {selectedPatientId && (
+            <div className="pt-3 border-t border-border/60 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+              {/* Pacote / Saldo */}
+              <div className="md:col-span-5 lg:col-span-5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  <Package className="w-3.5 h-3.5 inline mr-1 text-primary" />
+                  Pacote & Saldo Disponível
+                </label>
+                {!patientContext ? (
+                  <div className="text-xs text-muted-foreground">Carregando plano...</div>
+                ) : patientContext.packages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg border border-border">
+                    Nenhum pacote ativo. O agendamento será criado avulso.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {patientContext.packages.length > 1 && (
+                      <Select
+                        value={selectedPackageId || ''}
+                        onChange={(e) => {
+                          setSelectedPackageId(e.target.value || null)
+                          const pkg = patientContext.packages.find((p) => p.id === e.target.value)
+                          if (pkg) setSessionCount(pkg.freeBalance)
+                        }}
+                        className="h-9 text-xs flex-1 min-w-[180px]"
+                      >
+                        <option value="">Selecionar pacote...</option>
+                        {patientContext.packages.map((pkg) => (
+                          <option key={pkg.id} value={pkg.id}>
+                            {pkg.serviceName} ({pkg.freeBalance} livres)
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    {selectedPackage && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className="text-xs font-medium">
                           Total: {selectedPackage.totalSessions}
                         </Badge>
-                        <Badge variant="outline" className="text-[11px] font-medium text-muted-foreground">
+                        <Badge variant="outline" className="text-xs font-medium text-muted-foreground">
                           Usadas: {selectedPackage.usedSessions}
                         </Badge>
-                        <Badge className="text-[11px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/20">
+                        <Badge className="text-xs font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/20">
                           Livres: {selectedPackage.freeBalance}
                         </Badge>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
-              {patientContext.availableCredits > 0 && (
-                <Badge className="mt-2 bg-blue-500/15 text-blue-600 border-blue-500/20 text-xs">
-                  {patientContext.availableCredits} crédito(s) de reposição disponível(is)
-                </Badge>
-              )}
-            </div>
-          )}
-
-          {/* 3. Quantidade de Sessões */}
-          {selectedPatientId && (
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                <Hash className="w-3.5 h-3.5 inline mr-1 text-primary" />
-                Quantidade de Sessões a Marcar
-              </label>
-              <Input
-                type="number"
-                min={1}
-                max={freeBalance > 0 ? freeBalance : 100}
-                value={sessionCount || ''}
-                placeholder="Ex: 4 ou 8 sessões"
-                onChange={(e) => setSessionCount(parseInt(e.target.value, 10) || 0)}
-                className="w-full"
-              />
-              {freeBalance > 0 && (
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Saldo livre no plano selecionado: <strong>{freeBalance}</strong>
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* 4. Filtro de Especialidade */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Especialidade
-            </label>
-            <Select value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-              <option value="">Todas as especialidades</option>
-              {clinicalSpecialties.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </Select>
-          </div>
-
-          {/* 5. Recorrência Mensal */}
-          <div className="p-3 bg-muted/30 rounded-xl border border-border">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-              />
-              <Repeat className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">Recorrência Mensal</span>
-            </label>
-            {isRecurring ? (
-              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                Ao selecionar um horário (ex: Seg 08:00), o sistema reservará <strong>todas as segundas-feiras</strong> do mês de {formatMonthLabel(month)}.
-              </p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Marcar apenas na data específica da semana selecionada.
-              </p>
-            )}
-          </div>
-
-          {/* 6. Modo Remarcação Ativo */}
-          {reschedulingParticipant && (
-            <Card className="border-amber-500/30 bg-amber-500/10 animate-fade-in">
-              <CardContent className="p-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-600">
-                  Modo Remarcação Ativo
-                </p>
-                <p className="text-sm font-semibold text-foreground mt-1">
-                  {reschedulingParticipant.patientName}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Clique em um horário livre na grade para transferir o paciente.
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReschedulingParticipant(null)}
-                  className="mt-2 text-xs text-amber-600 hover:text-amber-700 h-7 px-2"
-                >
-                  Cancelar remarcação
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 7. Resumo de Seleções */}
-          {selectedSlots.length > 0 && (
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-                Horários Selecionados ({selectedSlots.length})
-              </label>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {selectedSlots.map((slot, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-2.5 bg-card rounded-xl border border-border shadow-xs text-xs"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <p className="font-bold text-foreground">
-                        {DAY_NAMES[slot.dayOfWeek]} às {slot.startTime}
-                      </p>
-                      <p className="text-muted-foreground truncate">
-                        {slot.roomName} • {slot.professionalName.split(' ')[0]}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => handleRemoveSlot(i)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    )}
                   </div>
-                ))}
+                )}
+                {patientContext?.availableCredits && patientContext.availableCredits > 0 ? (
+                  <Badge className="mt-1 bg-blue-500/15 text-blue-600 border-blue-500/20 text-[11px]">
+                    {patientContext.availableCredits} crédito(s) de reposição
+                  </Badge>
+                ) : null}
               </div>
 
-              {/* Contador & Alerta */}
-              <div className="mt-3 flex items-center justify-between">
-                <Badge variant="outline" className="text-xs font-semibold">
-                  {isRecurring ? `~${totalEstimated}` : selectedSlots.length} de {sessionCount || '?'} sessões
-                </Badge>
+              {/* Quantidade de Sessões */}
+              <div className="md:col-span-3 lg:col-span-3">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  <Hash className="w-3.5 h-3.5 inline mr-1 text-primary" />
+                  Qtd. de Sessões a Marcar
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={freeBalance > 0 ? freeBalance : 100}
+                  value={sessionCount || ''}
+                  placeholder="Ex: 4 ou 8"
+                  onChange={(e) => setSessionCount(parseInt(e.target.value, 10) || 0)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              {/* Contador de Horários Marcados */}
+              <div className="md:col-span-4 lg:col-span-4 flex items-center justify-end gap-2">
+                <div className="text-right">
+                  <div className="text-xs font-bold text-foreground">
+                    {isRecurring ? `~${totalEstimated}` : selectedSlots.length} de {sessionCount || '?'} sessões
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {selectedSlots.length} horário(s) selecionado(s)
+                  </div>
+                </div>
                 {overBalance && (
-                  <span className="text-xs font-semibold text-destructive flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Excede saldo
-                  </span>
+                  <Badge variant="destructive" className="text-[11px] gap-1 shrink-0">
+                    <AlertTriangle className="w-3 h-3" /> Excede saldo
+                  </Badge>
                 )}
               </div>
             </div>
           )}
-        </div>
 
-        {/* Rodapé: Confirmar Agendamento */}
-        <div className="p-4 border-t border-border bg-card">
+          {/* Horários Selecionados (Chips compactos) */}
+          {selectedSlots.length > 0 && (
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Horários Marcados na Grade ({selectedSlots.length})
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedSlots([])}
+                  className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
+                >
+                  Limpar todos
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {selectedSlots.map((slot, i) => (
+                  <div
+                    key={i}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/60 hover:bg-muted border border-border rounded-lg text-xs font-medium shadow-2xs"
+                  >
+                    <span className="font-bold text-foreground">
+                      {DAY_NAMES[slot.dayOfWeek]} {slot.startTime}
+                    </span>
+                    <span className="text-muted-foreground">
+                      • {slot.roomName} ({formatProfessionalDisplayName(slot.professionalName)})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSlot(i)}
+                      className="text-muted-foreground hover:text-destructive ml-1 p-0.5"
+                      title="Remover horário"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Modo Remarcação Ativo */}
+          {reschedulingParticipant && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
+                  Modo Remarcação Ativo:
+                </span>
+                <span className="ml-1.5 text-sm font-semibold text-foreground">
+                  {reschedulingParticipant.patientName}
+                </span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Clique em um horário vago na grade abaixo para transferir o paciente.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReschedulingParticipant(null)}
+                className="text-xs text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
+              >
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ─── BARRA DE NAVEGAÇÃO DA GRADE & FILTROS DIA / SEMANA / MÊS ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-xs">
+        <div className="flex items-center gap-2">
           <Button
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
-            disabled={!selectedPatientId || selectedSlots.length === 0}
-            onClick={() => setShowConfirm(true)}
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={handlePrevPeriod}
+            title="Período anterior"
           >
-            <Check className="w-4 h-4 mr-2" />
-            Confirmar Agendamento ({selectedSlots.length})
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-foreground">
+              {periodLabel}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {periodSubLabel}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={handleNextPeriod}
+            title="Próximo período"
+          >
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
-      </aside>
 
-      {/* ─── ÁREA PRINCIPAL (GRADE SEMANAL) ─── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header: Mês e Navegação de Semanas */}
-        <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-4 bg-card">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => setWeekStart(shiftWeek(weekStart, -1))}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <h3 className="text-base font-bold text-foreground">
-                {formatMonthLabel(month)}
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Semana a partir de {weekStart.split('-').reverse().join('/')}
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => setWeekStart(shiftWeek(weekStart, 1))}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGoToToday}
+            className="text-xs font-semibold h-9"
+          >
+            Ir para Hoje
+          </Button>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setWeekStart(getMonday(today))
-                setSelectedDay(today)
-              }}
-              className="text-xs font-semibold"
+          {/* Alternador de Período [ Dia | Semana | Mês ] */}
+          <div
+            role="group"
+            aria-label="Filtro de visualização temporal"
+            className="inline-flex items-center bg-muted/60 p-1 rounded-xl border border-border shrink-0 select-none shadow-2xs"
+          >
+            <button
+              type="button"
+              onClick={() => setPeriodMode('day')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                periodMode === 'day'
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Visualização por Dia"
             >
-              Ir para Hoje
-            </Button>
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span>Dia</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode('week')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                periodMode === 'week'
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Visualização Semanal"
+            >
+              <CalendarRange className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span>Semana</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode('month')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                periodMode === 'month'
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Visualização Mensal"
+            >
+              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span>Mês</span>
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Grade Semanal */}
-        <div className="flex-1 overflow-auto p-4">
-          {!gridData ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <span className="text-xs font-semibold">Carregando disponibilidade de salas e profissionais...</span>
-            </div>
-          ) : (
-            <WeeklyScheduleGrid
-              dates={gridData.dates}
-              rooms={gridData.rooms}
-              slots={gridData.slots as any}
-              selectedSlots={selectedSlots}
-              selectedDay={selectedDay}
-              onDayChange={setSelectedDay}
-              onSlotClick={handleSlotClick}
-              hasPatientSelected={!!selectedPatientId || !!reschedulingParticipant}
-            />
-          )}
-        </div>
-      </main>
+      {/* ─── ÁREA DA GRADE (100% DE LARGURA) ─── */}
+      <div>
+        {!gridData ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="text-xs font-semibold">Carregando disponibilidade de salas e profissionais...</span>
+          </div>
+        ) : (
+          <WeeklyScheduleGrid
+            dates={gridData.dates}
+            rooms={gridData.rooms}
+            slots={gridData.slots as any}
+            selectedSlots={selectedSlots}
+            selectedDay={selectedDay}
+            periodMode={periodMode}
+            onDayChange={(day) => {
+              setSelectedDay(day)
+              const mon = getMonday(day)
+              if (mon !== weekStart) {
+                setWeekStart(mon)
+              }
+            }}
+            onSlotClick={handleSlotClick}
+            hasPatientSelected={!!selectedPatientId || !!reschedulingParticipant}
+          />
+        )}
+      </div>
 
       {/* ─── MODAL DE SALAS E CADEIRAS ─── */}
       <RoomDrawer

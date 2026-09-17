@@ -1,6 +1,6 @@
-import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import React, { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { formatProfessionalDisplayName } from '@/lib/professionalUtils';
 
 export interface GridSlot {
   day: string; // YYYY-MM-DD
@@ -52,14 +52,18 @@ interface WeeklyScheduleGridProps {
   slots: GridSlot[];
   selectedSlots: SelectedSlot[];
   selectedDay: string;
+  periodMode?: 'day' | 'week' | 'month';
   onDayChange: (day: string) => void;
   onSlotClick: (slot: GridSlot) => void;
   hasPatientSelected: boolean;
 }
 
 const formatDayShort = (dateStr: string) => {
-  const d = new Date(`${dateStr}T12:00:00Z`);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}`;
+  }
+  return dateStr;
 };
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -70,6 +74,7 @@ export function WeeklyScheduleGrid({
   slots,
   selectedSlots,
   selectedDay,
+  periodMode = 'week',
   onDayChange,
   onSlotClick,
   hasPatientSelected,
@@ -78,44 +83,112 @@ export function WeeklyScheduleGrid({
   const daySlots = slots.filter((slot) => slot.day === selectedDay);
 
   // Get unique times for the selected day across all rooms
-  const uniqueTimes = Array.from(
-    new Set(daySlots.map((slot) => `${slot.startTime} - ${slot.endTime}`))
-  ).sort();
+  const uniqueTimes = useMemo(() => {
+    return Array.from(
+      new Set(daySlots.map((slot) => `${slot.startTime} - ${slot.endTime}`))
+    ).sort();
+  }, [daySlots]);
+
+  // Dias do mês para o modo "month"
+  const monthDays = useMemo(() => {
+    if (periodMode !== 'month') return [];
+    const [yearStr, monthStr] = selectedDay.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const totalDays = new Date(year, month, 0).getDate();
+    const days: string[] = [];
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = String(d).padStart(2, '0');
+      const mStr = String(month).padStart(2, '0');
+      days.push(`${year}-${mStr}-${dStr}`);
+    }
+    return days;
+  }, [periodMode, selectedDay]);
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Day Selector Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {dates.map((dateStr) => {
-          const d = new Date(`${dateStr}T12:00:00Z`);
-          const dayName = DAY_NAMES[d.getDay()];
-          const isSelected = dateStr === selectedDay;
+      {/* ─── VISUALIZAÇÃO DE ABAS TEMPORAIS ─── */}
+      {periodMode === 'week' && (
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {dates.map((dateStr) => {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+            const dayName = DAY_NAMES[dayOfWeek];
+            const isSelected = dateStr === selectedDay;
 
-          return (
-            <button
-              key={dateStr}
-              onClick={() => onDayChange(dateStr)}
-              className={`flex flex-col items-center justify-center min-w-[80px] p-2 rounded-md border transition-colors ${
-                isSelected
-                  ? 'bg-primary/10 border-primary text-primary font-medium'
-                  : 'bg-card border-border text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              <span className="text-sm">{dayName}</span>
-              <span className="text-xs">{formatDayShort(dateStr)}</span>
-            </button>
-          );
-        })}
-      </div>
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                onClick={() => onDayChange(dateStr)}
+                className={`flex flex-col items-center justify-center min-w-[78px] py-2 px-3 rounded-xl border transition-all cursor-pointer select-none ${
+                  isSelected
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs font-semibold'
+                    : 'bg-card border-border text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                }`}
+              >
+                <span className="text-xs">{dayName}</span>
+                <span className="text-sm font-bold">{formatDayShort(dateStr)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Grid */}
-      <div className="overflow-x-auto border border-border rounded-md bg-card">
+      {periodMode === 'month' && (
+        <div className="p-3 bg-card border border-border rounded-xl shadow-2xs">
+          <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground mb-2">
+            {DAY_NAMES.map((name) => (
+              <div key={name} className="py-1">
+                {name}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {/* Offset do primeiro dia */}
+            {(() => {
+              if (monthDays.length === 0) return null;
+              const [y, m, d] = monthDays[0].split('-').map(Number);
+              const firstDayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+              return Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-9" />
+              ));
+            })()}
+            {monthDays.map((dateStr) => {
+              const isSelected = dateStr === selectedDay;
+              const dayNum = dateStr.split('-')[2];
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => onDayChange(dateStr)}
+                  className={`h-9 flex items-center justify-center rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'hover:bg-muted text-foreground border border-transparent hover:border-border'
+                  }`}
+                >
+                  {parseInt(dayNum, 10)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ─── GRADE DE SALAS E HORÁRIOS ─── */}
+      <div className="overflow-x-auto border border-border rounded-xl bg-card shadow-2xs">
         <table className="w-full text-sm text-left">
           <thead className="bg-muted/50 border-b border-border">
             <tr>
-              <th className="px-4 py-3 font-medium text-gray-600 w-24 border-r">Horário</th>
+              <th className="px-4 py-3 font-semibold text-foreground/80 w-24 border-r border-border text-center">
+                Horário
+              </th>
               {rooms.map((room) => (
-                <th key={room.id} className="px-4 py-3 font-medium text-gray-600 text-center min-w-[150px] border-r last:border-r-0">
+                <th
+                  key={room.id}
+                  className="px-4 py-3 font-semibold text-foreground/80 text-center min-w-[150px] border-r border-border last:border-r-0"
+                >
                   {room.name}
                 </th>
               ))}
@@ -124,16 +197,16 @@ export function WeeklyScheduleGrid({
           <tbody>
             {uniqueTimes.length === 0 ? (
               <tr>
-                <td colSpan={rooms.length + 1} className="px-4 py-8 text-center text-gray-500">
-                  Nenhum horário disponível neste dia.
+                <td colSpan={rooms.length + 1} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                  Nenhum horário disponível configurado para este dia.
                 </td>
               </tr>
             ) : (
               uniqueTimes.map((timeLabel) => {
                 const [startTime, endTime] = timeLabel.split(' - ');
                 return (
-                  <tr key={timeLabel} className="border-b last:border-b-0 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-700 border-r text-center whitespace-nowrap">
+                  <tr key={timeLabel} className="border-b border-border/60 last:border-b-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-foreground/90 border-r border-border text-center whitespace-nowrap text-xs">
                       {startTime}
                     </td>
                     {rooms.map((room) => {
@@ -146,7 +219,7 @@ export function WeeklyScheduleGrid({
 
                       if (!slot) {
                         return (
-                          <td key={room.id} className="px-4 py-3 text-center text-gray-300 border-r last:border-r-0">
+                          <td key={room.id} className="px-4 py-3 text-center text-muted-foreground/30 border-r border-border/60 last:border-r-0">
                             -
                           </td>
                         );
@@ -162,17 +235,19 @@ export function WeeklyScheduleGrid({
                       const isFull = slot.occupiedSeats >= slot.totalCapacity;
                       const isAlmostFull = slot.totalCapacity - slot.occupiedSeats === 1;
 
-                      let badgeColor = 'bg-green-100 text-green-700 border-green-200';
+                      let badgeClass = 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
                       if (isFull) {
-                        badgeColor = 'bg-red-100 text-red-700 border-red-200';
+                        badgeClass = 'bg-destructive/15 text-destructive border-destructive/30';
                       } else if (isAlmostFull) {
-                        badgeColor = 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                        badgeClass = 'bg-amber-500/15 text-amber-600 border-amber-500/30';
                       }
+
+                      const profDisplayName = formatProfessionalDisplayName(slot.professionalName);
 
                       return (
                         <td
                           key={room.id}
-                          className="px-2 py-2 border-r last:border-r-0 align-top"
+                          className="px-2 py-2 border-r border-border/60 last:border-r-0 align-top"
                         >
                           <div
                             onClick={() => {
@@ -180,22 +255,25 @@ export function WeeklyScheduleGrid({
                                 onSlotClick(slot);
                               }
                             }}
-                            title={!hasPatientSelected ? 'Selecione um paciente primeiro' : ''}
-                            className={`flex flex-col gap-1 p-2 rounded border cursor-pointer transition-all ${
+                            title={!hasPatientSelected ? 'Selecione um paciente primeiro no painel superior' : slot.professionalName}
+                            className={`flex flex-col gap-1 p-2 rounded-lg border transition-all ${
                               isSelected
-                                ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                                ? 'border-primary bg-primary/10 ring-2 ring-primary/40 shadow-xs'
                                 : hasPatientSelected
-                                ? 'border-gray-200 bg-white hover:border-gray-300 shadow-sm'
-                                : 'border-gray-200 bg-gray-50 opacity-70 cursor-not-allowed'
+                                ? 'border-border bg-card hover:border-primary/50 hover:shadow-xs cursor-pointer'
+                                : 'border-border/60 bg-muted/40 opacity-70 cursor-not-allowed'
                             }`}
                           >
                             <div className="flex justify-between items-center">
-                              <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${badgeColor}`}>
+                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 font-semibold ${badgeClass}`}>
                                 {slot.occupiedSeats}/{slot.totalCapacity}
                               </Badge>
                             </div>
-                            <span className="text-[11px] text-gray-600 truncate mt-1 leading-tight" title={slot.professionalName}>
-                              {slot.professionalName.split(' ')[0]}
+                            <span
+                              className="text-[11px] font-medium text-foreground/80 truncate mt-1 leading-tight"
+                              title={slot.professionalName}
+                            >
+                              {profDisplayName}
                             </span>
                           </div>
                         </td>

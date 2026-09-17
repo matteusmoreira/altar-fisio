@@ -1,5 +1,16 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Agendamento Rápido em Coluna Única, Formatação de Nomes e Asserções DOM no Vitest
+- **Ponto de Fricção**:
+  1. A exibição de profissionais em slots da grade utilizava `slot.professionalName.split(' ')[0]`, o que isolava prefixos e fazia `"Dr. Marcelo"` ser exibido de forma truncada como apenas `"Dr."`.
+  2. O matcher `toBeInTheDocument()` do Jest DOM não está configurado globalmente no Vitest deste projeto, disparando `Invalid Chai property: toBeInTheDocument`.
+  3. A renderização do Agendamento Rápido com `<aside className="w-84">` comprimia os controles e a grade em duas colunas, e as descrições de parágrafo longo na recorrência mensal quebravam o layout vertical.
+- **Mitigação / Regra**:
+  1. Utilizar centralizadamente o helper `formatProfessionalDisplayName` (`src/lib/professionalUtils.ts`): profissionais com prefixo (`Dr.`, `Dra.`, `Prof.`) são exibidos como `"Dr Marcelo"`, `"Dra Larissa"`, e demais pelo primeiro nome (`"Gustavo"`, `"Claudia"`), mantendo o nome completo acessível no atributo `title` do slot.
+  2. Em testes com Testing Library no Vitest deste repositório, utilizar asserções nativas com `expect(...).toBeTruthy()` e `expect(screen.queryByText(...)).toBeNull()` em vez de matchers externos não carregados.
+  3. Na tela de Agendamento Rápido, organizar o layout em 1 coluna fluida com painel superior em grid (Paciente com dropdown completo ao focar/clicar, Especialidade e Recorrência sem parágrafos expansivos) e grade de horários ocupando 100% da largura, com alternador temporal `[ Dia | Semana | Mês ]`.
+- **Validação**: 234 testes Vitest em 39 arquivos aprovados 100%, typecheck TypeScript (`tsc -b`) aprovado com 0 erros, build Vite de produção gerado com sucesso e oxlint com 0 erros.
+
 ### [2026-09-16] Especialidades Clínicas Dinâmicas no Agendamento Rápido (Eliminação de Mocks Estáticos)
 - **Ponto de Fricção**:
   1. A tela de Agendamento Rápido (`QuickBookingPage.tsx`) possuía uma constante estática `SPECIALTIES` com opções legadas fixas em código (`pilates`, `fisioterapia`, `rpg`, `avaliacao`, `fortalecimento_muscular`).
