@@ -5,6 +5,14 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Loader2 } from 'lucide-react'
+import {
+  formatCpf,
+  formatPhone,
+  isValidCpf,
+  isValidPhone,
+  normalizeCpf,
+  normalizePhone,
+} from '../../../shared/patientIdentity'
 
 interface QuickPatientFormProps {
   onPatientCreated: (patientId: string) => void
@@ -24,28 +32,28 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
     e.preventDefault()
     setError('')
 
-    const cleanCpf = cpf.replace(/\D/g, '')
-    const cleanPhone = phone.replace(/\D/g, '')
+    const cleanCpf = normalizeCpf(cpf)
+    const cleanPhone = normalizePhone(phone)
 
     if (!name.trim() || !cleanCpf || !cleanPhone) {
       setError('Todos os campos são obrigatórios.')
       return
     }
 
-    if (cleanCpf.length !== 11) {
-      setError('CPF deve ter 11 dígitos.')
+    if (!isValidCpf(cleanCpf)) {
+      setError('CPF inválido. Verifique os números digitados.')
       return
     }
 
-    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      setError('Telefone deve ter 10 ou 11 dígitos.')
+    if (!isValidPhone(cleanPhone)) {
+      setError('Telefone deve conter DDD e 10 ou 11 dígitos.')
       return
     }
 
     setIsSubmitting(true)
     try {
       const result = await createPatient({
-        name,
+        name: name.trim(),
         phone: cleanPhone,
         documentCpf: cleanCpf,
         birthDate: '2000-01-01', // placeholder — será atualizado no cadastro completo
@@ -79,8 +87,10 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
             <label className="text-xs font-medium text-muted-foreground">Telefone</label>
             <Input 
               value={phone} 
-              onChange={(e) => setPhone(e.target.value)} 
+              onChange={(e) => setPhone(formatPhone(e.target.value))} 
               placeholder="(11) 99999-9999"
+              maxLength={15}
+              inputMode="tel"
               disabled={isSubmitting}
             />
           </div>
@@ -88,8 +98,10 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
             <label className="text-xs font-medium text-muted-foreground">CPF</label>
             <Input 
               value={cpf} 
-              onChange={(e) => setCpf(e.target.value)} 
+              onChange={(e) => setCpf(formatCpf(e.target.value))} 
               placeholder="000.000.000-00"
+              maxLength={14}
+              inputMode="numeric"
               disabled={isSubmitting}
             />
           </div>

@@ -265,20 +265,40 @@ export const updateInstanceStatusInternal = internalMutation({
 })
 
 export const removeInstanceInternal = internalMutation({
-  args: { token: v.string() },
+  args: {
+    token: v.optional(v.string()),
+    instanceId: v.optional(v.id("whatsappInstances")),
+  },
   handler: async (ctx, args) => {
-    const inst = await ctx.db
-      .query("whatsappInstances")
-      .withIndex("by_token", (q) => q.eq("token", args.token))
-      .first()
+    let inst = args.instanceId ? await ctx.db.get(args.instanceId) : null
+    const token = args.token
+    if (!inst && token) {
+      inst = await ctx.db
+        .query("whatsappInstances")
+        .withIndex("by_token", (q) => q.eq("token", token))
+        .first()
+    }
 
     if (inst) {
       await ctx.db.delete(inst._id)
-      // Se era a padrão, torna a próxima conectada em padrão
-      if (inst.isDefault) {
+      const settings = await ctx.db.query("clinicSettings").first()
+
+      // Se era a padrão ou se a clínica apontava para esta instância
+      if (inst.isDefault || (settings && settings.activeWhatsappInstanceToken === inst.token)) {
         const remaining = await ctx.db.query("whatsappInstances").first()
         if (remaining) {
           await ctx.db.patch(remaining._id, { isDefault: true })
+          if (settings) {
+            await ctx.db.patch(settings._id, {
+              activeWhatsappInstanceToken: remaining.token,
+              uazapiInstanceId: remaining.name,
+            })
+          }
+        } else if (settings) {
+          await ctx.db.patch(settings._id, {
+            activeWhatsappInstanceToken: undefined,
+            uazapiInstanceId: undefined,
+          })
         }
       }
     }
@@ -722,25 +742,30 @@ export const disconnectInstanceAction = action({
       body: {},
     })
 
-    if (!res.ok) return { success: false, error: res.error }
+    const isAlreadyGone = res.status === 401 || res.status === 404
+    if (!res.ok && !isAlreadyGone) return { success: false, error: res.error }
     await ctx.runMutation(internal.whatsapp.updateInstanceStatusInternal, {
       token: resolvedToken,
       status: "disconnected",
       qrcode: "",
     })
 
-    return { success: res.ok, error: res.ok ? undefined : res.error }
+    return { success: true }
   },
 })
 
 export const deleteInstanceAction = action({
-  args: { sessionToken: v.string(),  instanceId: v.id("whatsappInstances") },
+  args: {
+    sessionToken: v.string(),
+    instanceId: v.id("whatsappInstances"),
+    force: v.optional(v.boolean()),
+  },
   handler: async (ctx, input): Promise<{ success: boolean; error?: string }> => {
-    const { sessionToken, ...args } = input
+    const { sessionToken, force, ...args } = input
     await requireStaffAction(ctx, sessionToken, ["admin"]);
 
     const instance = await ctx.runQuery(internal.whatsapp.getInstanceByIdInternal, { instanceId: args.instanceId })
-    if (!instance) throw new Error('Instância não encontrada.')
+    if (!instance) return { success: true }
     const resolvedToken = instance.token
     const settings: any = await ctx.runQuery(internal.whatsapp.getClinicSettingsInternal, {})
     const baseUrl = sanitizeUazapiEndpoint(settings?.uazapiEndpoint)
@@ -751,9 +776,18 @@ export const deleteInstanceAction = action({
       headers: { token: resolvedToken },
     })
 
-    if (!res.ok) return { success: false, error: res.error }
-    // Remove localmente somente após confirmação do provedor.
-    await ctx.runMutation(internal.whatsapp.removeInstanceInternal, { token: resolvedToken })
+    // Se o provedor retornar 401 ou 404, significa que a instância já foi removida do Uazapi
+    // ou que o token expirou/não existe no provedor.
+    const isAlreadyGoneOnProvider = res.status === 401 || res.status === 404
+    if (!res.ok && !isAlreadyGoneOnProvider && !force) {
+      return { success: false, error: res.error }
+    }
+
+    // 2. Remove localmente no Convex
+    await ctx.runMutation(internal.whatsapp.removeInstanceInternal, {
+      instanceId: args.instanceId,
+      token: resolvedToken,
+    })
 
     return { success: true }
   },

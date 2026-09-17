@@ -5,6 +5,7 @@ import { Search, X, UserPlus, Phone, ChevronDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { formatCpf, formatPhone } from '../../../shared/patientIdentity'
 
 interface PatientSearchPanelProps {
   selectedPatientId: string | null
@@ -63,12 +64,12 @@ export function PatientSearchPanel({
             {selectedPatient.phone && (
               <span className="flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5 text-primary/70" />
-                {selectedPatient.phone}
+                {formatPhone(selectedPatient.phone)}
               </span>
             )}
             {selectedPatient.documentCpf && (
               <span className="text-muted-foreground/80">
-                CPF: {selectedPatient.documentCpf}
+                CPF: {formatCpf(selectedPatient.documentCpf)}
               </span>
             )}
           </div>
@@ -154,13 +155,13 @@ export function PatientSearchPanel({
                     {patient.phone ? (
                       <span className="flex items-center gap-1">
                         <Phone className="w-3 h-3 text-emerald-600" />
-                        <span>{patient.phone}</span>
+                        <span>{formatPhone(patient.phone)}</span>
                       </span>
                     ) : (
                       <span className="text-muted-foreground/60 italic">Sem telefone</span>
                     )}
                     {patient.documentCpf && (
-                      <span className="text-muted-foreground/60">• CPF: {patient.documentCpf}</span>
+                      <span className="text-muted-foreground/60">• CPF: {formatCpf(patient.documentCpf)}</span>
                     )}
                   </div>
                 </div>

@@ -1,5 +1,17 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-17] Exclusão Resiliente de Instâncias WhatsApp (Uazapi) e Tratamento de Tokens Órfãos no Provedor
+- **Ponto de Fricção**:
+  1. Ao excluir uma instância no painel de WhatsApp, a action `whatsapp:deleteInstanceAction` realizava a chamada `DELETE /instance` na UAZAPI com o header `token` e exigia que a resposta fosse estritamente `res.ok === true` antes de disparar `removeInstanceInternal`.
+  2. Caso a instância já tivesse sido deletada no servidor remoto da Uazapi ou seu token tivesse expirado, o provedor retornava `HTTP 401 Unauthorized` (ou `HTTP 404`). A action abortava a execução, impedindo que o registro fosse removido do banco Convex local e travando a instância permanentemente na interface.
+  3. No frontend (`WhatsAppInstanceManager.tsx`), o bloco `catch` engolia o erro real do provedor exibindo apenas o texto genérico `"Erro ao excluir instância"`, sem fornecer contexto nem opção de forçar a exclusão local da clínica.
+- **Mitigação / Regra**:
+  1. Em `deleteInstanceAction` e `disconnectInstanceAction`, tratar retornos `401` e `404` do provedor como confirmação de que o recurso já não existe remotamente (`isAlreadyGoneOnProvider`), procedendo normalmente com a remoção ou desconexão no banco Convex.
+  2. Adicionar o parâmetro opcional `force: boolean` em `deleteInstanceAction`: se o provedor falhar com erro interno (ex: `500` ou timeout), o administrador tem a opção explícita de forçar a exclusão local para desvincular a linha.
+  3. Em `removeInstanceInternal`, buscar tanto por `instanceId` direto quanto por índice `by_token`, e limpar reativamente o campo `activeWhatsappInstanceToken` em `clinicSettings` se a instância excluída era a ativa/padrão.
+  4. No modal de exclusão da interface, exibir o erro retornado pelo servidor e disponibilizar o botão `"Forçar Exclusão na Clínica"`.
+- **Validação**: 242 testes Vitest em 40 arquivos (incluindo `tests/whatsapp-instance-deletion.test.ts` com cobertura de 401, 404 e force 500) e 3 testes de service worker aprovados 100%. Typecheck TypeScript (`tsc -b`) aprovado com 0 erros, oxlint com 0 erros, deploy Convex de produção `exuberant-guanaco-180` atualizado, remoção da instância travada confirmada em produção (`whatsapp:listInstances` retornando `[]`), e deploy Vercel `dpl_AY8qEd8BtoutneQhqc3Aou8SeCeC` concluído com sucesso.
+
 ### [2026-09-17] Agendamento Rápido em Coluna Única, Formatação de Nomes e Asserções DOM no Vitest
 - **Ponto de Fricção**:
   1. A exibição de profissionais em slots da grade utilizava `slot.professionalName.split(' ')[0]`, o que isolava prefixos e fazia `"Dr. Marcelo"` ser exibido de forma truncada como apenas `"Dr."`.

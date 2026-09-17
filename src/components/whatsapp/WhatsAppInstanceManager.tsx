@@ -50,6 +50,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
   const [isConnectTokenModalOpen, setIsConnectTokenModalOpen] = useState(false)
   const [isQrModalOpen, setIsQrModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Formulários
   const [newInstanceName, setNewInstanceName] = useState("")
@@ -262,31 +263,34 @@ export const WhatsAppInstanceManager: React.FC = () => {
   }
 
   // 5. Desconectar Sessão
-  const handleDisconnect = async (token: string) => {
+  const handleDisconnect = async (instanceId: any) => {
     setIsLoading(true)
     try {
-      const result = await disconnectAction({ instanceId: token as any })
+      const result = await disconnectAction({ instanceId })
       if (!result.success) throw new Error(result.error || 'Falha ao desconectar.')
       showToast("Sessão do WhatsApp desconectada.")
     } catch (err: any) {
-      showToast("Erro ao desconectar", "error")
+      showToast(err?.message || "Erro ao desconectar", "error")
     } finally {
       setIsLoading(false)
     }
   }
 
   // 6. Excluir Instância
-  const handleDeleteInstance = async () => {
+  const handleDeleteInstance = async (force: boolean = false) => {
     if (!selectedInstance) return
     setIsLoading(true)
     try {
-      const result = await deleteAction({ instanceId: selectedInstance._id })
+      const result = await deleteAction({ instanceId: selectedInstance._id, force })
       if (!result.success) throw new Error(result.error || 'Falha ao excluir.')
       showToast(`Instância "${selectedInstance.name}" excluída com sucesso.`)
       setIsDeleteModalOpen(false)
       setSelectedInstance(null)
+      setDeleteError(null)
     } catch (err: any) {
-      showToast("Erro ao excluir instância", "error")
+      const msg = err?.message || "Erro ao excluir instância"
+      setDeleteError(msg)
+      showToast(msg, "error")
     } finally {
       setIsLoading(false)
     }
@@ -525,6 +529,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
                       variant="ghost"
                       onClick={() => {
                         setSelectedInstance(inst)
+                        setDeleteError(null)
                         setIsDeleteModalOpen(true)
                       }}
                       className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 ml-auto"
@@ -837,7 +842,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
       </Dialog>
 
       {/* MODAL 4: CONFIRMAR EXCLUSÃO DE INSTÂNCIA */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+      <Dialog open={isDeleteModalOpen} onOpenChange={(open) => { setIsDeleteModalOpen(open); if (!open) setDeleteError(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -851,19 +856,44 @@ export const WhatsAppInstanceManager: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogFooter className="pt-4">
-            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isLoading}>
+          {deleteError && (
+            <div className="p-3 rounded-xl bg-red-50 text-red-900 border border-red-200 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                <span>Falha na comunicação com o servidor Uazapi:</span>
+              </div>
+              <p className="font-mono text-[11px] pl-6 opacity-90">{deleteError}</p>
+              <p className="pl-6 text-muted-foreground">
+                Você pode forçar a exclusão local para desvincular e remover esta instância da clínica.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => { setIsDeleteModalOpen(false); setDeleteError(null); }} disabled={isLoading}>
               Cancelar
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteInstance}
-              disabled={isLoading}
-              className="gap-2"
-            >
-              {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Confirmar Exclusão
-            </Button>
+            {deleteError ? (
+              <Button
+                variant="destructive"
+                onClick={() => handleDeleteInstance(true)}
+                disabled={isLoading}
+                className="gap-2 bg-red-700 hover:bg-red-800 text-white font-medium"
+              >
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Forçar Exclusão na Clínica
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={() => handleDeleteInstance(false)}
+                disabled={isLoading}
+                className="gap-2"
+              >
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirmar Exclusão
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -7,6 +7,7 @@ import { formatProfessionalDisplayName } from '@/lib/professionalUtils'
 import { PatientSearchPanel } from '@/components/quickBooking/PatientSearchPanel'
 import { WeeklyScheduleGrid } from '@/components/quickBooking/WeeklyScheduleGrid'
 import { QuickBookingPage } from '@/pages/QuickBookingPage'
+import { QuickPatientForm } from '@/components/quickBooking/QuickPatientForm'
 
 // ─── Testes Unitários de Formatação de Nomes de Profissionais ────────────────
 
@@ -74,6 +75,7 @@ const mocks = vi.hoisted(() => ({
     ]
   },
   confirmBooking: vi.fn().mockResolvedValue({ scheduleIds: ['s1'], errors: [] }),
+  createPatientAction: vi.fn().mockResolvedValue('new-patient-id'),
 }))
 
 vi.mock('@/lib/staffConvex', () => ({
@@ -100,7 +102,7 @@ vi.mock('@/lib/staffConvex', () => ({
     if (name === 'quickBooking:confirmQuickBooking') return mocks.confirmBooking
     return vi.fn().mockResolvedValue({})
   },
-  useAction: () => vi.fn(),
+  useAction: () => mocks.createPatientAction,
 }))
 
 afterEach(() => {
@@ -249,3 +251,69 @@ test('QuickBookingPage renderiza em coluna única e recorrência não exibe desc
   expect(screen.getByRole('button', { name: /Semana/i })).toBeTruthy()
   expect(screen.getByRole('button', { name: /Mês/i })).toBeTruthy()
 })
+
+// ─── Testes de QuickPatientForm (Máscaras de Telefone e CPF) ─────────────────
+
+test('QuickPatientForm aplica máscara em tempo real ao digitar telefone e CPF', () => {
+  render(<QuickPatientForm onPatientCreated={vi.fn()} onCancel={vi.fn()} />)
+
+  const phoneInput = screen.getByPlaceholderText('(11) 99999-9999') as HTMLInputElement
+  const cpfInput = screen.getByPlaceholderText('000.000.000-00') as HTMLInputElement
+
+  // Digitando telefone sem formatação
+  fireEvent.change(phoneInput, { target: { value: '22999021889' } })
+  expect(phoneInput.value).toBe('(22) 99902-1889')
+
+  // Digitando telefone fixo (10 dígitos)
+  fireEvent.change(phoneInput, { target: { value: '2233334444' } })
+  expect(phoneInput.value).toBe('(22) 3333-4444')
+
+  // Digitando CPF sem formatação
+  fireEvent.change(cpfInput, { target: { value: '14322094775' } })
+  expect(cpfInput.value).toBe('143.220.947-75')
+})
+
+test('QuickPatientForm exibe erro ao tentar submeter CPF inválido', async () => {
+  render(<QuickPatientForm onPatientCreated={vi.fn()} onCancel={vi.fn()} />)
+
+  const nameInput = screen.getByPlaceholderText('Ex: João da Silva')
+  const phoneInput = screen.getByPlaceholderText('(11) 99999-9999')
+  const cpfInput = screen.getByPlaceholderText('000.000.000-00')
+  const submitBtn = screen.getByRole('button', { name: /Salvar Paciente/i })
+
+  fireEvent.change(nameInput, { target: { value: 'Paciente Teste' } })
+  fireEvent.change(phoneInput, { target: { value: '22999021889' } })
+  // CPF com dígitos repetidos/inválidos
+  fireEvent.change(cpfInput, { target: { value: '11111111111' } })
+
+  fireEvent.click(submitBtn)
+
+  expect(screen.getByText(/CPF inválido/i)).toBeTruthy()
+  expect(mocks.createPatientAction).not.toHaveBeenCalled()
+})
+
+test('QuickPatientForm submete com dados limpos e aciona onPatientCreated', async () => {
+  const onCreated = vi.fn()
+  mocks.createPatientAction.mockClear()
+
+  render(<QuickPatientForm onPatientCreated={onCreated} onCancel={vi.fn()} />)
+
+  const nameInput = screen.getByPlaceholderText('Ex: João da Silva')
+  const phoneInput = screen.getByPlaceholderText('(11) 99999-9999')
+  const cpfInput = screen.getByPlaceholderText('000.000.000-00')
+  const submitBtn = screen.getByRole('button', { name: /Salvar Paciente/i })
+
+  fireEvent.change(nameInput, { target: { value: ' Matteus Moreira ' } })
+  fireEvent.change(phoneInput, { target: { value: '22999021889' } })
+  fireEvent.change(cpfInput, { target: { value: '14322094775' } })
+
+  fireEvent.click(submitBtn)
+
+  expect(mocks.createPatientAction).toHaveBeenCalledWith({
+    name: 'Matteus Moreira',
+    phone: '22999021889',
+    documentCpf: '14322094775',
+    birthDate: '2000-01-01',
+  })
+})
+
