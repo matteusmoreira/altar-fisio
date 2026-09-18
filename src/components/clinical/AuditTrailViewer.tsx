@@ -174,20 +174,20 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [], o
 
   return (
     <>
-      <Card className="border border-border shadow-sm">
-        <CardHeader className="p-4 pb-3 border-b border-border">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+      <Card className="border border-border shadow-sm w-full max-w-full min-w-0 overflow-hidden">
+        <CardHeader className="p-4 pb-3 border-b border-border min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+            <div className="min-w-0">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                <span>Trilha de Auditoria LGPD & COFFITO</span>
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="truncate">Trilha de Auditoria LGPD & COFFITO</span>
               </CardTitle>
               <CardDescription className="text-xs">
                 Rastreamento imutável de acessos, alterações clínicas e emissões de documentos em conformidade com a LGPD.
               </CardDescription>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {onClearLogs && (
                 <Button
                   type="button"
@@ -195,7 +195,7 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [], o
                   size="sm"
                   onClick={() => setShowConfirmClear(true)}
                   disabled={logs.length === 0 || isClearing}
-                  className="text-xs h-8 gap-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50"
+                  className="text-xs h-8 gap-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 flex-1 sm:flex-initial"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Excluir Trilha</span>
@@ -208,7 +208,7 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [], o
                 size="sm"
                 onClick={handleExportExcel}
                 disabled={isExporting || filteredLogs.length === 0}
-                className="text-xs h-8 gap-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800"
+                className="text-xs h-8 gap-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 flex-1 sm:flex-initial"
               >
                 {isExporting ? (
                   <>
@@ -226,21 +226,22 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [], o
           </div>
 
           {/* Filtros */}
-          <div className="flex flex-wrap items-center gap-2 pt-3">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-3">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Buscar por operador, paciente ou detalhes..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 h-8 text-xs"
+                className="pl-8 h-9 sm:h-8 text-xs w-full"
               />
             </div>
 
-            <div className="w-48 sm:w-56">
+            <div className="w-full sm:w-56 shrink-0">
               <Select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
+                className="w-full"
               >
                 <option value="all">Todas as Ações</option>
                 <option value="view">Visualizações de Prontuário</option>
@@ -252,9 +253,9 @@ export const AuditTrailViewer: React.FC<AuditTrailViewerProps> = ({ logs = [], o
           </div>
         </CardHeader>
 
-        <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[420px]">
-            <table className="w-full text-left text-xs border-collapse">
+        <CardContent className="p-0 min-w-0 overflow-hidden">
+          <div className="overflow-x-auto max-h-[420px] w-full max-w-full touch-pan-x">
+            <table className="w-full min-w-[580px] text-left text-xs border-collapse">
               <thead className="bg-card border-b border-border text-muted-foreground font-semibold sticky top-0 z-10 shadow-xs">
                 <tr>
                   <th className="py-2.5 px-3 bg-card whitespace-nowrap">Data / Hora</th>

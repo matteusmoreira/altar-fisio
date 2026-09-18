@@ -312,7 +312,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 animate-fade-in min-w-0 overflow-x-hidden">
       {feedback && (
         <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -321,9 +321,9 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-          <Settings className="h-6 w-6 text-primary" />
+      <div className="space-y-1 min-w-0">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 sm:gap-2.5">
+          <Settings className="h-5 sm:h-6 w-5 sm:w-6 text-primary shrink-0" />
           <span>Configurações da Clínica</span>
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground">
@@ -333,17 +333,17 @@ export const SettingsPage: React.FC = () => {
 
       <PortalBookingSettings />
       <ClinicalSpecialtiesManager variant="card" onSaved={() => showToast("Especialidades clínicas salvas com sucesso!")} />
-      <form onSubmit={handleSave} className="space-y-6">
+      <form onSubmit={handleSave} className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
         {/* Card 1: Identidade Visual e Cores */}
-        <Card className="border-border">
-          <CardHeader className="p-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-primary/10 text-primary">
+        <Card className="border-border w-full max-w-full min-w-0 overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                   <Palette className="h-5 w-5" />
                 </div>
-                <div>
-                  <CardTitle className="text-base font-bold">Personalização do Dashboard & Cores</CardTitle>
+                <div className="min-w-0">
+                  <CardTitle className="text-base font-bold truncate">Personalização do Dashboard & Cores</CardTitle>
                   <CardDescription className="text-xs">
                     Escolha a cor primária que define os botões, menus e gráficos da clínica.
                   </CardDescription>
@@ -352,7 +352,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-4 text-xs">
+          <CardContent className="p-4 sm:p-5 pt-0 space-y-4 text-xs min-w-0">
             {/* Paletas */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
               {(Object.keys(PRESET_COLORS) as Array<Exclude<ColorPreset, "custom">>).map((key) => {
@@ -383,18 +383,18 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {/* Alternador de Modo Claro / Escuro */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/20">
               <div>
                 <span className="font-semibold text-foreground text-xs block">Aparência Visual</span>
                 <span className="text-[11px] text-muted-foreground">Alternar entre tema Claro e Escuro</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Button
                   type="button"
                   size="sm"
                   variant={theme.mode === "light" ? "default" : "outline"}
                   onClick={() => setMode("light")}
-                  className="h-8 text-xs gap-1.5"
+                  className="h-8 text-xs gap-1.5 flex-1 sm:flex-initial"
                 >
                   <Sun className="h-3.5 w-3.5 text-amber-500" />
                   <span>Claro</span>
@@ -404,7 +404,7 @@ export const SettingsPage: React.FC = () => {
                   size="sm"
                   variant={theme.mode === "dark" ? "default" : "outline"}
                   onClick={() => setMode("dark")}
-                  className="h-8 text-xs gap-1.5"
+                  className="h-8 text-xs gap-1.5 flex-1 sm:flex-initial"
                 >
                   <Moon className="h-3.5 w-3.5 text-sky-400" />
                   <span>Escuro</span>
@@ -415,14 +415,14 @@ export const SettingsPage: React.FC = () => {
         </Card>
 
         {/* Card 2: Dados da Clínica */}
-        <Card className="border-border">
-          <CardHeader className="p-5 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+        <Card className="border-border w-full max-w-full min-w-0 overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                 <Building className="h-5 w-5" />
               </div>
-              <div>
-                <CardTitle className="text-base font-bold">Informações da Clínica</CardTitle>
+              <div className="min-w-0">
+                <CardTitle className="text-base font-bold truncate">Informações da Clínica</CardTitle>
                 <CardDescription className="text-xs">
                   Dados exibidos no cabeçalho, portal do aluno, mensagens e recibos emitidos.
                 </CardDescription>
@@ -430,21 +430,21 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-4 text-xs">
+          <CardContent className="p-4 sm:p-5 pt-0 space-y-4 text-xs min-w-0">
             {/* Seção 1: Logotipo da Clínica */}
-            <div className="p-4 rounded-2xl border border-border bg-muted/20 space-y-3.5">
+            <div className="p-3.5 sm:p-4 rounded-2xl border border-border bg-muted/20 space-y-3.5 min-w-0 overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                    <ImageIcon className="h-4 w-4 text-primary" />
+                    <ImageIcon className="h-4 w-4 text-primary shrink-0" />
                     <span>Logotipo da Clínica & Identidade Visual</span>
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground block mt-0.5">
                     Exibido no menu lateral, login, portal do aluno, agendamentos online e documentos timbrados.
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
                   <Button
                     type="button"
                     variant="ghost"
@@ -474,22 +474,22 @@ export const SettingsPage: React.FC = () => {
 
               {/* Inserção por URL Externa (Expansível) */}
               {showCustomUrlInput && (
-                <div className="p-3 rounded-xl border border-border bg-card space-y-2 animate-fade-in">
+                <div className="p-3 rounded-xl border border-border bg-card space-y-2 animate-fade-in min-w-0">
                   <span className="text-[11px] font-semibold text-foreground block">
                     Link Direto da Imagem (Externa / CDN)
                   </span>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       value={customUrlValue}
                       onChange={(e) => setCustomUrlValue(e.target.value)}
                       placeholder="https://sua-clinica.com.br/logo.png"
-                      className="h-8 text-xs font-mono"
+                      className="h-8 text-xs font-mono flex-1 w-full"
                     />
                     <Button
                       type="button"
                       size="sm"
                       onClick={handleApplyCustomUrl}
-                      className="h-8 text-xs px-3 shrink-0"
+                      className="h-8 text-xs px-3 shrink-0 w-full sm:w-auto"
                     >
                       Aplicar
                     </Button>
@@ -498,11 +498,11 @@ export const SettingsPage: React.FC = () => {
               )}
 
               {/* Grid: Preview & Upload Drag-and-Drop */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-stretch pt-0.5">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-stretch pt-0.5 min-w-0">
                 {/* Visualizador de Previews */}
-                <div className="md:col-span-5 flex items-center gap-3.5 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs">
+                <div className="md:col-span-5 flex items-center gap-3.5 p-3 sm:p-3.5 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
                   {/* Preview Principal */}
-                  <div className="relative h-16 w-16 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center bg-muted/60 overflow-hidden shrink-0 shadow-inner">
+                  <div className="relative h-14 sm:h-16 w-14 sm:w-16 rounded-xl border-2 border-dashed border-primary/20 flex items-center justify-center bg-muted/60 overflow-hidden shrink-0 shadow-inner">
                     {logoUrl ? (
                       <img
                         src={logoUrl}
@@ -511,7 +511,7 @@ export const SettingsPage: React.FC = () => {
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center text-primary/60">
-                        <HeartPulse className="h-7 w-7" />
+                        <HeartPulse className="h-6 sm:h-7 w-6 sm:w-7" />
                       </div>
                     )}
                     {isUploadingLogo && (
@@ -521,13 +521,13 @@ export const SettingsPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex flex-col min-w-0 justify-center">
+                  <div className="flex flex-col min-w-0 justify-center flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-foreground truncate">
                         {logoUrl ? "Logotipo Ativo" : "Ícone Padrão Altar"}
                       </span>
                       {logoUrl && (
-                        <Badge variant="success" className="text-[9px] py-0 px-1.5">
+                        <Badge variant="success" className="text-[9px] py-0 px-1.5 shrink-0">
                           Personalizado
                         </Badge>
                       )}
@@ -537,15 +537,15 @@ export const SettingsPage: React.FC = () => {
                     </span>
 
                     {/* Preview Contextual da Sidebar */}
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-[10px] font-semibold text-muted-foreground">Na Sidebar:</span>
+                    <div className="mt-2 flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] font-semibold text-muted-foreground shrink-0">Na Sidebar:</span>
                       {logoUrl ? (
                         <div className="h-7 max-w-[140px] px-2 py-0.5 rounded-lg border border-border bg-card flex items-center justify-start overflow-hidden shadow-2xs">
                           <img src={logoUrl} alt="Preview Sidebar" className="max-h-5 w-auto object-contain" />
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs">
+                        <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                          <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs shrink-0">
                             <HeartPulse className="h-3.5 w-3.5" />
                           </div>
                           <span className="text-[10px] font-medium truncate max-w-[100px]">{clinicName || "Altar Fisio"}</span>
@@ -556,7 +556,7 @@ export const SettingsPage: React.FC = () => {
                 </div>
 
                 {/* Dropzone de Upload para o Convex Storage */}
-                <div className="md:col-span-7">
+                <div className="md:col-span-7 min-w-0">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -584,7 +584,7 @@ export const SettingsPage: React.FC = () => {
                       if (file) handleLogoFileUpload(file)
                     }}
                     onClick={() => fileInputRef.current?.click()}
-                    className={`h-full min-h-[96px] border-2 border-dashed rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                    className={`h-full min-h-[96px] border-2 border-dashed rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-w-0 ${
                       isDraggingLogo
                         ? "border-primary bg-primary/10 ring-2 ring-primary/30"
                         : "border-border hover:border-primary/50 hover:bg-muted/40"
@@ -662,14 +662,14 @@ export const SettingsPage: React.FC = () => {
         </Card>
 
         {/* Card 3: Regras de Desmarcação e Reposição */}
-        <Card className="border-border">
-          <CardHeader className="p-5 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+        <Card className="border-border w-full max-w-full min-w-0 overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 shrink-0">
                 <Clock className="h-5 w-5" />
               </div>
-              <div>
-                <CardTitle className="text-base font-bold">Políticas de Reposição & Desmarcações</CardTitle>
+              <div className="min-w-0">
+                <CardTitle className="text-base font-bold truncate">Políticas de Reposição & Desmarcações</CardTitle>
                 <CardDescription className="text-xs">
                   Regras automatizadas para turmas de Pilates e atendimentos da clínica.
                 </CardDescription>
@@ -677,7 +677,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-3 text-xs">
+          <CardContent className="p-4 sm:p-5 pt-0 space-y-3 text-xs min-w-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">
@@ -713,27 +713,27 @@ export const SettingsPage: React.FC = () => {
         </Card>
 
         {/* Card 4: Integração WhatsApp (UAZAPI) */}
-        <Card className="border-border">
-          <CardHeader className="p-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+        <Card className="border-border w-full max-w-full min-w-0 overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 shrink-0">
                   <Smartphone className="h-5 w-5" />
                 </div>
-                <div>
-                  <CardTitle className="text-base font-bold">WhatsApp Gateway (UAZAPI)</CardTitle>
+                <div className="min-w-0">
+                  <CardTitle className="text-base font-bold truncate">WhatsApp Gateway (UAZAPI)</CardTitle>
                   <CardDescription className="text-xs">
                     Disparo de lembretes de agendamento (24h/2h), avisos de reposição e comprovantes.
                   </CardDescription>
                 </div>
               </div>
-              <Badge variant={(uazapiToken || convexSettings?.uazapiConfigured) ? "success" : "warning"} className="text-[10px]">
+              <Badge variant={(uazapiToken || convexSettings?.uazapiConfigured) ? "success" : "warning"} className="text-[10px] self-start sm:self-auto shrink-0">
                 {(uazapiToken || convexSettings?.uazapiConfigured) ? "Configurado" : "Não configurado"}
               </Badge>
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-3 text-xs">
+          <CardContent className="p-4 sm:p-5 pt-0 space-y-3 text-xs min-w-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">Endpoint / URL da API UAZAPI</label>
@@ -775,14 +775,14 @@ export const SettingsPage: React.FC = () => {
               <Input type="password" value={uazapiAdminToken} onChange={(e) => setUazapiAdminToken(e.target.value)} placeholder="Novo token; vazio mantém o atual" className="font-mono text-xs" />
               <span className="text-[11px] text-muted-foreground">Necessário para criar e listar instâncias no servidor.</span>
             </div>
-            <div className="pt-1 flex justify-end">
+            <div className="pt-1 flex flex-col sm:flex-row justify-end">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleTestWhatsApp}
                 disabled={isTestingWhatsApp}
-                className="gap-1.5 text-xs text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                className="gap-1.5 text-xs text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 w-full sm:w-auto"
               >
                 {isTestingWhatsApp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 <span>Testar Conexão WhatsApp</span>
@@ -792,27 +792,27 @@ export const SettingsPage: React.FC = () => {
         </Card>
 
         {/* Card 5: Integração E-mail (Resend) */}
-        <Card className="border-border">
-          <CardHeader className="p-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600">
+        <Card className="border-border w-full max-w-full min-w-0 overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600 shrink-0">
                   <Mail className="h-5 w-5" />
                 </div>
-                <div>
-                  <CardTitle className="text-base font-bold">E-mails Transacionais (Resend)</CardTitle>
+                <div className="min-w-0">
+                  <CardTitle className="text-base font-bold truncate">E-mails Transacionais (Resend)</CardTitle>
                   <CardDescription className="text-xs">
                     Envio de recibos de pagamento, comprovantes para convênios e comunicados.
                   </CardDescription>
                 </div>
               </div>
-              <Badge variant={(resendApiKey || convexSettings?.resendConfigured) ? "success" : "warning"} className="text-[10px]">
+              <Badge variant={(resendApiKey || convexSettings?.resendConfigured) ? "success" : "warning"} className="text-[10px] self-start sm:self-auto shrink-0">
                 {(resendApiKey || convexSettings?.resendConfigured) ? "API Ativa" : "Não configurado"}
               </Badge>
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 pt-0 space-y-3 text-xs">
+          <CardContent className="p-4 sm:p-5 pt-0 space-y-3 text-xs min-w-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">Chave de API do Resend (re_...)</label>
@@ -858,7 +858,7 @@ export const SettingsPage: React.FC = () => {
         {/* Botão de Salvar Geral */}
 
         <div className="flex justify-end pt-2">
-          <Button type="submit" size="lg" disabled={isSaving} className="gap-2 font-semibold shadow-md w-full sm:w-auto">
+          <Button type="submit" size="lg" disabled={isSaving} className="gap-2 font-semibold shadow-md w-full sm:w-auto h-11 sm:h-10 text-xs sm:text-sm">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             <span>Salvar Todas as Configurações</span>
           </Button>

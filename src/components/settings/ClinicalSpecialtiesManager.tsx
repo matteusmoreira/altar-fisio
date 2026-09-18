@@ -202,7 +202,7 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
 
       {/* Formulário de Adicionar Nova Especialidade */}
       {canManage && (
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full">
           <Input
             aria-label="Nome da nova especialidade clínica"
             placeholder="Ex.: Osteopatia, Acupuntura, Fisioterapia Pélvica..."
@@ -215,13 +215,13 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
                 handleAddSpecialty()
               }
             }}
-            className="h-10 text-xs sm:text-sm flex-1"
+            className="h-10 text-xs sm:text-sm flex-1 w-full"
           />
           <Button
             type="button"
             onClick={handleAddSpecialty}
             disabled={isLoading || isSaving || !newSpecialtyName.trim()}
-            className="h-10 shrink-0 gap-1.5 px-4 text-xs font-semibold shadow-xs"
+            className="h-10 shrink-0 gap-1.5 px-4 text-xs font-semibold shadow-xs w-full sm:w-auto"
           >
             {isSaving && actionInProgressId === "new" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -368,18 +368,18 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
       </div>
 
       {/* Ações / Botão Salvar Geral */}
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-border/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-border/60">
         <p className="text-[11px] text-muted-foreground">
           {canManage ? "As alterações salvam automaticamente no banco." : "Modo somente leitura."}
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {onClose && (
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              className="h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs flex-1 sm:flex-initial"
             >
               Fechar
             </Button>
@@ -389,7 +389,7 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
               type="button"
               onClick={handleSaveAll}
               disabled={isSaving || isLoading}
-              className="h-8 px-4 text-xs font-semibold gap-1.5 rounded-lg"
+              className="h-9 sm:h-8 px-4 text-xs font-semibold gap-1.5 rounded-lg w-full sm:w-auto"
             >
               {isSaving ? (
                 <>
@@ -414,15 +414,15 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
   }
 
   return (
-    <Card className={`border-border ${className}`}>
-      <CardHeader className="p-5 pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+    <Card className={`border-border w-full max-w-full min-w-0 overflow-hidden ${className}`}>
+      <CardHeader className="p-4 sm:p-5 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
               <Stethoscope className="h-5 w-5" />
             </div>
-            <div>
-              <CardTitle className="text-base font-bold">Especialidades Clínicas</CardTitle>
+            <div className="min-w-0">
+              <CardTitle className="text-base font-bold truncate">Especialidades Clínicas</CardTitle>
               <CardDescription className="text-xs">
                 Configure as áreas de atendimento clínico disponíveis na clínica (Fisioterapia, Pilates, RPG, etc.).
               </CardDescription>
@@ -430,7 +430,7 @@ export const ClinicalSpecialtiesManager: React.FC<ClinicalSpecialtiesManagerProp
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-5 pt-1">{content}</CardContent>
+      <CardContent className="p-4 sm:p-5 pt-1 min-w-0">{content}</CardContent>
     </Card>
   )
 }

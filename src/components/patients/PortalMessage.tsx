@@ -63,18 +63,18 @@ export function PortalBookingSettings() {
     }
   }, [settings])
   const command = (name: string, value?: string) => { editor.current?.focus(); document.execCommand(name, false, value); if (editor.current) setMessage(readEditor(editor.current)) }
-  return <section className="rounded-xl border bg-card p-5 space-y-4">
-    <h2 className="font-bold text-lg">Portal do paciente</h2>
-    <label className="flex items-center gap-3 font-medium"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />Permitir agendamentos pelo portal</label>
-    <p className="text-sm text-muted-foreground">Ao desativar, somente a equipe agenda, remarca e reserva reposições. Os pacientes continuam consultando e desmarcando conforme as regras. O agendamento público de avaliações não muda.</p>
-    <label className="block font-medium" id="portal-message-label">Mensagem exibida quando fechado</label>
-    <div className="flex flex-wrap gap-2" role="toolbar" aria-label="Formatação da mensagem">
-      {([['bold', 'Negrito'], ['italic', 'Itálico'], ['insertUnorderedList', 'Lista']] as const).map(([cmd, label]) => <Button key={cmd} type="button" variant="outline" onMouseDown={e => e.preventDefault()} onClick={() => command(cmd)}>{label}</Button>)}
-      <Button type="button" variant="outline" onMouseDown={e => e.preventDefault()} onClick={() => { const href = window.prompt('Endereço do link (https://, mailto: ou tel:)'); if (href) { const safe = safeMessageLink(href); if (safe) command('createLink', safe); else setFeedback('Link inválido.') } }}>Inserir link</Button>
+  return <section className="rounded-xl border bg-card p-4 sm:p-5 space-y-4 w-full max-w-full min-w-0 overflow-hidden">
+    <h2 className="font-bold text-base sm:text-lg">Portal do paciente</h2>
+    <label className="flex items-center gap-2.5 sm:gap-3 font-medium text-xs sm:text-sm cursor-pointer"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="rounded border-input text-primary focus:ring-primary h-4 w-4" />Permitir agendamentos pelo portal</label>
+    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">Ao desativar, somente a equipe agenda, remarca e reserva reposições. Os pacientes continuam consultando e desmarcando conforme as regras. O agendamento público de avaliações não muda.</p>
+    <label className="block font-medium text-xs sm:text-sm" id="portal-message-label">Mensagem exibida quando fechado</label>
+    <div className="flex flex-wrap gap-1.5 sm:gap-2" role="toolbar" aria-label="Formatação da mensagem">
+      {([['bold', 'Negrito'], ['italic', 'Itálico'], ['insertUnorderedList', 'Lista']] as const).map(([cmd, label]) => <Button key={cmd} type="button" variant="outline" size="sm" className="h-8 px-2.5 sm:px-3 text-xs" onMouseDown={e => e.preventDefault()} onClick={() => command(cmd)}>{label}</Button>)}
+      <Button type="button" variant="outline" size="sm" className="h-8 px-2.5 sm:px-3 text-xs" onMouseDown={e => e.preventDefault()} onClick={() => { const href = window.prompt('Endereço do link (https://, mailto: ou tel:)'); if (href) { const safe = safeMessageLink(href); if (safe) command('createLink', safe); else setFeedback('Link inválido.') } }}>Inserir link</Button>
     </div>
-    <div ref={editor} role="textbox" aria-labelledby="portal-message-label" aria-multiline contentEditable suppressContentEditableWarning className="min-h-32 rounded-lg border p-3 space-y-2 select-text" onInput={() => editor.current && setMessage(readEditor(editor.current))} onPaste={e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')) }} />
-    <div className="rounded-lg bg-muted p-4 space-y-2"><h3 className="font-medium">Prévia para o paciente</h3><PortalMessage value={message} /></div>
-    {feedback && <p role="status" className="text-sm">{feedback}</p>}
-    <Button type="button" disabled={saving || settings === undefined} onClick={async () => { setSaving(true); try { await save({ enabled, message }); setFeedback('Configuração do portal salva.') } catch (e) { setFeedback(e instanceof Error ? e.message : 'Não foi possível salvar.') } finally { setSaving(false) } }}>{saving ? 'Salvando…' : 'Salvar configuração do portal'}</Button>
+    <div ref={editor} role="textbox" aria-labelledby="portal-message-label" aria-multiline contentEditable suppressContentEditableWarning className="min-h-28 sm:min-h-32 rounded-lg border p-3 space-y-2 select-text text-xs sm:text-sm break-words overflow-x-hidden w-full max-w-full" onInput={() => editor.current && setMessage(readEditor(editor.current))} onPaste={e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')) }} />
+    <div className="rounded-lg bg-muted/60 p-3 sm:p-4 space-y-2 min-w-0 overflow-hidden"><h3 className="font-medium text-xs sm:text-sm">Prévia para o paciente</h3><PortalMessage value={message} /></div>
+    {feedback && <p role="status" className="text-xs sm:text-sm">{feedback}</p>}
+    <Button type="button" className="w-full sm:w-auto font-semibold h-10 sm:h-9 text-xs sm:text-sm" disabled={saving || settings === undefined} onClick={async () => { setSaving(true); try { await save({ enabled, message }); setFeedback('Configuração do portal salva.') } catch (e) { setFeedback(e instanceof Error ? e.message : 'Não foi possível salvar.') } finally { setSaving(false) } }}>{saving ? 'Salvando…' : 'Salvar configuração do portal'}</Button>
   </section>
 }
