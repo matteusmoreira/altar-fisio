@@ -97,7 +97,7 @@ export function PatientSearchPanel({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Clique para listar todos ou busque por nome/telefone..."
+            placeholder="Buscar... (Clique para listar todos)"
             value={searchTerm}
             onFocus={() => setIsOpen(true)}
             onClick={() => setIsOpen(true)}
@@ -105,7 +105,7 @@ export function PatientSearchPanel({
               setSearchTerm(e.target.value)
               setIsOpen(true)
             }}
-            className="pl-9 pr-8 h-10 w-full"
+            className="pl-9 pr-8 h-10 w-full text-xs sm:text-sm"
           />
           <button
             type="button"
@@ -119,10 +119,12 @@ export function PatientSearchPanel({
         <Button
           onClick={onOpenQuickRegister}
           variant="outline"
-          className="shrink-0 h-10 px-3 text-xs font-semibold gap-1.5"
+          aria-label="Novo Paciente"
+          className="shrink-0 h-10 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
         >
-          <UserPlus className="w-4 h-4 text-primary" />
-          <span>Novo Paciente</span>
+          <UserPlus className="w-4 h-4 text-primary shrink-0" />
+          <span className="hidden sm:inline">Novo Paciente</span>
+          <span className="sm:hidden">Novo</span>
         </Button>
       </div>
 

@@ -335,11 +335,11 @@ export const WhatsAppInstanceManager: React.FC = () => {
       )}
 
       {/* Cabeçalho com Ações Rápidas */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-5 rounded-2xl border shadow-sm">
-        <div>
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Smartphone className="w-5 h-5 text-emerald-500" />
-            Instâncias de WhatsApp (Uazapi)
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 sm:p-5 rounded-2xl border shadow-sm">
+        <div className="min-w-0">
+          <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
+            <Smartphone className="w-5 h-5 text-emerald-500 shrink-0" />
+            <span>Instâncias de WhatsApp (Uazapi)</span>
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             Gerencie conexões do WhatsApp da clínica, crie novas linhas ou conecte números existentes por token.
@@ -347,34 +347,36 @@ export const WhatsAppInstanceManager: React.FC = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncAll}
-            disabled={isSyncing}
-            className="gap-1.5 h-9 w-full sm:w-auto"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-            Atualizar Status
-          </Button>
+          <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncAll}
+              disabled={isSyncing}
+              className="gap-1.5 h-9 w-full sm:w-auto text-xs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+              <span className="truncate">Atualizar Status</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsConnectTokenModalOpen(true)}
-            className="gap-1.5 h-9 w-full sm:w-auto"
-          >
-            <Key className="w-3.5 h-3.5 text-amber-500" />
-            Conectar por Token
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsConnectTokenModalOpen(true)}
+              className="gap-1.5 h-9 w-full sm:w-auto text-xs"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="truncate">Por Token</span>
+            </Button>
+          </div>
 
           <Button
             size="sm"
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 shadow-sm w-full sm:w-auto"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 shadow-sm w-full sm:w-auto font-semibold text-xs"
           >
-            <Plus className="w-4 h-4" />
-            Nova Instância
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Nova Instância</span>
           </Button>
         </div>
       </div>

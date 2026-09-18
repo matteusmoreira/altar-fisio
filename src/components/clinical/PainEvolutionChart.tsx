@@ -129,97 +129,97 @@ export const PainEvolutionChart: React.FC<PainEvolutionChartProps> = ({
   return (
     <div className="space-y-4">
       {/* Cards de Métricas Clínicas */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-            Dor Inicial (Anamnese)
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-2.5 sm:p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs min-w-0">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block truncate" title="Dor Inicial (Anamnese)">
+            Dor Inicial
           </span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-bold text-foreground">EVA {baselinePain}</span>
+          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
+            <span className="text-xl sm:text-2xl font-bold text-foreground">EVA {baselinePain}</span>
             <span className="text-xs text-muted-foreground">/ 10</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">Ponto de partida do tratamento</span>
+          <span className="text-[10px] text-muted-foreground block truncate">Ponto de partida</span>
         </div>
 
-        <div className="p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-            Dor Atual (Última Sessão)
+        <div className="p-2.5 sm:p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs min-w-0">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block truncate" title="Dor Atual (Última Sessão)">
+            Dor Atual
           </span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-bold text-primary">EVA {currentPain}</span>
+          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
+            <span className="text-xl sm:text-2xl font-bold text-primary">EVA {currentPain}</span>
             <span className="text-xs text-muted-foreground">/ 10</span>
           </div>
-          <span className={`text-[10px] font-semibold ${getPainMeta(currentPain).color}`}>
+          <span className={`text-[10px] font-semibold block truncate ${getPainMeta(currentPain).color}`}>
             {getPainMeta(currentPain).label}
           </span>
         </div>
 
-        <div className="p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+        <div className="p-2.5 sm:p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs min-w-0">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block truncate">
             Redução da Dor
           </span>
-          <div className="flex items-center gap-1.5 mt-1.5">
+          <div className="flex items-center gap-1 mt-1">
             {percentImprovement > 0 ? (
               <>
-                <TrendingDown className="h-5 w-5 text-emerald-500" />
-                <span className="text-2xl font-bold text-emerald-500">-{percentImprovement}%</span>
+                <TrendingDown className="h-4 sm:h-5 w-4 sm:w-5 text-emerald-500 shrink-0" />
+                <span className="text-xl sm:text-2xl font-bold text-emerald-500">-{percentImprovement}%</span>
               </>
             ) : percentImprovement < 0 ? (
               <>
-                <TrendingUp className="h-5 w-5 text-rose-500" />
-                <span className="text-2xl font-bold text-rose-500">+{Math.abs(percentImprovement)}%</span>
+                <TrendingUp className="h-4 sm:h-5 w-4 sm:w-5 text-rose-500 shrink-0" />
+                <span className="text-xl sm:text-2xl font-bold text-rose-500">+{Math.abs(percentImprovement)}%</span>
               </>
             ) : (
               <>
-                <Minus className="h-5 w-5 text-muted-foreground" />
-                <span className="text-2xl font-bold text-muted-foreground">0%</span>
+                <Minus className="h-4 sm:h-5 w-4 sm:w-5 text-muted-foreground shrink-0" />
+                <span className="text-xl sm:text-2xl font-bold text-muted-foreground">0%</span>
               </>
             )}
           </div>
-          <span className="text-[10px] text-muted-foreground">
-            {percentImprovement > 0 ? "Evolução clínica favorável" : "Quadro estável"}
+          <span className="text-[10px] text-muted-foreground block truncate">
+            {percentImprovement > 0 ? "Evolução favorável" : "Quadro estável"}
           </span>
         </div>
 
-        <div className="p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-            Média Recente (EVA)
+        <div className="p-2.5 sm:p-3.5 rounded-xl border border-border bg-card/60 shadow-2xs min-w-0">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block truncate" title="Média Recente (EVA)">
+            Média Recente
           </span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-bold text-foreground">{recentAvg}</span>
+          <div className="flex items-baseline gap-1.5 sm:gap-2 mt-1">
+            <span className="text-xl sm:text-2xl font-bold text-foreground">{recentAvg}</span>
             <span className="text-xs text-muted-foreground">/ 10</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">
-            Baseado em {recentPoints.length} registro(s)
+          <span className="text-[10px] text-muted-foreground block truncate">
+            {recentPoints.length} registro(s)
           </span>
         </div>
       </div>
 
       {/* Gráfico SVG Vetorial */}
-      <div className="relative rounded-2xl border border-border bg-card p-4 shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
-          <div>
-            <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <HeartPulse className="h-4 w-4 text-primary" />
-              <span>Linha do Tempo da Escala Analógica Visual (EVA)</span>
+      <div className="relative rounded-2xl border border-border bg-card p-3 sm:p-4 shadow-sm overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-1">
+          <div className="min-w-0">
+            <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+              <HeartPulse className="h-4 w-4 text-primary shrink-0" />
+              <span className="truncate">Linha do Tempo da Escala Analógica Visual (EVA)</span>
             </h4>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground truncate">
               Acompanhamento de regressão da dor sessão a sessão {patientName ? `para ${patientName}` : ""}.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] font-medium text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> 0-2 Leve
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-emerald-500" /> 0-2 Leve
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> 3-5 Moderada
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-amber-500" /> 3-5 Moderada
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> 6-8 Intensa
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-orange-500" /> 6-8 Intensa
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-600" /> 9-10 Insuportável
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-rose-600" /> 9-10 Insuportável
             </span>
           </div>
         </div>

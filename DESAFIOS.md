@@ -1,5 +1,23 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-18] Refatoração Mobile-First Integral: Contenção de Overflow X, Cards Responsivos e Preservação A11y/Testes
+- **Ponto de Fricção**:
+  1. Nas 5 páginas principais da clínica (Ficha Clínica / Prontuário, Agendamento Rápido, Turmas & Salas Físicas, Pacotes & Serviços e Notificações WhatsApp), layouts baseados em `flex justify-between items-center` ou grades rígidas sem `min-w-0` e sem `overflow-x-hidden` causavam overflow horizontal em smartphones (viewport de 393px × 852px do iPhone 14 Pro), empurrando a viewport e comprimindo títulos, botões e tabs.
+  2. Na Ficha Clínica, a evolução de dor EVA continha 4 cards de KPIs em linha única com rótulos extensos ("Média Recente (Últimos 30 dias)", "Evolução Global"), truncando valores e forçando scroll lateral.
+  3. No Agendamento Rápido, o placeholder do campo de busca de pacientes continha 58 caracteres (`"Buscar por nome, telefone ou CPF... (Clique para listar todos)"`), ocupando todo o espaço visual no mobile e quebrando seletor de busca em testes quando encurtado sem o padrão `/Clique para listar todos/i`.
+  4. Em botões de abas responsivas (`tabs`) e ações com textos compactos no mobile, a alteração de rótulos visuais para telas pequenas sem preservação de `aria-label` causa quebra em suites de teste do Testing Library que utilizam seletores semânticos acessíveis (`getByRole('tab', { name: ... })`).
+- **Mitigação / Regra**:
+  1. Contenção global e local:
+     - Adicionar `overflow-x-hidden w-full max-w-full` na raiz (`html, body` em `src/index.css`) e no container mestre (`AppLayout.tsx`), associado a `min-w-0` em containers flex/grid.
+     - Em telas com cabeçalhos com múltiplos botões de ação, empilhar em coluna no mobile (`flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3`) com botões principais em largura total (`w-full sm:w-auto`).
+  2. Em cards e KPIs densos:
+     - No `PainEvolutionChart.tsx`, adotar grid 2x2 ou cards compactos com padding reduzido (`p-2.5 sm:p-3.5`), rótulos concisos ("Dor Inicial", "Dor Atual", "Redução da Dor", "Média Recente") e valores autoajustáveis.
+     - No `PackagesPage.tsx`, migrar de 4 cards em coluna única com altura excessiva para grid 2x2 responsivo (`grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4`), reduzindo mais de 250px de altura desnecessária na rolagem móvel.
+  3. Preservação de acessibilidade e seletores de teste:
+     - Ao compactar visualmente botões e abas para mobile (`<span className="sm:hidden">...</span><span className="hidden sm:inline">...</span>`), incluir sempre `aria-label` com o nome semântico completo esperado por leitores de tela e testes automatizados.
+     - No campo de busca do paciente, manter o termo funcional `"Buscar... (Clique para listar todos)"`, harmonizando espaço móvel e estabilidade da suíte.
+- **Validação**: 52 arquivos de teste e 287 testes aprovados com 100% de sucesso no Vitest, mais 3 testes de service worker aprovados. Typecheck TypeScript (`tsc -b`) com 0 erros.
+
 ### [2026-09-18] Determinismo Temporal em Testes com Seleção Dinâmica de Dia e Revisão Mobile-First Integral
 - **Ponto de Fricção**:
   1. No Agendamento Rápido (`QuickBookingPage.tsx`), a data padrão de visualização da grade semanal é inicializada via `getTodayDateString()` (fuso `America/Sao_Paulo`). No teste de integração `tests/quick-booking-enhancements.test.tsx`, o mock de dados da grade semanal continha um slot registrado com data fixa `'2026-09-17'`. Quando a data real do sistema mudou para `2026-09-18`, a grade filtrou apenas slots do dia corrente, não encontrando o slot e falhando a busca pelo badge `'2/8'` (`Unable to find an element with the text: 2/8`).

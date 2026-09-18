@@ -528,17 +528,17 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
 
         {/* Header da Central */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-              <FileText className="h-6 w-6 text-primary" />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+              <FileText className="h-5 sm:h-6 w-5 sm:w-6 text-primary shrink-0" />
               <span>Central Geral de Prontuários & Evoluções</span>
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
               Diretório consolidado de fichas clínicas, anamneses e evoluções diárias conforme Resolução COFFITO nº 414/2012.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
               onClick={() => {
                 if (patients.length > 0) {
@@ -546,7 +546,7 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                   setViewMode("patient")
                 }
               }}
-              className="gap-2 shadow-sm"
+              className="gap-2 shadow-sm w-full sm:w-auto h-10"
             >
               <HeartPulse className="h-4 w-4" />
               <span>Abrir Ficha Individual</span>
@@ -1045,22 +1045,24 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
       )}
 
       {/* Top Bar com Botão Voltar para Central */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode("overview")}
-            className="gap-1.5 text-xs font-semibold shadow-xs"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Central de Prontuários</span>
-          </Button>
-
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <span>Ficha Clínica: {patient?.name}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode("overview")}
+              className="gap-1.5 text-xs font-semibold shadow-xs h-8"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Central de Prontuários</span>
+            </Button>
+          </div>
+
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2 min-w-0">
+              <FileText className="h-5 w-5 text-primary shrink-0" />
+              <span className="truncate">Ficha Clínica: {patient?.name}</span>
             </h1>
           </div>
         </div>
@@ -1085,15 +1087,15 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
 
       {/* Banner Resumo do Paciente Ativo com Selo COFFITO */}
       {patient && (
-        <Card className="bg-gradient-to-r from-primary/10 via-card to-card border-primary/20 shadow-xs">
+        <Card className="bg-gradient-to-r from-primary/10 via-card to-card border-primary/20 shadow-xs overflow-hidden">
           <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-sm">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
                 {patient.name.charAt(0)}
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-bold text-foreground">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-foreground truncate">
                     {patient.name}
                   </h2>
                   <Badge variant="outline" className="text-[10px]">
@@ -1104,51 +1106,56 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                     COFFITO Nº 414/2012
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-0.5">
-                  <span>CPF: {patient.documentCpf}</span>
-                  <span>WhatsApp: {patient.phone}</span>
-                  <span>Nasc: {formatDateBR(patient.birthDate)}</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                  <span className="shrink-0">CPF: {patient.documentCpf}</span>
+                  <span className="shrink-0">WhatsApp: {patient.phone}</span>
+                  <span className="shrink-0">Nasc: {formatDateBR(patient.birthDate)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsLgpdModalOpen(true)}
-                className="gap-1.5 text-xs font-semibold shadow-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10"
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                <span>Termos LGPD</span>
-              </Button>
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto">
+              <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsLgpdModalOpen(true)}
+                  className="gap-1 text-xs font-semibold shadow-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10 px-2 h-9"
+                  title="Termos LGPD"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Termos LGPD</span>
+                </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleOpenNewReport("report")}
-                className="gap-1.5 text-xs font-semibold shadow-xs"
-              >
-                <FileText className="h-3.5 w-3.5 text-primary" />
-                <span>Emitir Laudo / PDF</span>
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenNewReport("report")}
+                  className="gap-1 text-xs font-semibold shadow-xs px-2 h-9"
+                  title="Emitir Laudo / PDF"
+                >
+                  <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">Emitir Laudo</span>
+                </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setBioModalView("anterior")
-                  setIsBioModalOpen(true)
-                }}
-                className="gap-1.5 text-xs font-semibold shadow-xs"
-              >
-                <Crosshair className="h-3.5 w-3.5 text-primary" />
-                <span>Espelho Postural</span>
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBioModalView("anterior")
+                    setIsBioModalOpen(true)
+                  }}
+                  className="gap-1 text-xs font-semibold shadow-xs px-2 h-9"
+                  title="Espelho Postural"
+                >
+                  <Crosshair className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">Espelho Postural</span>
+                </Button>
+              </div>
 
               <Button
                 onClick={() => setIsEvolutionModalOpen(true)}
-                className="gap-2 font-semibold shadow-sm"
+                className="gap-2 font-semibold shadow-sm h-10 w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4" />
                 <span>Nova Evolução SOAP</span>
@@ -1160,17 +1167,17 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
 
       {/* Tabs de Prontuário Clínico */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-2xl justify-start p-1 h-auto gap-1 bg-muted/50 rounded-xl">
-          <TabsTrigger value="evolutions" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
+        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-full justify-start p-1 h-auto gap-1 bg-muted/50 rounded-xl touch-pan-x">
+          <TabsTrigger value="evolutions" className="text-xs shrink-0 px-3 py-2 rounded-lg">
             Evoluções SOAP ({evolutions.length})
           </TabsTrigger>
-          <TabsTrigger value="anamnesis" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
+          <TabsTrigger value="anamnesis" className="text-xs shrink-0 px-3 py-2 rounded-lg">
             Anamnese Clínica
           </TabsTrigger>
-          <TabsTrigger value="postural" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
+          <TabsTrigger value="postural" className="text-xs shrink-0 px-3 py-2 rounded-lg">
             Avaliação Postural (4 Vistas)
           </TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs shrink-0 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+          <TabsTrigger value="reports" className="text-xs shrink-0 px-3 py-2 rounded-lg flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />
             <span>Laudos & Docs ({patientReports.length})</span>
           </TabsTrigger>

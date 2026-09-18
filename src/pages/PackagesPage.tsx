@@ -331,7 +331,7 @@ export const PackagesPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-fade-in w-full max-w-full overflow-x-hidden">
       {/* Toast Feedback */}
       {feedback && (
         <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
@@ -342,12 +342,12 @@ export const PackagesPage: React.FC = () => {
 
       {/* Header com Ações Rápidas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <BookmarkCheck className="h-6 w-6 text-primary" />
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 sm:gap-2.5">
+            <BookmarkCheck className="h-5 sm:h-6 w-5 sm:w-6 text-primary shrink-0" />
             <span>Serviços Clínicos & Pacotes Comerciais</span>
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Catálogo completo de procedimentos, planos de sessões de Pilates e Fisioterapia e controle de renovações.
           </p>
         </div>
@@ -357,18 +357,18 @@ export const PackagesPage: React.FC = () => {
             <Button
               variant="outline"
               onClick={() => setIsNewPackageModalOpen(true)}
-              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
+              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto h-9"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4 shrink-0" />
               <span>Novo Plano Comercial</span>
             </Button>
           ) : (
             <Button
               variant="outline"
               onClick={() => setIsQuickServiceModalOpen(true)}
-              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
+              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto h-9"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4 shrink-0" />
               <span>Novo Serviço Clínico</span>
             </Button>
           )}
@@ -379,27 +379,28 @@ export const PackagesPage: React.FC = () => {
               setAssignPackageId(packages[0]?.id || "")
               setIsAssignModalOpen(true)
             }}
-            className="gap-2 shadow-sm w-full sm:w-auto"
+            className="gap-2 shadow-sm w-full sm:w-auto h-9 font-semibold"
           >
-            <ShoppingBag className="h-4 w-4" />
+            <ShoppingBag className="h-4 w-4 shrink-0" />
             <span>Vender / Atribuir Pacote</span>
           </Button>
         </div>
       </div>
 
       {/* Barra de Navegação em Abas */}
-      <div className="flex items-center gap-2 border-b border-border overflow-x-auto scrollbar-none pb-px">
+      <div className="flex items-center gap-2 border-b border-border overflow-x-auto scrollbar-none pb-px touch-pan-x w-full max-w-full">
         <button
           type="button"
           onClick={() => setActiveTab("packages")}
-          className={`flex items-center shrink-0 gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center shrink-0 gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
             activeTab === "packages"
               ? "border-primary text-primary bg-primary/5 rounded-t-xl"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t-xl"
           }`}
         >
-          <ShoppingBag className="h-4 w-4" />
-          <span>Planos Comerciais & Saldos</span>
+          <ShoppingBag className="h-4 w-4 shrink-0" />
+          <span className="sm:hidden">Planos & Saldos</span>
+          <span className="hidden sm:inline">Planos Comerciais & Saldos</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
             {packages.length}
           </span>
@@ -408,14 +409,15 @@ export const PackagesPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab("services")}
-          className={`flex items-center shrink-0 gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center shrink-0 gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
             activeTab === "services"
               ? "border-primary text-primary bg-primary/5 rounded-t-xl"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t-xl"
           }`}
         >
-          <Sparkles className="h-4 w-4" />
-          <span>Catálogo de Serviços Clínicos</span>
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span className="sm:hidden">Catálogo de Serviços</span>
+          <span className="hidden sm:inline">Catálogo de Serviços Clínicos</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
             {services.length}
           </span>
@@ -433,72 +435,72 @@ export const PackagesPage: React.FC = () => {
         />
       ) : (
         <>
-      {/* Cards de Métricas Consolidadas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Alunos com Pacotes Ativos
+      {/* Cards de Métricas Consolidadas (Grid 2x2 no Mobile) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <Card className="border-border shadow-xs min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground truncate" title="Alunos com Pacotes Ativos">
+              Alunos Ativos
             </CardTitle>
-            <UserCheck className="h-4 w-4 text-primary" />
+            <UserCheck className="h-4 w-4 text-primary shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-foreground">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-foreground">
               {activePackages.length} <span className="text-xs font-normal text-muted-foreground">alunos</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Assinaturas vigentes com saldo positivo
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">
+              Assinaturas vigentes
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Total de Sessões em Saldo
+        <Card className="border-border shadow-xs min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground truncate" title="Total de Sessões em Saldo">
+              Sessões em Saldo
             </CardTitle>
-            <Sparkles className="h-4 w-4 text-emerald-600" />
+            <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {totalRemainingSessions} <span className="text-xs font-normal text-muted-foreground">sessões</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Créditos contratados a realizar na clínica
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">
+              Créditos contratados
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Alertas de Renovação
+        <Card className="border-border shadow-xs min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground truncate" title="Alertas de Renovação">
+              Renovações
             </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400">
               {needsRenewalCount} <span className="text-xs font-normal text-muted-foreground">alunos</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              &le; 2 sessões ou expiração em 7 dias
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">
+              &le; 2 sessões restantes
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Receita em Pacotes Ativos
+        <Card className="border-border shadow-xs min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground truncate" title="Receita em Pacotes Ativos">
+              Receita em Planos
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <DollarSign className="h-4 w-4 text-primary shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-foreground">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-foreground truncate">
               R$ {totalRevenuePackages.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Valor nominal dos planos em vigor
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">
+              Valor dos planos ativos
             </p>
           </CardContent>
         </Card>

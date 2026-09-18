@@ -89,8 +89,8 @@
   * {
     @apply border-border;
   }
-  body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary min-h-screen;
+  html, body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary min-h-screen overflow-x-hidden w-full max-w-full;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }

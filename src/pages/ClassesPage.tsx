@@ -505,7 +505,7 @@ export const ClassesPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-fade-in w-full max-w-full overflow-x-hidden">
       {/* Toast Feedback */}
       {feedback && (
         <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
@@ -516,24 +516,24 @@ export const ClassesPage: React.FC = () => {
 
       {/* Header com Abas */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <Layers className="h-6 w-6 text-primary" />
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 sm:gap-2.5">
+            <Layers className="h-5 sm:h-6 w-5 sm:w-6 text-primary shrink-0" />
             <span>Turmas & Salas Físicas</span>
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Gestão unificada de turmas de Pilates e RPG, alocação de ambientes físicos e controle de reposições.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
           {activeTab !== "relatorio" && (
             <Button
               variant="outline"
               onClick={() => setActiveTab("relatorio")}
-              className="gap-2 shadow-xs text-xs"
+              className="gap-2 shadow-xs text-xs h-9 w-full sm:w-auto"
             >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Relatório de Frequência</span>
             </Button>
           )}
@@ -545,9 +545,9 @@ export const ClassesPage: React.FC = () => {
                 if (professionals.length > 0 && !recProfId) setRecProfId(professionals[0].id)
                 setIsRecurringModalOpen(true)
               }}
-              className="gap-2 shadow-sm"
+              className="gap-2 shadow-sm h-9 w-full sm:w-auto font-semibold"
             >
-              <Repeat className="h-4 w-4" />
+              <Repeat className="h-4 w-4 shrink-0" />
               <span>Nova Série Recorrente</span>
             </Button>
           )}
@@ -557,13 +557,13 @@ export const ClassesPage: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => handleOpenAvailabilityModal()}
-                className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
+                className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto h-9"
               >
-                <Clock className="h-4 w-4" />
+                <Clock className="h-4 w-4 shrink-0" />
                 <span>Horários de Atendimento & Escalas</span>
               </Button>
-              <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm w-full sm:w-auto">
-                <Plus className="h-4 w-4" />
+              <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm w-full sm:w-auto h-9">
+                <Plus className="h-4 w-4 shrink-0" />
                 <span>Nova Sala / Box</span>
               </Button>
             </div>
@@ -573,20 +573,20 @@ export const ClassesPage: React.FC = () => {
 
       {/* Tabs Principais */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-2xl justify-start p-1 h-auto gap-1 bg-muted/60 rounded-xl">
-          <TabsTrigger value="turmas" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
+        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-full justify-start p-1 h-auto gap-1 bg-muted/60 rounded-xl touch-pan-x">
+          <TabsTrigger value="turmas" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
             <Layers className="h-3.5 w-3.5" />
             <span>Turmas ({classSchedules.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="relatorio" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
+          <TabsTrigger value="relatorio" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
             <FileSpreadsheet className="h-3.5 w-3.5" />
             <span>Relatório & Faltas</span>
           </TabsTrigger>
-          <TabsTrigger value="salas" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
+          <TabsTrigger value="salas" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
             <DoorOpen className="h-3.5 w-3.5" />
             <span>Salas & Ambientes ({rooms.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="reposicoes" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
+          <TabsTrigger value="reposicoes" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
             <Clock className="h-3.5 w-3.5" />
             <span>Reposições ({availableCredits.length})</span>
           </TabsTrigger>
@@ -749,16 +749,16 @@ export const ClassesPage: React.FC = () => {
 
                       {/* Lista de Alunos Matriculados */}
                       <CardContent className="p-4 pt-1 space-y-2">
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground pt-1">
+                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 text-[11px] font-semibold text-muted-foreground pt-1">
                           <span>Alunos Matriculados ({activeParticipants.length}/{schedule.maxCapacity}):</span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {activeParticipants.length > 0 && (
                               <button
                                 onClick={() => handleBatchCheckIn(schedule.id)}
                                 className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 text-[11px] font-bold"
                                 title="Marcar todos os alunos desta turma como presentes com 1 clique"
                               >
-                                <CheckCheck className="h-3.5 w-3.5" />
+                                <CheckCheck className="h-3.5 w-3.5 shrink-0" />
                                 <span>Marcar todos presentes</span>
                               </button>
                             )}
@@ -771,7 +771,7 @@ export const ClassesPage: React.FC = () => {
                                 }}
                                 className="text-primary hover:underline flex items-center gap-1 text-[11px] font-bold"
                               >
-                                <UserPlus className="h-3 w-3" />
+                                <UserPlus className="h-3 w-3 shrink-0" />
                                 <span>Matricular</span>
                               </button>
                             )}

@@ -168,7 +168,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20"
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row antialiased">
+    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row antialiased w-full max-w-full overflow-x-hidden">
       {/* ========================================================================= */}
       {/* DESKTOP RETRACTABLE SIDEBAR (hidden on mobile, visible md+)               */}
       {/* ========================================================================= */}
@@ -721,7 +721,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MAIN CONTENT AREA                                                         */}
       {/* ========================================================================= */}
-      <main className="flex-1 flex flex-col min-w-0 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] md:pb-8">
+      <main className="flex-1 flex flex-col min-w-0 w-full max-w-full overflow-x-hidden pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] md:pb-8">
         {/* Top Header Bar Desktop com Relógio e Data no Fuso America/Sao_Paulo */}
         <header className="hidden md:flex items-center justify-between px-6 lg:px-8 h-14 border-b border-border bg-card/60 backdrop-blur-md sticky top-0 z-20 transition-all">
           <div className="flex items-center gap-2 text-xs">

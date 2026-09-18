@@ -117,7 +117,7 @@ export function WeeklyScheduleGrid({
     <div className="flex flex-col gap-4">
       {/* ─── VISUALIZAÇÃO DE ABAS TEMPORAIS ─── */}
       {periodMode === 'week' && (
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none snap-x touch-pan-x w-full max-w-full">
           {dates.map((dateStr) => {
             const [y, m, d] = dateStr.split('-').map(Number);
             const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
@@ -129,14 +129,14 @@ export function WeeklyScheduleGrid({
                 key={dateStr}
                 type="button"
                 onClick={() => onDayChange(dateStr)}
-                className={`flex flex-col items-center justify-center min-w-[78px] py-2 px-3 rounded-xl border transition-all cursor-pointer select-none ${
+                className={`flex flex-col items-center justify-center min-w-[62px] sm:min-w-[78px] flex-1 sm:flex-none py-1.5 sm:py-2 px-2 sm:px-3 rounded-xl border transition-all cursor-pointer select-none snap-start shrink-0 sm:shrink ${
                   isSelected
                     ? 'bg-primary text-primary-foreground border-primary shadow-xs font-semibold'
                     : 'bg-card border-border text-muted-foreground hover:bg-muted/70 hover:text-foreground'
                 }`}
               >
-                <span className="text-xs">{dayName}</span>
-                <span className="text-sm font-bold">{formatDayShort(dateStr)}</span>
+                <span className="text-[11px] sm:text-xs">{dayName}</span>
+                <span className="text-xs sm:text-sm font-bold">{formatDayShort(dateStr)}</span>
               </button>
             );
           })}
@@ -193,7 +193,7 @@ export function WeeklyScheduleGrid({
               <span className="text-[11px] text-primary">Deslize para ver todas ➔</span>
             )}
           </div>
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1 touch-pan-x w-full max-w-full">
             <button
               type="button"
               onClick={() => setSelectedMobileRoomId('all')}
@@ -210,7 +210,8 @@ export function WeeklyScheduleGrid({
                 key={room.id}
                 type="button"
                 onClick={() => setSelectedMobileRoomId(room.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all border ${
+                title={room.name}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all border max-w-[170px] truncate ${
                   selectedMobileRoomId === room.id
                     ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
                     : 'bg-card border-border text-muted-foreground hover:text-foreground'

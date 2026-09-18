@@ -261,7 +261,7 @@ export const NotificationsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-fade-in w-full max-w-full overflow-x-hidden">
       {feedback && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-sm font-medium animate-fade-in ${
@@ -281,12 +281,12 @@ export const NotificationsPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <Bell className="h-6 w-6 text-primary" />
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 sm:gap-2.5">
+            <Bell className="h-5 sm:h-6 w-5 sm:w-6 text-primary shrink-0" />
             <span>Motor de Notificações Omnicanal</span>
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Automação de lembretes pré-sessão via <strong>WhatsApp (UAZAPI)</strong> e e-mails transacionais via <strong>Resend</strong>.
           </p>
         </div>
@@ -294,59 +294,69 @@ export const NotificationsPage: React.FC = () => {
         <Button
           onClick={handleTriggerManualScan}
           disabled={isScanning}
-          className="gap-2 shadow-sm font-semibold text-xs h-9 w-full sm:w-auto"
+          className="gap-2 shadow-sm font-semibold text-xs h-9 w-full sm:w-auto shrink-0"
         >
           {isScanning ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
           ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
           )}
-          <span>Executar Varredura de Lembretes Agora</span>
+          <span className="sm:hidden">Varredura de Lembretes</span>
+          <span className="hidden sm:inline">Executar Varredura de Lembretes Agora</span>
         </Button>
       </div>
 
 
       {/* Abas Principais do Módulo */}
       <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
-        <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full justify-start">
+        <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full max-w-full justify-start touch-pan-x">
           <TabsTrigger
             value="whatsapp_hub"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
+            aria-label="Central WhatsApp & Uazapi"
+            className="gap-1.5 sm:gap-2 font-semibold py-2 px-3 sm:px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
-            <Smartphone className="w-4 h-4 text-emerald-500" />
-            <span>Central WhatsApp & Uazapi</span>
+            <Smartphone className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="sm:hidden">WhatsApp & Uazapi</span>
+            <span className="hidden sm:inline">Central WhatsApp & Uazapi</span>
           </TabsTrigger>
           <TabsTrigger
             value="logs"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
+            aria-label={`Histórico & Auditoria (${notificationStats.total})`}
+            className="gap-1.5 sm:gap-2 font-semibold py-2 px-3 sm:px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
-            <FileCheck className="w-4 h-4 text-sky-500" />
-            <span>Histórico & Auditoria ({notificationStats.total})</span>
+            <FileCheck className="w-4 h-4 text-sky-500 shrink-0" />
+            <span className="sm:hidden">Auditoria ({notificationStats.total})</span>
+            <span className="hidden sm:inline">Histórico & Auditoria ({notificationStats.total})</span>
           </TabsTrigger>
           <TabsTrigger
             value="automations"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
+            aria-label="Automações & Testes"
+            className="gap-1.5 sm:gap-2 font-semibold py-2 px-3 sm:px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
-            <Sparkles className="w-4 h-4 text-purple-500" />
-            <span>Automações & Testes</span>
+            <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
+            <span className="sm:hidden">Automações</span>
+            <span className="hidden sm:inline">Automações & Testes</span>
           </TabsTrigger>
         </TabsList>
 
         {/* ABA 1: CENTRAL WHATSAPP & DISPARADOR */}
         <TabsContent value="whatsapp_hub" className="space-y-6 focus-visible:outline-none">
           <Tabs value={whatsappSubTab} onValueChange={(v: any) => setWhatsappSubTab(v)} className="space-y-6">
-            <TabsList className="bg-muted/40 border p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full justify-start">
+            <TabsList className="bg-muted/40 border p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full max-w-full justify-start touch-pan-x">
               <TabsTrigger value="instances" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
-                Instâncias & QR Code
+                <Smartphone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="sm:hidden">Instâncias</span>
+                <span className="hidden sm:inline">Instâncias & QR Code</span>
               </TabsTrigger>
               <TabsTrigger value="templates" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                Modelos de Lembretes
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="sm:hidden">Modelos</span>
+                <span className="hidden sm:inline">Modelos de Lembretes</span>
               </TabsTrigger>
               <TabsTrigger value="broadcast" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
-                <Send className="w-3.5 h-3.5 text-sky-500" />
-                Disparador em Massa
+                <Send className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                <span className="sm:hidden">Disparador</span>
+                <span className="hidden sm:inline">Disparador em Massa</span>
               </TabsTrigger>
             </TabsList>
 

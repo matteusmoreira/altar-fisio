@@ -540,10 +540,10 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div className="w-full min-h-screen bg-background text-foreground antialiased p-4 md:p-6 space-y-5 pb-20">
+    <div className="w-full max-w-full min-h-screen bg-background text-foreground antialiased p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-5 pb-20 overflow-x-hidden">
       {/* ─── CABEÇALHO DA PÁGINA ─── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-border">
-        <div className="space-y-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border">
+        <div className="space-y-1 min-w-0">
           {onNavigate && (
             <Button
               variant="ghost"
@@ -556,8 +556,8 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
             </Button>
           )}
           <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-primary" />
-            Agendamento Rápido
+            <Calendar className="w-5 sm:w-6 h-5 sm:h-6 text-primary shrink-0" />
+            <span>Agendamento Rápido</span>
           </h1>
           <p className="text-xs md:text-sm text-muted-foreground">
             Fluxo prático para recepção com reserva em lote, turmas e salas em coluna única.
@@ -568,7 +568,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Button
             size="lg"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm h-11 px-5 text-sm gap-2 w-full sm:w-auto"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm h-11 px-4 sm:px-5 text-xs sm:text-sm gap-2 w-full sm:w-auto"
             disabled={!selectedPatientId || selectedSlots.length === 0 || isSubmitting}
             onClick={() => setShowConfirm(true)}
           >
