@@ -133,12 +133,12 @@ export const OnlineBookingsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={() => window.open(publicUrl, "_blank")}
-            className="rounded-xl text-xs font-semibold gap-1.5 h-9"
+            className="rounded-xl text-xs font-semibold gap-1.5 h-9 w-full sm:w-auto"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             <span>Ver Página Pública</span>
@@ -148,7 +148,7 @@ export const OnlineBookingsPage: React.FC = () => {
             size="sm"
             onClick={() => exportAllBookingsToXls(filteredBookings)}
             disabled={filteredBookings.length === 0}
-            className="rounded-xl text-xs font-bold gap-1.5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            className="rounded-xl text-xs font-bold gap-1.5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm w-full sm:w-auto"
           >
             <FileSpreadsheet className="h-4 w-4" />
             <span>Exportar Lista em XLS</span>
@@ -229,11 +229,11 @@ export const OnlineBookingsPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-10 rounded-xl text-xs bg-background min-w-[170px]"
+                className="h-10 rounded-xl text-xs bg-background w-full sm:w-auto min-w-[170px]"
               >
                 <option value="all">Todos os Status ({stats.total})</option>
                 <option value="pending_approval">Aguardando Aprovação ({stats.pending})</option>
@@ -404,7 +404,7 @@ export const OnlineBookingsPage: React.FC = () => {
         open={!!selectedBookingForModal}
         onOpenChange={(open) => !open && setSelectedBookingForModal(null)}
       >
-        <DialogContent className="sm:max-w-lg rounded-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <div className="flex items-center justify-between gap-2">
               <div>

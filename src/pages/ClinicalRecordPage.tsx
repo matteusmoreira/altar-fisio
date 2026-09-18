@@ -1066,9 +1066,9 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
         </div>
 
         {/* Seletor Rápido de Paciente */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <span className="text-xs font-semibold text-muted-foreground shrink-0">Trocar Paciente:</span>
-          <div className="min-w-[220px]">
+          <div className="w-full sm:min-w-[220px]">
             <Select
               value={selectedPatientId}
               onChange={(e) => setSelectedPatientId(e.target.value)}
@@ -1160,17 +1160,17 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
 
       {/* Tabs de Prontuário Clínico */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 max-w-2xl w-full">
-          <TabsTrigger value="evolutions" className="text-xs">
+        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-2xl justify-start p-1 h-auto gap-1 bg-muted/50 rounded-xl">
+          <TabsTrigger value="evolutions" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
             Evoluções SOAP ({evolutions.length})
           </TabsTrigger>
-          <TabsTrigger value="anamnesis" className="text-xs">
+          <TabsTrigger value="anamnesis" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
             Anamnese Clínica
           </TabsTrigger>
-          <TabsTrigger value="postural" className="text-xs">
+          <TabsTrigger value="postural" className="text-xs shrink-0 px-3 py-1.5 rounded-lg">
             Avaliação Postural (4 Vistas)
           </TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs flex items-center gap-1.5">
+          <TabsTrigger value="reports" className="text-xs shrink-0 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />
             <span>Laudos & Docs ({patientReports.length})</span>
           </TabsTrigger>

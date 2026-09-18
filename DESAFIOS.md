@@ -1,5 +1,17 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-18] Determinismo Temporal em Testes com Seleção Dinâmica de Dia e Revisão Mobile-First Integral
+- **Ponto de Fricção**:
+  1. No Agendamento Rápido (`QuickBookingPage.tsx`), a data padrão de visualização da grade semanal é inicializada via `getTodayDateString()` (fuso `America/Sao_Paulo`). No teste de integração `tests/quick-booking-enhancements.test.tsx`, o mock de dados da grade semanal continha um slot registrado com data fixa `'2026-09-17'`. Quando a data real do sistema mudou para `2026-09-18`, a grade filtrou apenas slots do dia corrente, não encontrando o slot e falhando a busca pelo badge `'2/8'` (`Unable to find an element with the text: 2/8`).
+  2. Em refatorações para telas pequenas (smartphones de 360px a 430px), tabelas com muitas colunas (ex: grade semanal de salas e atendimentos por fisioterapeuta) sofrem compressão severa de células ou estouram a viewport se não tiverem proteção de scroll horizontal ou conversão inteligente para cartões empilhados.
+- **Mitigação / Regra**:
+  1. Em testes unitários ou de integração que renderizem páginas com inicialização baseada na data atual (`getTodayDateString()`), aplicar sempre mock determinístico da data via `vi.mock('@/lib/dateUtils', ...)` fixando a data de referência dos mocks (ex: `getTodayDateString: () => '2026-09-17'`), assegurando independência da virada de dia e execução 100% reproduzível.
+  2. No layout Mobile-First:
+     - Adotar touch targets mínimos de 44px e safe areas com `pb-[calc(...,env(safe-area-inset-bottom,0px))]` em menus de navegação fixos.
+     - Em modais de formulário, aplicar `w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto`.
+     - Em tabelas com múltiplas colunas de dados, prover alternativa em cards empilhados (`< md`) e alternadores rápidos de visualização (ex: abas por dia da semana no `AvailabilityManagerModal` e seletor rápido de ambiente no `WeeklyScheduleGrid`).
+- **Validação**: 52 arquivos de teste e 287 testes aprovados com 100% de sucesso no Vitest, mais 3 testes de service worker aprovados. Typecheck TypeScript (`tsc -b`) sem nenhum erro.
+
 ### [2026-09-17] Clareza Métrica na Agenda: Vagas Ocupadas vs Cadastros de Pacientes
 - **Ponto de Fricção**:
   1. Na barra de métricas da Agenda (`ScheduleMetricsBar.tsx`), o card de ocupação exibia o rótulo `"Alunos / Vagas"` com a contagem total de matrículas somadas em todas as sessões do período selecionado (ex: 17 agendamentos em 40 sessões no mês para 2 pacientes com aulas recorrentes).

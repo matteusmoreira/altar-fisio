@@ -352,12 +352,12 @@ export const PackagesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           {activeTab === "packages" ? (
             <Button
               variant="outline"
               onClick={() => setIsNewPackageModalOpen(true)}
-              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5"
+              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               <span>Novo Plano Comercial</span>
@@ -366,7 +366,7 @@ export const PackagesPage: React.FC = () => {
             <Button
               variant="outline"
               onClick={() => setIsQuickServiceModalOpen(true)}
-              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5"
+              className="gap-2 shadow-xs border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               <span>Novo Serviço Clínico</span>
@@ -379,7 +379,7 @@ export const PackagesPage: React.FC = () => {
               setAssignPackageId(packages[0]?.id || "")
               setIsAssignModalOpen(true)
             }}
-            className="gap-2 shadow-sm"
+            className="gap-2 shadow-sm w-full sm:w-auto"
           >
             <ShoppingBag className="h-4 w-4" />
             <span>Vender / Atribuir Pacote</span>
@@ -388,11 +388,11 @@ export const PackagesPage: React.FC = () => {
       </div>
 
       {/* Barra de Navegação em Abas */}
-      <div className="flex items-center gap-2 border-b border-border">
+      <div className="flex items-center gap-2 border-b border-border overflow-x-auto scrollbar-none pb-px">
         <button
           type="button"
           onClick={() => setActiveTab("packages")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center shrink-0 gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
             activeTab === "packages"
               ? "border-primary text-primary bg-primary/5 rounded-t-xl"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t-xl"
@@ -408,7 +408,7 @@ export const PackagesPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab("services")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center shrink-0 gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold border-b-2 transition-all cursor-pointer ${
             activeTab === "services"
               ? "border-primary text-primary bg-primary/5 rounded-t-xl"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30 rounded-t-xl"
@@ -707,18 +707,18 @@ export const PackagesPage: React.FC = () => {
             </div>
 
             {/* Filtros e Busca */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-56">
                 <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Buscar paciente ou plano..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-8 pl-8 text-xs w-48 sm:w-56"
+                  className="h-8 pl-8 text-xs w-full"
                 />
               </div>
 
-              <div className="w-48 sm:w-56">
+              <div className="w-full sm:w-56">
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}

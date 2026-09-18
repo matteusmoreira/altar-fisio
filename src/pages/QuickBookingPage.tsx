@@ -565,10 +565,10 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         </div>
 
         {/* Ação de confirmação no topo */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
           <Button
             size="lg"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm h-11 px-5 text-sm gap-2"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm h-11 px-5 text-sm gap-2 w-full sm:w-auto"
             disabled={!selectedPatientId || selectedSlots.length === 0 || isSubmitting}
             onClick={() => setShowConfirm(true)}
           >
@@ -833,18 +833,18 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
       </Card>
 
       {/* ─── BARRA DE NAVEGAÇÃO DA GRADE & FILTROS DIA / SEMANA / MÊS ─── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-xs">
+        <div className="flex items-center justify-between sm:justify-start gap-2">
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 shrink-0"
             onClick={handlePrevPeriod}
             title="Período anterior"
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div>
+          <div className="text-center sm:text-left flex-1 sm:flex-none">
             <h3 className="text-sm md:text-base font-bold text-foreground">
               {periodLabel}
             </h3>
@@ -855,7 +855,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 shrink-0"
             onClick={handleNextPeriod}
             title="Próximo período"
           >
@@ -863,14 +863,14 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={handleGoToToday}
             className="text-xs font-semibold h-9"
           >
-            Ir para Hoje
+            Hoje
           </Button>
 
           {/* Alternador de Período [ Dia | Semana | Mês ] */}

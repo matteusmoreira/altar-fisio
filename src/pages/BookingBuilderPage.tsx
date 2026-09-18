@@ -381,23 +381,23 @@ export const BookingBuilderPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={handleResetDefault}
-            className="rounded-xl text-xs font-semibold gap-1.5 h-9"
+            className="rounded-xl text-xs font-semibold gap-1.5 h-9 w-full sm:w-auto"
             title="Restaurar padrão clínico"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Restaurar Padrão</span>
+            <span>Restaurar Padrão</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => window.open(publicUrl, "_blank")}
-            className="rounded-xl text-xs font-semibold gap-1.5 h-9"
+            className="rounded-xl text-xs font-semibold gap-1.5 h-9 w-full sm:w-auto"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             <span>Abrir Página Pública</span>
@@ -406,7 +406,7 @@ export const BookingBuilderPage: React.FC = () => {
           <Button
             size="sm"
             onClick={() => handleCopyLink(publicUrl)}
-            className="rounded-xl text-xs font-bold gap-1.5 h-9 shadow-sm shadow-primary/20"
+            className="rounded-xl text-xs font-bold gap-1.5 h-9 shadow-sm shadow-primary/20 w-full sm:w-auto"
           >
             <Copy className="h-3.5 w-3.5" />
             <span>Copiar Link Principal</span>
@@ -874,7 +874,7 @@ export const BookingBuilderPage: React.FC = () => {
           </div>
 
           {/* Renderização do Mockup */}
-          <div className="flex justify-center w-full">
+          <div className="flex justify-center w-full overflow-hidden px-2">
             {previewDevice === "mobile" ? (
               /* ======================================================= */
               /* MOCKUP DE CELULAR REALISTA (SMARTPHONE TITANIUM COM DYNAMIC ISLAND) */
@@ -987,7 +987,7 @@ export const BookingBuilderPage: React.FC = () => {
 
       {/* MODAL: EDITAR ETAPA */}
       <Dialog open={!!editingStep} onOpenChange={(open) => !open && setEditingStep(null)}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground">
               Editar Etapa do Agendamento
@@ -1005,7 +1005,7 @@ export const BookingBuilderPage: React.FC = () => {
                 <Input
                   value={editingStep.title}
                   onChange={(e) => setEditingStep({ ...editingStep, title: e.target.value })}
-                  placeholder="Ex: Triagem & Convênio"
+                  placeholder="Ex: Dados Pessoais, Triagem..."
                   className="h-10 rounded-xl text-xs"
                 />
               </div>
@@ -1035,7 +1035,7 @@ export const BookingBuilderPage: React.FC = () => {
             <Button
               size="sm"
               onClick={handleSaveStep}
-              disabled={!editingStep?.title?.trim()}
+              disabled={!editingStep?.title.trim()}
               className="rounded-xl text-xs font-bold shadow-xs"
             >
               Salvar Alterações
@@ -1046,7 +1046,7 @@ export const BookingBuilderPage: React.FC = () => {
 
       {/* MODAL: ADICIONAR / EDITAR PERGUNTA */}
       <Dialog open={isFieldModalOpen} onOpenChange={setIsFieldModalOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-foreground">
               {editingFieldId ? "Editar Pergunta da Triagem" : "Adicionar Pergunta à Triagem"}

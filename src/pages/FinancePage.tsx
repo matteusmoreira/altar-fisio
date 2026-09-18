@@ -250,11 +250,13 @@ export const FinancePage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           {/* Seletor de Mês */}
-          <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border text-xs">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-muted-foreground">Período:</span>
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border text-xs w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="font-semibold text-muted-foreground">Período:</span>
+            </div>
             <select
               value={selectedFinanceMonth}
               onChange={(e) => setSelectedFinanceMonth(e.target.value)}
@@ -267,7 +269,7 @@ export const FinancePage: React.FC = () => {
             </select>
           </div>
 
-          <Button onClick={handleOpenNewTxModal} className="gap-2 text-xs h-9">
+          <Button onClick={handleOpenNewTxModal} className="gap-2 text-xs h-9 w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             <span>Novo Lançamento</span>
           </Button>
@@ -371,17 +373,17 @@ export const FinancePage: React.FC = () => {
       {/* Tabs Principais: Fluxo de Caixa vs Comissões vs Histórico */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-2">
-          <TabsList className="grid grid-cols-3 max-w-md w-full">
-            <TabsTrigger value="cashflow" className="text-xs">
+          <TabsList className="grid grid-cols-3 max-w-md w-full h-auto p-1 text-[11px] sm:text-xs">
+            <TabsTrigger value="cashflow" className="py-1.5 px-1 truncate">
               Extrato & Caixa
             </TabsTrigger>
-            <TabsTrigger value="commissions" className="text-xs flex items-center gap-1.5">
-              <span>Repasses da Equipe</span>
+            <TabsTrigger value="commissions" className="py-1.5 px-1 flex items-center justify-center gap-1 truncate">
+              <span className="truncate">Repasses</span>
               {commissionReports.some((r) => !r.isClosed && r.totalAttendedSessions > 0) && (
-                <span className="h-2 w-2 rounded-full bg-primary" />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="closed" className="text-xs">
+            <TabsTrigger value="closed" className="py-1.5 px-1 truncate">
               Fechamentos ({closedCommissions.length})
             </TabsTrigger>
           </TabsList>
@@ -831,38 +833,70 @@ export const FinancePage: React.FC = () => {
                             Nenhum atendimento com presença confirmada encontrado neste período.
                           </p>
                         ) : (
-                          <div className="rounded-lg border border-border overflow-hidden">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-muted/40 text-muted-foreground border-b border-border">
-                                <tr>
-                                  <th className="p-2.5 font-semibold">Data / Hora</th>
-                                  <th className="p-2.5 font-semibold">Paciente</th>
-                                  <th className="p-2.5 font-semibold">Modalidade / Aula</th>
-                                  <th className="p-2.5 font-semibold text-right">Valor Sessão</th>
-                                  <th className="p-2.5 font-semibold text-right">Comissão Gerada</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border">
-                                {report.attendancesList.map((att, idx) => (
-                                  <tr key={`${att.scheduleId}_${idx}`} className="hover:bg-muted/10">
-                                    <td className="p-2.5 font-medium text-foreground">
+                          <>
+                            {/* Versão Mobile (< md): Lista de Cartões Responsivos */}
+                            <div className="block md:hidden space-y-2">
+                              {report.attendancesList.map((att, idx) => (
+                                <div
+                                  key={`${att.scheduleId}_${idx}`}
+                                  className="p-3 rounded-xl border border-border/80 bg-background flex flex-col gap-1.5 text-xs shadow-2xs"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-foreground">
                                       {formatDateBR(att.date)} • {att.startTime}
-                                    </td>
-                                    <td className="p-2.5 text-foreground">{att.patientName}</td>
-                                    <td className="p-2.5 text-muted-foreground">
-                                      {att.title} ({att.modality})
-                                    </td>
-                                    <td className="p-2.5 text-right font-medium text-foreground">
-                                      R$ {att.sessionRevenue.toFixed(2)}
-                                    </td>
-                                    <td className="p-2.5 text-right font-bold text-primary">
-                                      R$ {att.commissionEarned.toFixed(2)}
-                                    </td>
+                                    </span>
+                                    <span className="font-bold text-primary">
+                                      + R$ {att.commissionEarned.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-muted-foreground">
+                                    <span className="text-foreground font-medium">{att.patientName}</span>
+                                    <span className="text-[11px]">Sessão: R$ {att.sessionRevenue.toFixed(2)}</span>
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground/80 flex items-center justify-between pt-1 border-t border-border/40">
+                                    <span>{att.title}</span>
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1">
+                                      {att.modality}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Versão Desktop (>= md): Tabela com rolagem protegida */}
+                            <div className="hidden md:block rounded-lg border border-border overflow-x-auto">
+                              <table className="w-full text-left text-xs min-w-[500px]">
+                                <thead className="bg-muted/40 text-muted-foreground border-b border-border">
+                                  <tr>
+                                    <th className="p-2.5 font-semibold">Data / Hora</th>
+                                    <th className="p-2.5 font-semibold">Paciente</th>
+                                    <th className="p-2.5 font-semibold">Modalidade / Aula</th>
+                                    <th className="p-2.5 font-semibold text-right">Valor Sessão</th>
+                                    <th className="p-2.5 font-semibold text-right">Comissão Gerada</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                  {report.attendancesList.map((att, idx) => (
+                                    <tr key={`${att.scheduleId}_${idx}`} className="hover:bg-muted/10">
+                                      <td className="p-2.5 font-medium text-foreground">
+                                        {formatDateBR(att.date)} • {att.startTime}
+                                      </td>
+                                      <td className="p-2.5 text-foreground">{att.patientName}</td>
+                                      <td className="p-2.5 text-muted-foreground">
+                                        {att.title} ({att.modality})
+                                      </td>
+                                      <td className="p-2.5 text-right font-medium text-foreground">
+                                        R$ {att.sessionRevenue.toFixed(2)}
+                                      </td>
+                                      <td className="p-2.5 text-right font-bold text-primary">
+                                        R$ {att.commissionEarned.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
                         )}
                       </div>
                     )}

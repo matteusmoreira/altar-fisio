@@ -294,7 +294,7 @@ export const NotificationsPage: React.FC = () => {
         <Button
           onClick={handleTriggerManualScan}
           disabled={isScanning}
-          className="gap-2 shadow-sm font-semibold text-xs h-9 self-start sm:self-auto"
+          className="gap-2 shadow-sm font-semibold text-xs h-9 w-full sm:w-auto"
         >
           {isScanning ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -308,24 +308,24 @@ export const NotificationsPage: React.FC = () => {
 
       {/* Abas Principais do Módulo */}
       <Tabs value={mainTab} onValueChange={(v: any) => setMainTab(v)} className="space-y-6">
-        <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex flex-wrap gap-1">
+        <TabsList className="bg-muted/70 p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full justify-start">
           <TabsTrigger
             value="whatsapp_hub"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
             <Smartphone className="w-4 h-4 text-emerald-500" />
-            <span>Central WhatsApp & Disparador Uazapi</span>
+            <span>Central WhatsApp & Uazapi</span>
           </TabsTrigger>
           <TabsTrigger
             value="logs"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
             <FileCheck className="w-4 h-4 text-sky-500" />
             <span>Histórico & Auditoria ({notificationStats.total})</span>
           </TabsTrigger>
           <TabsTrigger
             value="automations"
-            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm"
+            className="gap-2 font-semibold py-2 px-3.5 data-[state=active]:bg-card data-[state=active]:shadow-xs text-xs sm:text-sm shrink-0 rounded-lg"
           >
             <Sparkles className="w-4 h-4 text-purple-500" />
             <span>Automações & Testes</span>
@@ -335,18 +335,18 @@ export const NotificationsPage: React.FC = () => {
         {/* ABA 1: CENTRAL WHATSAPP & DISPARADOR */}
         <TabsContent value="whatsapp_hub" className="space-y-6 focus-visible:outline-none">
           <Tabs value={whatsappSubTab} onValueChange={(v: any) => setWhatsappSubTab(v)} className="space-y-6">
-            <TabsList className="bg-muted/40 border p-1 rounded-xl h-auto flex flex-wrap gap-1">
-              <TabsTrigger value="instances" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+            <TabsList className="bg-muted/40 border p-1 rounded-xl h-auto flex items-center overflow-x-auto scrollbar-none whitespace-nowrap gap-1 w-full justify-start">
+              <TabsTrigger value="instances" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
                 <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
-                Instâncias & Conexão QR Code
+                Instâncias & QR Code
               </TabsTrigger>
-              <TabsTrigger value="templates" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+              <TabsTrigger value="templates" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                Modelos de Lembretes (Botões / Carrossel)
+                Modelos de Lembretes
               </TabsTrigger>
-              <TabsTrigger value="broadcast" className="gap-1.5 text-xs font-semibold py-1.5 px-3">
+              <TabsTrigger value="broadcast" className="gap-1.5 text-xs font-semibold py-1.5 px-3 shrink-0 rounded-lg">
                 <Send className="w-3.5 h-3.5 text-sky-500" />
-                Disparador em Massa & Recorrência
+                Disparador em Massa
               </TabsTrigger>
             </TabsList>
 

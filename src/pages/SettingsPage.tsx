@@ -836,14 +836,14 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-1 flex justify-end">
+            <div className="pt-1 flex flex-col sm:flex-row justify-end">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleTestResend}
                 disabled={isTestingResend}
-                className="gap-1.5 text-xs text-sky-600 border-sky-500/30 hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                className="gap-1.5 text-xs text-sky-600 border-sky-500/30 hover:bg-sky-50 dark:hover:bg-sky-950/30 w-full sm:w-auto"
               >
                 {isTestingResend ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
                 <span>Testar Conexão Resend</span>
@@ -858,7 +858,7 @@ export const SettingsPage: React.FC = () => {
         {/* Botão de Salvar Geral */}
 
         <div className="flex justify-end pt-2">
-          <Button type="submit" size="lg" disabled={isSaving} className="gap-2 font-semibold shadow-md">
+          <Button type="submit" size="lg" disabled={isSaving} className="gap-2 font-semibold shadow-md w-full sm:w-auto">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             <span>Salvar Todas as Configurações</span>
           </Button>

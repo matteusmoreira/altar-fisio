@@ -553,16 +553,16 @@ export const ClassesPage: React.FC = () => {
           )}
 
           {activeTab === "salas" && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
                 onClick={() => handleOpenAvailabilityModal()}
-                className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+                className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
               >
                 <Clock className="h-4 w-4" />
                 <span>Horários de Atendimento & Escalas</span>
               </Button>
-              <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm">
+              <Button onClick={handleOpenCreateRoom} className="gap-2 shadow-sm w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 <span>Nova Sala / Box</span>
               </Button>
@@ -573,20 +573,20 @@ export const ClassesPage: React.FC = () => {
 
       {/* Tabs Principais */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 max-w-2xl w-full">
-          <TabsTrigger value="turmas" className="text-xs gap-1.5">
+        <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-2xl justify-start p-1 h-auto gap-1 bg-muted/60 rounded-xl">
+          <TabsTrigger value="turmas" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
             <Layers className="h-3.5 w-3.5" />
             <span>Turmas ({classSchedules.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="relatorio" className="text-xs gap-1.5">
+          <TabsTrigger value="relatorio" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
             <FileSpreadsheet className="h-3.5 w-3.5" />
             <span>Relatório & Faltas</span>
           </TabsTrigger>
-          <TabsTrigger value="salas" className="text-xs gap-1.5">
+          <TabsTrigger value="salas" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
             <DoorOpen className="h-3.5 w-3.5" />
             <span>Salas & Ambientes ({rooms.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="reposicoes" className="text-xs gap-1.5">
+          <TabsTrigger value="reposicoes" className="text-xs gap-1.5 shrink-0 px-3 py-1.5 rounded-lg">
             <Clock className="h-3.5 w-3.5" />
             <span>Reposições ({availableCredits.length})</span>
           </TabsTrigger>
@@ -609,8 +609,8 @@ export const ClassesPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="w-44 sm:w-48">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                <div className="w-full sm:w-48">
                   <Select
                     value={selectedSpecialtyFilter}
                     onChange={(e) => setSelectedSpecialtyFilter(e.target.value)}
@@ -624,7 +624,7 @@ export const ClassesPage: React.FC = () => {
                   </Select>
                 </div>
 
-                <div className="w-44 sm:w-48">
+                <div className="w-full sm:w-48">
                   <Select
                     value={selectedRoomFilter}
                     onChange={(e) => setSelectedRoomFilter(e.target.value)}

@@ -380,7 +380,7 @@ const PatientPortalContent: React.FC = () => {
       </header>
 
       {/* Conteúdo Central do Aplicativo */}
-      <main className="max-w-md w-full mx-auto p-4 space-y-4 flex-1">
+      <main className="max-w-md w-full mx-auto p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] space-y-4 flex-1">
         {!bookingEnabled && <section role="status" className="border border-primary/30 bg-primary/5 rounded-2xl p-4 space-y-2"><h2 className="font-bold">Agendamentos com a equipe da clínica</h2><PortalMessage value={portalData.portalBookingMessage} /></section>}
         {/* ================================================================= */}
         {/* ABA 1: MINHA AGENDA (PRÓXIMAS AULAS)                               */}
@@ -845,11 +845,11 @@ const PatientPortalContent: React.FC = () => {
       {/* ===================================================================== */}
       {/* NAVEGAÇÃO INFERIOR FIXA (BOTTOM BAR ESTILO APLICATIVO NATIVO)          */}
       {/* ===================================================================== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/60 py-2 px-4 shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/60 pt-1.5 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-lg">
         <div className="max-w-md mx-auto grid grid-cols-4 gap-1">
           <button
             onClick={() => setActiveTab("schedule")}
-            className={`flex flex-col items-center justify-center py-1 rounded-2xl transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-h-[44px] py-1 rounded-2xl transition-all active:scale-95 ${
               activeTab === "schedule"
                 ? "text-primary font-bold"
                 : "text-muted-foreground hover:text-foreground font-medium"
@@ -861,7 +861,7 @@ const PatientPortalContent: React.FC = () => {
 
           <button
             onClick={() => setActiveTab("replacements")}
-            className={`relative flex flex-col items-center justify-center py-1 rounded-2xl transition-all active:scale-95 ${
+            className={`relative flex flex-col items-center justify-center min-h-[44px] py-1 rounded-2xl transition-all active:scale-95 ${
               activeTab === "replacements"
                 ? "text-primary font-bold"
                 : "text-muted-foreground hover:text-foreground font-medium"
@@ -870,13 +870,13 @@ const PatientPortalContent: React.FC = () => {
             <RotateCcw className="h-5 w-5 mb-0.5" />
             <span className="text-[10px]">Reposições</span>
             {replacementCredits.length > 0 && (
-              <span className="absolute top-0 right-5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+              <span className="absolute top-1 right-5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
             )}
           </button>
 
           <button
             onClick={() => setActiveTab("packages")}
-            className={`flex flex-col items-center justify-center py-1 rounded-2xl transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-h-[44px] py-1 rounded-2xl transition-all active:scale-95 ${
               activeTab === "packages"
                 ? "text-primary font-bold"
                 : "text-muted-foreground hover:text-foreground font-medium"
@@ -888,7 +888,7 @@ const PatientPortalContent: React.FC = () => {
 
           <button
             onClick={() => setActiveTab("history")}
-            className={`flex flex-col items-center justify-center py-1 rounded-2xl transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center min-h-[44px] py-1 rounded-2xl transition-all active:scale-95 ${
               activeTab === "history"
                 ? "text-primary font-bold"
                 : "text-muted-foreground hover:text-foreground font-medium"

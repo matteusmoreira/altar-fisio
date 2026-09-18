@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatProfessionalDisplayName } from '@/lib/professionalUtils';
 
@@ -79,6 +79,14 @@ export function WeeklyScheduleGrid({
   onSlotClick,
   hasPatientSelected,
 }: WeeklyScheduleGridProps) {
+  // Filtro de sala na visão mobile
+  const [selectedMobileRoomId, setSelectedMobileRoomId] = useState<string>('all');
+
+  const visibleRooms = useMemo(() => {
+    if (selectedMobileRoomId === 'all') return rooms;
+    return rooms.filter((r) => r.id === selectedMobileRoomId);
+  }, [rooms, selectedMobileRoomId]);
+
   // Filter slots for the selected day
   const daySlots = slots.filter((slot) => slot.day === selectedDay);
 
@@ -176,18 +184,57 @@ export function WeeklyScheduleGrid({
         </div>
       )}
 
+      {/* ─── FILTRO RÁPIDO DE SALA NO MOBILE (< sm) ─── */}
+      {rooms.length > 1 && (
+        <div className="block sm:hidden">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5 px-0.5">
+            <span className="font-semibold text-foreground">Ambiente / Sala:</span>
+            {selectedMobileRoomId === 'all' && (
+              <span className="text-[11px] text-primary">Deslize para ver todas ➔</span>
+            )}
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedMobileRoomId('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all border ${
+                selectedMobileRoomId === 'all'
+                  ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
+                  : 'bg-card border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Todas as Salas ({rooms.length})
+            </button>
+            {rooms.map((room) => (
+              <button
+                key={room.id}
+                type="button"
+                onClick={() => setSelectedMobileRoomId(room.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all border ${
+                  selectedMobileRoomId === room.id
+                    ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
+                    : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {room.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ─── GRADE DE SALAS E HORÁRIOS ─── */}
       <div className="overflow-x-auto border border-border rounded-xl bg-card shadow-2xs">
         <table className="w-full text-sm text-left">
           <thead className="bg-muted/50 border-b border-border">
             <tr>
-              <th className="px-4 py-3 font-semibold text-foreground/80 w-24 border-r border-border text-center">
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold text-foreground/80 w-20 sm:w-24 border-r border-border text-center text-xs sm:text-sm">
                 Horário
               </th>
-              {rooms.map((room) => (
+              {visibleRooms.map((room) => (
                 <th
                   key={room.id}
-                  className="px-4 py-3 font-semibold text-foreground/80 text-center min-w-[150px] border-r border-border last:border-r-0"
+                  className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold text-foreground/80 text-center min-w-[130px] sm:min-w-[150px] border-r border-border last:border-r-0 text-xs sm:text-sm"
                 >
                   {room.name}
                 </th>
@@ -197,7 +244,7 @@ export function WeeklyScheduleGrid({
           <tbody>
             {uniqueTimes.length === 0 ? (
               <tr>
-                <td colSpan={rooms.length + 1} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                <td colSpan={visibleRooms.length + 1} className="px-4 py-12 text-center text-muted-foreground text-sm">
                   Nenhum horário disponível configurado para este dia.
                 </td>
               </tr>
@@ -206,10 +253,10 @@ export function WeeklyScheduleGrid({
                 const [startTime, endTime] = timeLabel.split(' - ');
                 return (
                   <tr key={timeLabel} className="border-b border-border/60 last:border-b-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-foreground/90 border-r border-border text-center whitespace-nowrap text-xs">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 font-semibold text-foreground/90 border-r border-border text-center whitespace-nowrap text-xs">
                       {startTime}
                     </td>
-                    {rooms.map((room) => {
+                    {visibleRooms.map((room) => {
                       const slot = daySlots.find(
                         (s) =>
                           s.roomId === room.id &&

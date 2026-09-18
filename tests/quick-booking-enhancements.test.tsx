@@ -129,6 +129,14 @@ vi.mock('@/lib/staffConvex', () => ({
   useAction: () => mocks.createPatientAction,
 }))
 
+vi.mock('@/lib/dateUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/dateUtils')>()
+  return {
+    ...actual,
+    getTodayDateString: () => '2026-09-17',
+  }
+})
+
 afterEach(() => {
   cleanup()
 })

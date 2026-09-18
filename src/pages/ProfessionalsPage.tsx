@@ -254,16 +254,16 @@ export const ProfessionalsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => handleOpenAvailabilityModal()}
-            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
           >
             <Clock className="h-4 w-4" />
             <span>Horários & Escalas</span>
           </Button>
-          <Button onClick={handleOpenCreate} className="gap-2 shadow-sm">
+          <Button onClick={handleOpenCreate} className="gap-2 shadow-sm w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             <span>Cadastrar Profissional</span>
           </Button>
@@ -352,8 +352,8 @@ export const ProfessionalsPage: React.FC = () => {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="w-48">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            <div className="w-full sm:w-48">
               <Select
                 value={specialtyFilter}
                 onChange={(e) => setSpecialtyFilter(e.target.value)}
@@ -367,18 +367,20 @@ export const ProfessionalsPage: React.FC = () => {
               </Select>
             </div>
 
-            <div className="w-36 sm:w-40">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-              >
-                <option value="all">Todos os Status</option>
-                <option value="active">Apenas Ativos</option>
-                <option value="inactive">Apenas Inativos</option>
-              </Select>
-            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="flex-1 sm:w-36">
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="active">Apenas Ativos</option>
+                  <option value="inactive">Apenas Inativos</option>
+                </Select>
+              </div>
 
-            <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+              <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+            </div>
           </div>
         </div>
       </Card>

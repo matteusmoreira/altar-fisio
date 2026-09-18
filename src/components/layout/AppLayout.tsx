@@ -721,7 +721,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MAIN CONTENT AREA                                                         */}
       {/* ========================================================================= */}
-      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+      <main className="flex-1 flex flex-col min-w-0 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] md:pb-8">
         {/* Top Header Bar Desktop com Relógio e Data no Fuso America/Sao_Paulo */}
         <header className="hidden md:flex items-center justify-between px-6 lg:px-8 h-14 border-b border-border bg-card/60 backdrop-blur-md sticky top-0 z-20 transition-all">
           <div className="flex items-center gap-2 text-xs">
@@ -779,25 +779,25 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MOBILE BOTTOM NAVIGATION BAR (Fixed at bottom <= 768px)                   */}
       {/* ========================================================================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1.5 flex items-center justify-around shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 pt-1 pb-[calc(0.375rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shadow-lg">
         <button
           onClick={() => onNavigate("schedule")}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-            currentSection === "schedule" ? "text-primary font-bold" : "text-muted-foreground"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+            currentSection === "schedule" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Calendar className="h-5 w-5" />
-          <span className="text-[10px]">Agenda</span>
+          <span className="text-[10px] leading-tight">Agenda</span>
         </button>
 
         <button
           onClick={() => onNavigate("classes")}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-            currentSection === "classes" ? "text-primary font-bold" : "text-muted-foreground"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+            currentSection === "classes" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Layers className="h-5 w-5" />
-          <span className="text-[10px]">Turmas</span>
+          <span className="text-[10px] leading-tight">Turmas</span>
         </button>
 
         <button
@@ -810,44 +810,44 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
         <button
           onClick={() => onNavigate("patients")}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-            currentSection === "patients" ? "text-primary font-bold" : "text-muted-foreground"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+            currentSection === "patients" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Users className="h-5 w-5" />
-          <span className="text-[10px]">Pacientes</span>
+          <span className="text-[10px] leading-tight">Pacientes</span>
         </button>
 
         {/* 5º Botão Contextual por Perfil */}
         {role === "admin" ? (
           <button
             onClick={() => onNavigate("finance")}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              currentSection === "finance" ? "text-primary font-bold" : "text-muted-foreground"
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+              currentSection === "finance" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <DollarSign className="h-5 w-5" />
-            <span className="text-[10px]">Caixa</span>
+            <span className="text-[10px] leading-tight">Caixa</span>
           </button>
         ) : role === "professional" ? (
           <button
             onClick={() => onNavigate("clinical")}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              currentSection === "clinical" ? "text-primary font-bold" : "text-muted-foreground"
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+              currentSection === "clinical" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <FileText className="h-5 w-5" />
-            <span className="text-[10px]">Prontuário</span>
+            <span className="text-[10px] leading-tight">Prontuário</span>
           </button>
         ) : (
           <button
             onClick={() => onNavigate("packages")}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors ${
-              currentSection === "packages" ? "text-primary font-bold" : "text-muted-foreground"
+            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+              currentSection === "packages" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <BookmarkCheck className="h-5 w-5" />
-            <span className="text-[10px]">Pacotes</span>
+            <span className="text-[10px] leading-tight">Pacotes</span>
           </button>
         )}
       </nav>

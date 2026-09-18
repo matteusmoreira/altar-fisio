@@ -208,7 +208,7 @@ export const PainEvolutionChart: React.FC<PainEvolutionChartProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-[10px] font-medium text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] font-medium text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> 0-2 Leve
             </span>
@@ -233,10 +233,13 @@ export const PainEvolutionChart: React.FC<PainEvolutionChartProps> = ({
             </p>
           </div>
         ) : (
-          <div className="relative w-full overflow-x-auto">
+          <div className="relative w-full overflow-x-auto scrollbar-none">
+            <div className="sm:hidden flex items-center justify-end text-[10px] text-muted-foreground mb-1 pr-1">
+              <span>Deslize para ver o histórico ➔</span>
+            </div>
             <svg
               viewBox={`0 0 ${width} ${height}`}
-              className="w-full h-auto min-w-[580px] select-none"
+              className="w-full h-auto min-w-[520px] sm:min-w-[580px] select-none"
             >
               <defs>
                 <linearGradient id="painAreaGrad" x1="0" y1="0" x2="0" y2="1">

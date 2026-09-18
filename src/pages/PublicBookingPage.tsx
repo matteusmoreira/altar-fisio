@@ -1929,13 +1929,13 @@ export const PublicBookingPage: React.FC = () => {
           </CardContent>
 
           {/* Rodapé com Navegação */}
-          <CardFooter className="p-6 sm:p-8 border-t border-border/60 bg-muted/10 flex items-center justify-between gap-4">
+          <CardFooter className="p-4 sm:p-8 border-t border-border/60 bg-muted/10 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <Button
               type="button"
               variant="outline"
               disabled={currentStepIndex === 0 || isSubmitting}
               onClick={handlePrevStep}
-              className="rounded-xl px-5 h-12 text-xs font-bold border-border hover:bg-muted"
+              className="rounded-xl px-5 h-12 text-xs font-bold border-border hover:bg-muted w-full sm:w-auto"
             >
               <ChevronLeft className="h-4 w-4 mr-1.5" />
               Voltar
@@ -1945,7 +1945,7 @@ export const PublicBookingPage: React.FC = () => {
               type="button"
               disabled={isSubmitting}
               onClick={handleNextStep}
-              className="rounded-xl px-7 h-12 text-xs font-black shadow-lg shadow-primary/25 flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+              className="rounded-xl px-7 h-12 text-xs font-black shadow-lg shadow-primary/25 flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto"
             >
               {isSubmitting ? (
                 <>
@@ -1959,8 +1959,8 @@ export const PublicBookingPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>Continuar para Próxima Etapa</span>
-                  <ChevronRight className="h-4 w-4" />
+                  <span className="truncate">Continuar para Próxima Etapa</span>
+                  <ChevronRight className="h-4 w-4 shrink-0" />
                 </>
               )}
             </Button>

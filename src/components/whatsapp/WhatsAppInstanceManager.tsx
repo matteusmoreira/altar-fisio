@@ -346,13 +346,13 @@ export const WhatsAppInstanceManager: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={handleSyncAll}
             disabled={isSyncing}
-            className="gap-1.5 h-9"
+            className="gap-1.5 h-9 w-full sm:w-auto"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
             Atualizar Status
@@ -362,7 +362,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={() => setIsConnectTokenModalOpen(true)}
-            className="gap-1.5 h-9"
+            className="gap-1.5 h-9 w-full sm:w-auto"
           >
             <Key className="w-3.5 h-3.5 text-amber-500" />
             Conectar por Token
@@ -371,7 +371,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
           <Button
             size="sm"
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 shadow-sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 shadow-sm w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
             Nova Instância
@@ -547,7 +547,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
 
       {/* MODAL 1: CRIAR NOVA INSTÂNCIA */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-emerald-600" />
@@ -587,7 +587,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
 
       {/* MODAL 2: CONECTAR / VINCULAR INSTÂNCIA EXISTENTE */}
       <Dialog open={isConnectTokenModalOpen} onOpenChange={setIsConnectTokenModalOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Key className="w-5 h-5 text-amber-500" />
@@ -761,7 +761,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
 
       {/* MODAL 3: EXIBIÇÃO DE QR CODE */}
       <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
-        <DialogContent className="sm:max-w-md text-center">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto p-4 sm:p-6 text-center">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-center gap-2">
               <QrCode className="w-5 h-5 text-emerald-600" />
@@ -843,7 +843,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
 
       {/* MODAL 4: CONFIRMAR EXCLUSÃO DE INSTÂNCIA */}
       <Dialog open={isDeleteModalOpen} onOpenChange={(open) => { setIsDeleteModalOpen(open); if (!open) setDeleteError(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="w-5 h-5" />

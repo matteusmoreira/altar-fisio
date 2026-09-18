@@ -411,11 +411,11 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setIsAvailabilityModalOpen(true)}
-            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5"
+            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
             title="Configurar horários de atendimento, salas e folgas"
           >
             <Clock className="h-4 w-4" />
@@ -424,7 +424,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
 
           <Button
             onClick={() => (onNavigate ? onNavigate("quick_booking") : setIsNewModalOpen(true))}
-            className="gap-2 shadow-sm bg-primary text-primary-foreground font-semibold"
+            className="gap-2 shadow-sm bg-primary text-primary-foreground font-semibold w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>Novo Agendamento / Turma</span>
@@ -527,52 +527,51 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           </div>
 
           {/* Filtros de Sala, Profissional e Modo de Período */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Filter className="h-3.5 w-3.5" />
-              <span className="font-medium">Filtrar:</span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              {/* Filtro por Sala */}
+              <div className="w-full sm:w-44">
+                <Select
+                  value={selectedRoom}
+                  onChange={(e) => setSelectedRoom(e.target.value)}
+                >
+                  <option value="all">Todas as Salas</option>
+                  {rooms.filter(r => r.isActive).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* Filtro por Profissional */}
+              <div className="w-full sm:w-48">
+                <Select
+                  value={selectedProf}
+                  onChange={(e) => setSelectedProf(e.target.value)}
+                >
+                  <option value="all">Todos os Profissionais</option>
+                  {professionals.filter(p => p.active).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
 
-            {/* Filtro por Sala */}
-            <div className="w-36 sm:w-44">
-              <Select
-                value={selectedRoom}
-                onChange={(e) => setSelectedRoom(e.target.value)}
-              >
-                <option value="all">Todas as Salas</option>
-                {rooms.filter(r => r.isActive).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </Select>
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              {/* Alternador de Período [ Dia | Semana | Mês ] */}
+              <SchedulePeriodToggle
+                period={schedulePeriodMode}
+                onChange={setSchedulePeriodMode}
+              />
+
+              {/* Alternador Grade/Lista (Apenas no Modo Dia) */}
+              {schedulePeriodMode === "day" && (
+                <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+              )}
             </div>
-
-            {/* Filtro por Profissional */}
-            <div className="w-40 sm:w-48">
-              <Select
-                value={selectedProf}
-                onChange={(e) => setSelectedProf(e.target.value)}
-              >
-                <option value="all">Todos os Profissionais</option>
-                {professionals.filter(p => p.active).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            {/* Alternador de Período [ Dia | Semana | Mês ] */}
-            <SchedulePeriodToggle
-              period={schedulePeriodMode}
-              onChange={setSchedulePeriodMode}
-            />
-
-            {/* Alternador Grade/Lista (Apenas no Modo Dia) */}
-            {schedulePeriodMode === "day" && (
-              <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
-            )}
           </div>
         </div>
       </Card>

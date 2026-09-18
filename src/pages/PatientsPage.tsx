@@ -417,7 +417,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           </p>
         </div>
 
-        <Button onClick={handleOpenCreate} className="gap-2 self-start sm:self-auto shadow-sm">
+        <Button onClick={handleOpenCreate} className="gap-2 w-full sm:w-auto shadow-sm">
           <Plus className="h-4 w-4" />
           <span>Novo Paciente</span>
         </Button>
@@ -530,7 +530,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
             {/* Dropdown de Profissional (para Admin ou Recepção gerenciarem equipes) */}
             {(role === "admin" || role === "reception") && (
-              <div className="w-44 sm:w-52">
+              <div className="w-full sm:w-52">
                 <Select
                   value={selectedProfFilter}
                   onChange={(e) => setSelectedProfFilter(e.target.value)}
@@ -547,7 +547,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
               </div>
             )}
 
-            <div className="w-44 sm:w-52 flex-1 sm:flex-initial">
+            <div className="w-full sm:w-52 flex-1 sm:flex-initial">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -1035,7 +1035,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
       {/* Modal de Cadastro / Edição */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="w-[95vw] sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSubmit}>
             <DialogHeader className="space-y-1">
               <DialogTitle className="text-xl font-bold text-foreground">
@@ -1305,9 +1305,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmação de Exclusão */}
+      {/* Diálogo de Confirmação de Exclusão */}
       <Dialog open={!!deletingPatient} onOpenChange={(open) => !open && setDeletingPatient(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md">
           <DialogHeader>
             <div className="h-10 w-10 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-2">
               <AlertTriangle className="h-5 w-5" />

@@ -386,7 +386,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="w-full sm:max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden border-border rounded-2xl shadow-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden border-border rounded-2xl shadow-2xl">
           {/* Header Superior Estilizado */}
           <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/70 p-5 sm:p-6 pb-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -441,7 +441,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
               </div>
 
               {/* Botões de Ação Rápida */}
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
                 <Button
                   size="sm"
                   variant="outline"
@@ -528,13 +528,13 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
               {/* Pacote & Sessões */}
               <div className="p-2.5 rounded-xl bg-background/80 border border-border/70 shadow-2xs">
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                  <Award className="h-3.5 w-3.5 text-indigo-500" />
-                  <span>Saldo de Pacote</span>
+                  <Shield className="h-3.5 w-3.5 text-primary" />
+                  <span>Plano / Pacote</span>
                 </div>
                 <div className="text-xs font-bold text-foreground mt-1 truncate">
                   {activePackageSummary ? (
-                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                      {activePackageSummary.remaining} de {activePackageSummary.total} sessões
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {activePackageSummary.remaining}/{activePackageSummary.total} livres
                     </span>
                   ) : (
                     <span className="text-muted-foreground font-normal">Sem plano ativo</span>
@@ -586,11 +586,11 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             onValueChange={(val) => setActiveTab(val as any)}
             className="flex-1 flex flex-col overflow-hidden"
           >
-            <div className="px-5 sm:px-6 pt-2 border-b border-border bg-muted/20">
-              <TabsList className="bg-transparent h-10 p-0 space-x-2 sm:space-x-4 border-b-0">
+            <div className="px-4 sm:px-6 pt-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none">
+              <TabsList className="bg-transparent h-10 p-0 flex gap-2 sm:gap-4 border-b-0 w-max shrink-0">
                 <TabsTrigger
                   value="overview"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
                   <User className="h-3.5 w-3.5 mr-1.5 text-primary" />
                   <span>Visão Geral</span>
@@ -598,7 +598,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
                 <TabsTrigger
                   value="classes"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
                   <Layers className="h-3.5 w-3.5 mr-1.5 text-primary" />
                   <span>Turmas & Presenças</span>
@@ -611,7 +611,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
                 <TabsTrigger
                   value="clinical"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
                   <HeartPulse className="h-3.5 w-3.5 mr-1.5 text-rose-500" />
                   <span>Prontuário & SOAP</span>
@@ -624,7 +624,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
                 <TabsTrigger
                   value="financial"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
                   <DollarSign className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
                   <span>Pacotes & Financeiro</span>
@@ -632,10 +632,10 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
                 <TabsTrigger
                   value="reports"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
-                  <FileText className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
-                  <span>Laudos & Documentos</span>
+                  <FileText className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
+                  <span>Documentos & Laudos</span>
                   {patientReports.length > 0 && (
                     <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0 h-4">
                       {patientReports.length}

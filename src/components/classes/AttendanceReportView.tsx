@@ -273,10 +273,10 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Cabeçalho do Relatório */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-card p-4 rounded-2xl border border-border shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border shadow-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
@@ -288,9 +288,9 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           {onBackToClasses && (
-            <Button variant="outline" size="sm" onClick={onBackToClasses} className="text-xs gap-1">
+            <Button variant="outline" size="sm" onClick={onBackToClasses} className="text-xs gap-1 w-full sm:w-auto">
               <Calendar className="h-3.5 w-3.5" />
               <span>Painel de Turmas</span>
             </Button>
@@ -300,7 +300,7 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
             size="sm"
             onClick={handleExportExcel}
             disabled={isExporting || isLoading || filteredRecords.length === 0}
-            className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+            className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs w-full sm:w-auto"
           >
             {isExporting ? (
               <>
@@ -552,12 +552,12 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
       </div>
 
       {/* Barra de Alternância de Abas: Detalhada vs Consolidada */}
-      <div className="flex items-center justify-between border-b border-border/80 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 border-b border-border/80 pb-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setViewMode("detailed")}
-            className={`text-xs px-3.5 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+            className={`text-xs px-3.5 py-1.5 rounded-xl font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
               viewMode === "detailed"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -570,7 +570,7 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
           <button
             type="button"
             onClick={() => setViewMode("students")}
-            className={`text-xs px-3.5 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
+            className={`text-xs px-3.5 py-1.5 rounded-xl font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
               viewMode === "students"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"

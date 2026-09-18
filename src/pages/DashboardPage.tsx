@@ -404,11 +404,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
 
         {/* Grupo de Ações Rápidas no Topo */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <Button
             size="sm"
             onClick={() => onNavigate("schedule")}
-            className="gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-3.5"
+            className="gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-3.5 flex-1 sm:flex-initial"
           >
             <Calendar className="h-4 w-4" />
             <span>Ver Agenda</span>
@@ -418,23 +418,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             size="sm"
             variant="outline"
             onClick={() => onNavigate("patients")}
-            className="gap-2 rounded-xl text-xs h-9 px-3.5 hover:bg-muted"
+            className="gap-2 rounded-xl text-xs h-9 px-3.5 hover:bg-muted flex-1 sm:flex-initial"
           >
             <Plus className="h-4 w-4 text-primary" />
             <span>Novo Paciente</span>
           </Button>
-
 
           <Button
             size="sm"
             variant="ghost"
             onClick={handleBatchReminders}
             disabled={isActionLoading || pendingToday === 0}
-            className="gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20"
+            className="gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20 w-full sm:w-auto"
             title="Disparar lembrete via WhatsApp para todos os agendados de hoje"
           >
             <Send className={`h-3.5 w-3.5 ${isActionLoading ? "animate-spin" : ""}`} />
-            <span className="hidden md:inline">Lembretes WhatsApp</span>
+            <span>Lembretes WhatsApp</span>
           </Button>
         </div>
       </div>

@@ -92,6 +92,8 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   // Aba Ativa: "weekly" | "blocks" | "extras" | "grid"
   const [activeTab, setActiveTab] = useState<"weekly" | "blocks" | "extras" | "grid">("weekly")
+  // Dia selecionado na visão compacta mobile da grade semanal
+  const [mobileGridDay, setMobileGridDay] = useState<number>(1)
 
   // Toast / Feedback
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
@@ -360,17 +362,17 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-border bg-background">
+      <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-border bg-background">
         {/* Cabeçalho */}
-        <DialogHeader className="p-6 pb-4 border-b border-border bg-card/60">
+        <DialogHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border bg-card/60">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <Clock className="w-6 h-6" />
+              <div className="p-2 sm:p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 h-6" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
-                  Gestão de Horários & Disponibilidade
+                <DialogTitle className="text-lg sm:text-xl font-bold text-foreground flex flex-wrap items-center gap-2">
+                  <span>Gestão de Horários & Disponibilidade</span>
                   <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                     Atendimento Clínico
                   </Badge>
@@ -397,7 +399,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
           )}
 
           {/* Barra de Filtros Rápidos */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-3">
             <div>
               <label className="block text-[11px] font-semibold text-muted-foreground mb-1">Filtrar por Profissional</label>
               <Select value={filterProfId} onChange={(e) => setFilterProfId(e.target.value)}>
@@ -437,30 +439,30 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
         </DialogHeader>
 
         {/* Abas Principais */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border">
-              <TabsList className="bg-muted/40 p-1 rounded-xl">
-                <TabsTrigger value="weekly" className="text-xs font-semibold rounded-lg">
+              <TabsList className="bg-muted/40 p-1 rounded-xl flex overflow-x-auto scrollbar-none whitespace-nowrap w-full sm:w-auto">
+                <TabsTrigger value="weekly" className="text-xs font-semibold rounded-lg shrink-0">
                   <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
                   Grade Semanal ({filteredRules.length})
                 </TabsTrigger>
-                <TabsTrigger value="blocks" className="text-xs font-semibold rounded-lg">
+                <TabsTrigger value="blocks" className="text-xs font-semibold rounded-lg shrink-0">
                   <CalendarOff className="w-3.5 h-3.5 mr-1.5" />
                   Folgas & Férias ({blocksList.length})
                 </TabsTrigger>
-                <TabsTrigger value="extras" className="text-xs font-semibold rounded-lg">
+                <TabsTrigger value="extras" className="text-xs font-semibold rounded-lg shrink-0">
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                   Plantões Extras ({extrasList.length})
                 </TabsTrigger>
-                <TabsTrigger value="grid" className="text-xs font-semibold rounded-lg">
+                <TabsTrigger value="grid" className="text-xs font-semibold rounded-lg shrink-0">
                   <Layers className="w-3.5 h-3.5 mr-1.5" />
                   Visão Semanal
                 </TabsTrigger>
               </TabsList>
 
               {activeTab === "weekly" && canManageAvailability && (
-                <Button onClick={handleOpenCreateRule} size="sm" className="rounded-xl gap-1.5 font-semibold text-xs shadow-sm">
+                <Button onClick={handleOpenCreateRule} size="sm" className="rounded-xl gap-1.5 font-semibold text-xs shadow-sm w-full sm:w-auto">
                   <Plus className="w-4 h-4" />
                   Novo Horário Semanal
                 </Button>
@@ -482,7 +484,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   }}
                   size="sm"
                   variant="outline"
-                  className="rounded-xl gap-1.5 font-semibold text-xs border-rose-500/30 text-rose-600 hover:bg-rose-500/10"
+                  className="rounded-xl gap-1.5 font-semibold text-xs border-rose-500/30 text-rose-600 hover:bg-rose-500/10 w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4" />
                   Registrar Bloqueio de Folga
@@ -500,7 +502,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
                   }}
                   size="sm"
                   variant="outline"
-                  className="rounded-xl gap-1.5 font-semibold text-xs border-primary/30 text-primary hover:bg-primary/10"
+                  className="rounded-xl gap-1.5 font-semibold text-xs border-primary/30 text-primary hover:bg-primary/10 w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4" />
                   Abrir Atendimento Extra
@@ -718,8 +720,76 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
             </TabsContent>
 
             {/* TAB 4: VISÃO SEMANAL (GRID RESUMIDO) */}
-            <TabsContent value="grid" className="mt-4">
-              <div className="border border-border rounded-2xl p-4 bg-card/50 overflow-x-auto">
+            <TabsContent value="grid" className="mt-4 space-y-3">
+              {/* Visão Mobile: Abas de Dias da Semana (< sm) */}
+              <div className="block sm:hidden space-y-3">
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                  {DAYS_OF_WEEK.filter((d) => d.day !== 0).map((d) => {
+                    const count = filteredRules.filter((r) => r.dayOfWeek === d.day).length
+                    const isSelected = mobileGridDay === d.day
+                    return (
+                      <button
+                        key={d.day}
+                        type="button"
+                        onClick={() => setMobileGridDay(d.day)}
+                        className={`flex-1 min-w-[52px] py-2 px-1 rounded-xl text-center border transition-all ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                            : "bg-card border-border text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <div className="text-xs">{d.short}</div>
+                        <div className={`text-[10px] ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground/70"}`}>
+                          {count}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Turnos do dia selecionado no mobile */}
+                <div className="border border-border rounded-2xl p-4 bg-card/60">
+                  <div className="text-xs font-bold text-foreground mb-3 flex items-center justify-between border-b border-border pb-2">
+                    <span>{DAYS_OF_WEEK.find((d) => d.day === mobileGridDay)?.label}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {filteredRules.filter((r) => r.dayOfWeek === mobileGridDay).length} turno(s)
+                    </span>
+                  </div>
+
+                  {filteredRules.filter((r) => r.dayOfWeek === mobileGridDay).length === 0 ? (
+                    <div className="text-xs text-muted-foreground/60 text-center py-8">
+                      Nenhum turno configurado para este dia
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredRules
+                        .filter((r) => r.dayOfWeek === mobileGridDay)
+                        .map((r) => (
+                          <div
+                            key={r._id}
+                            className="p-3 rounded-xl text-xs border border-border/70 bg-background/80 flex items-center justify-between gap-3 shadow-2xs"
+                          >
+                            <div>
+                              <div className="font-extrabold text-foreground text-sm">
+                                {r.startTime} às {r.endTime}
+                              </div>
+                              <div className="text-primary font-medium mt-0.5">{r.professionalName}</div>
+                              <div className="text-muted-foreground text-[11px] mt-0.5">{r.roomName}</div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <Badge variant="outline" className="text-[10px]">
+                                {r.slotDurationMinutes || 50} min
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Visão Desktop: Grade de 6 Colunas (>= sm) */}
+              <div className="hidden sm:block border border-border rounded-2xl p-4 bg-card/50 overflow-x-auto">
                 <div className="grid grid-cols-6 gap-3 min-w-[650px]">
                   {DAYS_OF_WEEK.filter((d) => d.day !== 0).map((d) => {
                     const dayRules = filteredRules.filter((r) => r.dayOfWeek === d.day)
@@ -768,7 +838,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
         {/* SUBMODAL 1: CADASTRAR / EDITAR REGRA SEMANAL */}
         <Dialog open={isRuleFormOpen} onOpenChange={setIsRuleFormOpen}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <form onSubmit={handleSaveRule}>
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-foreground">
@@ -939,7 +1009,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
         {/* SUBMODAL 2: REGISTRAR BLOQUEIO DE FOLGA */}
         <Dialog open={isBlockFormOpen} onOpenChange={setIsBlockFormOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <form onSubmit={handleSaveBlock}>
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-foreground">Bloqueio de Agenda (Folga/Férias)</DialogTitle>
@@ -1030,7 +1100,7 @@ export const AvailabilityManagerModal: React.FC<AvailabilityManagerModalProps> =
 
         {/* SUBMODAL 3: ABRIR PLANTÃO / ATENDIMENTO EXTRA */}
         <Dialog open={isExtraFormOpen} onOpenChange={setIsExtraFormOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <form onSubmit={handleSaveExtra}>
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-foreground">Abrir Atendimento Extra (Plantão)</DialogTitle>
