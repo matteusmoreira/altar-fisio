@@ -761,7 +761,7 @@ export const sendQuickBookingWhatsApp = mutation({
       schedules.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
 
       const settings = await ctx.db.query('clinicSettings').first()
-      const clinicName = settings?.clinicName || 'Altar Fisio'
+      const clinicName = settings?.clinicName || 'Clinica Dr Marcelo'
       const noticeHours = settings?.cancellationNoticeHours ?? 2
 
       const firstSchedule = schedules[0]

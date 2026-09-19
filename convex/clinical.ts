@@ -234,7 +234,7 @@ export const getPainEvolutionHistory = query({
         date: new Date(record.updatedAt).toISOString().split("T")[0],
         painLevel: record.painScaleEva,
         sessionLabel: "Avaliação Inicial (Anamnese)",
-        professionalName: "Equipe Altar Fisio",
+        professionalName: "Equipe Clinica Dr Marcelo",
         technique: "Avaliação",
       })
     }

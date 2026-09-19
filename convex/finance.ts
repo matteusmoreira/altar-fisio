@@ -410,7 +410,7 @@ export const calculateProfessionalCommissions = query({
             totalGrossRevenue += sessionPrice
             totalCommission += earned
 
-            let patientName = "Paciente Altar Fisio"
+            let patientName = "Paciente Clinica Dr Marcelo"
             if (part.patientId) {
               const pat = await ctx.db.get(part.patientId)
               if (pat) patientName = pat.name

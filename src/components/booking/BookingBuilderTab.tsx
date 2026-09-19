@@ -99,7 +99,7 @@ export const BookingBuilderTab: React.FC = () => {
       setWelcomeTitle(config.welcomeTitle || "Agende sua Consulta ou Sessão")
       setWelcomeMessage(
         config.welcomeMessage ||
-          "Bem-vindo à Altar Fisio (Dr. Marcelo). Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade."
+          "Bem-vindo à Clinica Dr Marcelo. Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade."
       )
       setSuccessMessage(
         config.successMessage ||
@@ -320,7 +320,7 @@ export const BookingBuilderTab: React.FC = () => {
   const handleResetDefault = async () => {
     if (
       !confirm(
-        "Deseja restaurar as perguntas para o padrão clínico Altar Fisio (Plano de Saúde condicional, Queixa, EVA, etc.)?"
+        "Deseja restaurar as perguntas para o padrão clínico da Clinica Dr Marcelo (Plano de Saúde condicional, Queixa, EVA, etc.)?"
       )
     ) {
       return
@@ -589,7 +589,7 @@ export const BookingBuilderTab: React.FC = () => {
               rows={2}
               value={welcomeMessage}
               onChange={(e) => setWelcomeMessage(e.target.value)}
-              placeholder="Ex: Bem-vindo à Altar Fisio (Dr. Marcelo). Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade."
+              placeholder="Ex: Bem-vindo à Clinica Dr Marcelo. Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade."
               className="w-full p-3 rounded-xl border border-input bg-card text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 leading-relaxed resize-none"
             />
           </div>

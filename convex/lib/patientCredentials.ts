@@ -12,7 +12,7 @@ export async function findPatients(ctx: QueryCtx | MutationCtx, type: PatientLog
   const legacy = type === 'cpf'
     ? await ctx.db.query('patients').withIndex('by_normalizedCpf', q => q.eq('normalizedCpf', undefined)).collect()
     : await ctx.db.query('patients').withIndex('by_normalizedPhone', q => q.eq('normalizedPhone', undefined)).collect()
-  return [...rows, ...legacy.filter(p => (type === 'cpf' ? normalizeCpf(p.documentCpf) : normalizePhone(p.phone)) === identifier)]
+  return [...rows, ...legacy.filter(p => (type === 'cpf' ? (p.documentCpf ? normalizeCpf(p.documentCpf) : '') : normalizePhone(p.phone)) === identifier)]
 }
 export async function ensurePatientCredential(ctx: MutationCtx, patientId: Id<'patients'>, credential: { salt: string; passwordHash: string }) {
   const existing = await ctx.db.query('patientCredentials').withIndex('by_patient', q => q.eq('patientId', patientId)).unique()

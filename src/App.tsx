@@ -94,7 +94,7 @@ function AppContent() {
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span>Carregando Altar Fisio...</span>
+          <span>Carregando Clinica Dr Marcelo...</span>
         </div>
       </div>
     )

@@ -46,7 +46,7 @@ export const listPatients = query({
     return all.filter(
       (p) =>
         p.name.toLowerCase().includes(lower) ||
-        p.documentCpf.includes(lower) ||
+        (p.documentCpf && p.documentCpf.includes(lower)) ||
         p.phone.includes(lower)
     )
   },
@@ -64,7 +64,7 @@ export const getPatient = query({
 
 const createPatientArgs = { sessionToken: v.string(),
     name: v.string(),
-    documentCpf: v.string(),
+    documentCpf: v.optional(v.string()),
     phone: v.string(),
     email: v.optional(v.string()),
     birthDate: v.string(),
@@ -75,12 +75,25 @@ const createPatientArgs = { sessionToken: v.string(),
     emergencyPhone: v.optional(v.string()),
     healthInsurance: v.optional(v.string()),
     notes: v.optional(v.string()),
+    customFields: v.optional(
+      v.array(
+        v.object({
+          fieldId: v.optional(v.string()),
+          label: v.string(),
+          type: v.string(),
+          value: v.string(),
+        })
+      )
+    ),
   }
 export const createPatient = action({
   args: createPatientArgs,
   handler: async (ctx, args): Promise<Id<'patients'>> => {
     await requireStaffAction(ctx, args.sessionToken, ['admin', 'professional', 'reception'])
-    if (!isValidCpf(args.documentCpf) || !isValidPhone(args.phone)) throw new ConvexError('CPF ou telefone inválido.')
+    if (!args.name.trim() || !isValidPhone(args.phone)) throw new ConvexError('Nome e telefone válido são obrigatórios.')
+    if (args.documentCpf !== undefined && (!args.documentCpf.trim() || !isValidCpf(args.documentCpf))) {
+      throw new ConvexError('CPF inválido.')
+    }
     const credential = await ctx.runAction(internal.portalAuth.prepareDefault, {})
     return ctx.runMutation(internal.patients.insertPatient, { ...args, credential })
   },
@@ -91,10 +104,14 @@ export const insertPatient = internalMutation({
     const { sessionToken, credential, ...args } = input
     await requireStaff(ctx, sessionToken, ["admin","professional","reception"]);
 
-    if (!args.name.trim() || !isValidCpf(args.documentCpf) || !isValidPhone(args.phone)) throw new ConvexError('Nome, CPF e telefone válidos são obrigatórios.')
-    const normalizedCpf = normalizeCpf(args.documentCpf)
+    if (!args.name.trim() || !isValidPhone(args.phone)) throw new ConvexError('Nome e telefone válidos são obrigatórios.')
+    let normalizedCpf: string | undefined = undefined
+    if (args.documentCpf !== undefined) {
+      if (!args.documentCpf.trim() || !isValidCpf(args.documentCpf)) throw new ConvexError('CPF inválido.')
+      normalizedCpf = normalizeCpf(args.documentCpf)
+      if ((await findPatients(ctx, 'cpf', normalizedCpf)).length) throw new ConvexError('Já existe paciente com este CPF.')
+    }
     const normalizedPhone = normalizePhone(args.phone)
-    if ((await findPatients(ctx, 'cpf', normalizedCpf)).length) throw new ConvexError('Já existe paciente com este CPF.')
     const patientId = await ctx.db.insert("patients", {
       ...args,
       documentCpf: normalizedCpf,
@@ -124,6 +141,16 @@ export const updatePatient = mutation({
     emergencyPhone: v.optional(v.string()),
     healthInsurance: v.optional(v.string()),
     notes: v.optional(v.string()),
+    customFields: v.optional(
+      v.array(
+        v.object({
+          fieldId: v.optional(v.string()),
+          label: v.string(),
+          type: v.string(),
+          value: v.string(),
+        })
+      )
+    ),
     active: v.optional(v.boolean()),
   },
   handler: async (ctx, input) => {
@@ -135,9 +162,13 @@ export const updatePatient = mutation({
     if (data.name !== undefined && !data.name.trim()) throw new ConvexError('Nome obrigatório.')
     if (!await ctx.db.get(id)) throw new ConvexError('Paciente não encontrado.')
     if (data.documentCpf !== undefined) {
-      if (!isValidCpf(data.documentCpf)) throw new ConvexError('CPF inválido.')
-      data.documentCpf = normalizeCpf(data.documentCpf)
-      if ((await findPatients(ctx, 'cpf', data.documentCpf)).some(p => p._id !== id)) throw new ConvexError('Já existe paciente com este CPF.')
+      if (data.documentCpf.trim()) {
+        if (!isValidCpf(data.documentCpf)) throw new ConvexError('CPF inválido.')
+        data.documentCpf = normalizeCpf(data.documentCpf)
+        if ((await findPatients(ctx, 'cpf', data.documentCpf)).some(p => p._id !== id)) throw new ConvexError('Já existe paciente com este CPF.')
+      } else {
+        data.documentCpf = undefined
+      }
     }
     if (data.phone !== undefined) {
       if (!isValidPhone(data.phone)) throw new ConvexError('Telefone inválido.')

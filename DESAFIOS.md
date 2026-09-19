@@ -1,5 +1,76 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Remoção de CPF, Gênero e E-mail no Cadastro de Pacientes, Suporte a Campos Livres Dinâmicos e Robustez de Tipos Convex
+- **Ponto de Fricção**:
+  1. No cadastro e edição do paciente, o usuário solicitou a remoção definitiva dos campos CPF, gênero e e-mail, e a introdução de campos livres personalizados adicionáveis e removíveis dinamicamente.
+  2. Ao tornar `documentCpf` opcional no schema do Convex (`v.optional(v.string())`), funções que invocam `normalizeCpf(p.documentCpf)` para busca de legados ou migração (`findPatients`, `migratePatient`) falhavam no typecheck TypeScript (`tsc -b`), pois `normalizeCpf` exige argumento do tipo `string`.
+  3. No teste `tests/patient-access-panel.test.tsx`, o mock de `staffConvex.useQuery` retornava um array de strings (`['Particular', 'Unimed']`) indistintamente para todas as queries da página. Quando a página passou a consumir a nova query `clinic:getPatientCustomFields`, o mock entregou o array de strings em vez de objetos `PatientCustomFieldDefinition[]`. O `.map()` ao acessar `f.label.toLowerCase()` causava `TypeError: Cannot read properties of undefined (reading 'toLowerCase')`.
+  4. Em `tests/patient-portal-auth.test.ts`, o teste esperava que tentar criar paciente com CPF vazio (`''`) fosse rejeitado como CPF inválido. Ao tornar o campo opcional, se a validação permitisse strings vazias, a proteção contra preenchimento corrompido falhava.
+  5. Com a remoção do CPF do formulário de login do Portal do Paciente, o teste de UI `tests/portal-login-ui.test.tsx` que buscava o label `CPF` e alternava botões de formato quebrou.
+- **Mitigação / Regra**:
+  1. No `src/pages/PatientsPage.tsx`:
+     - Sanitização defensiva em queries de campos customizados: filtrar `clinicCustomFieldsQuery` garantindo que cada item seja um objeto válido com `label` em string: `Array.isArray(q) ? q.filter((f): f is PatientCustomFieldDefinition => Boolean(f && typeof f === 'object' && typeof f.label === 'string')) : []`.
+     - Acessos a rótulos de campos com fallback seguro: `const fieldLabel = field.label || ''` e `${fieldLabel.toLowerCase()}`.
+  2. No backend Convex (`convex/patients.ts`, `convex/lib/patientCredentials.ts`, `convex/portalAccess.ts`):
+     - Validar que quando `documentCpf !== undefined`, ele não seja vazio e passe em `isValidCpf`: `if (args.documentCpf !== undefined && (!args.documentCpf.trim() || !isValidCpf(args.documentCpf))) throw new ConvexError('CPF inválido.')`. Quando omitido (`undefined`), o cadastro sem CPF ocorre perfeitamente.
+     - Em migrações e buscas de legado, verificar existência antes da normalização: `p.documentCpf ? normalizeCpf(p.documentCpf) : undefined`.
+  3. No Portal do Paciente:
+     - Login simplificado exclusivamente para Telefone/WhatsApp com validação de formato e máscara brasileira `(11) 98765-4321`.
+     - Testes de UI em `tests/portal-login-ui.test.tsx` atualizados para cobrir máscara telefônica, visibilidade de senha e bloqueio de inputs inválidos.
+  4. Teste dedicado:
+     - Criado `tests/patient-custom-fields.test.ts` validando criação de pacientes sem CPF/gênero/email, persistência de campos livres (texto, número, data, seleção) e autorizações de acesso da clínica.
+- **Validação**: 53 arquivos de teste e 290 testes aprovados 100% no Vitest, mais 3 testes de service worker aprovados (`npm test`). Typecheck TypeScript (`tsc -b`), build de produção Vite (`npm run build`) e oxlint aprovados com 0 erros.
+
+### [2026-09-19] Correção do Layout da Ficha do Paciente (Abas Cortadas com Flex Shrink) e Reordenamento do Acesso ao Portal
+- **Ponto de Fricção**:
+  1. No modal da Ficha do Paciente (`PatientProfileModal.tsx`), o container de abas (`Tabs`) utilizava `flex flex-col` com `max-h-[92vh]` e o container das abas possuía `overflow-x-auto` com apenas `pt-2` (sem padding inferior) e sem `shrink-0`. Pela especificação do CSS Flexbox, itens com `overflow` diferente de `visible` têm seu `min-height` padrão resolvido para `0` e sofrem encolhimento (`flex-shrink: 1`), fazendo a barra de abas ser espremida e cortada horizontalmente pela metade pelo container de conteúdo com scroll.
+  2. O bloco de "Acesso ao portal & redefinição de senha" (`PortalAccessSettings`) havia sido inserido no topo da aba "Visão Geral", aparecendo como o primeiro card antes da identificação, do convênio e das próximas sessões marcadas do paciente, gerando desordem visual e cognitiva ao abrir a ficha.
+- **Mitigação / Regra**:
+  1. Em modais com flexbox vertical (`flex flex-col max-h-...`):
+     - Adicionar compulsoriamente `shrink-0` no cabeçalho fixo (`div ... shrink-0`) e no container da barra de abas (`px-4 sm:px-6 py-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none shrink-0 touch-pan-x`).
+     - Aplicar `min-h-0` no container flex pai (`Tabs`) e no container de rolagem suave (`flex-1 min-h-0 overflow-y-auto`).
+     - O `py-2` simétrico assegura respiro superior e inferior idênticos, garantindo que os botões de abas nunca sejam cortados.
+  2. Reordenar a aba "Visão Geral":
+     - Mover `<PortalAccessSettings />` do topo para o rodapé da aba (como última opção, logo abaixo de "Próximas Sessões Marcadas"), permitindo que médicos e recepcionistas visualizem os dados cadastrais e de contato imediatamente ao abrir a ficha.
+     - Harmonizar o design do `PortalAccessSettings` com os cards da ficha clínica (`border-border shadow-xs`, ícone `KeyRound`, tipografia consistente e inputs padronizados).
+- **Validação**: 52 arquivos de teste e 288 testes aprovados com 100% de sucesso no Vitest (incluindo novo teste de ordenação no DOM em `tests/patient-profile-appointments-clarity.test.tsx`), mais 3 testes de service worker aprovados. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint aprovados com 0 erros.
+
+### [2026-09-19] Simplificação do Dashboard (Remoção de Receita, Reposições/Encaixes e Ações Rápidas) e Determinismo de Testes
+- **Ponto de Fricção**:
+  1. No Dashboard inicial (`DashboardPage.tsx`), o usuário solicitou a remoção do card "Receita do Mês", do card "Reposições & Encaixes" e do bloco "Ações Rápidas da Clínica".
+  2. Ao remover esses blocos, era crucial limpar hooks, queries e cálculos dependentes (`transactions`, `replacementCredits`, `getCurrentMonthString`, `DollarSign`, `TrendingUp`, `Zap`) sem impactar as métricas do dia (`greeting`, `doctorName`, `todaySchedules`, `totalAttendancesToday`, etc.).
+  3. A remoção de Coluna 3 ("Ações Rápidas da Clínica") deixava a seção de Timeline em `lg:col-span-2` dentro de um grid de 3 colunas desbalanceado. A Timeline foi convertida para largura total (`w-full`), proporcionando layout fluído, legível e responsivo para os atendimentos do dia.
+  4. No teste `tests/class-modality-formatting.test.tsx`, o slot de mock com data fixa `'2026-09-18'` passou a ser considerado agendamento passado com a virada do dia para `19/09/2026`, quebrando o filtro de próximas sessões do modal.
+  5. No build Vite de produção (`npm run build`), o validador `validateProductionUrl` em `shared/deploymentConfig.ts` bloqueia URLs locais (`http://127.0.0.1:3210`) presentes no `.env.local`.
+- **Mitigação / Regra**:
+  1. No `DashboardPage.tsx`:
+     - O grid superior de KPIs foi ajustado de `grid-cols-2 lg:grid-cols-4` para `grid-cols-2`, mantendo os 2 cards operacionais remanescentes ("Atendimentos Hoje" e "Ocupação da Grade") em perfeito equilíbrio em qualquer resolução.
+     - A seção de timeline dos agendamentos do dia passou a ocupar a largura total do container com `space-y-4`, eliminando o container de 3 colunas desnecessário.
+     - As importações não utilizadas de ícones e funções utilitárias foram removidas de forma cirúrgica.
+  2. No `tests/dashboard-room-occupancy.test.tsx`:
+     - O teste foi atualizado para verificar explicitamente a ausência dos elementos removidos (`Receita do Mês`, `Reposições & Encaixes`, `Ações Rápidas da Clínica`, `Central WhatsApp`) e a integridade dos cards principais remanescentes.
+  3. No `tests/class-modality-formatting.test.tsx`:
+     - Aplicado mock determinístico temporal com `vi.mock('@/lib/dateUtils', ...)` fixando `getTodayDateString: () => '2026-09-17'`, assegurando estabilidade perene independente da data da máquina.
+  4. Para validação de build de produção Vite em ambiente Windows, definir a variável de ambiente: `$env:VITE_CONVEX_URL="https://exuberant-guanaco-180.convex.cloud"; npm run build`.
+- **Validação**: 52 arquivos de teste e 287 testes aprovados com 100% de sucesso no Vitest. Typecheck TypeScript (`tsc -b`) sem erros e build Vite de produção gerado com sucesso.
+
+### [2026-09-18] Renomeação Institucional "Clinica Dr Marcelo", Identidade PWA Vetorial/Rasterizada e Convex CLI no Windows
+- **Ponto de Fricção**:
+  1. Ao gerar os ícones do PWA (192x192, 512x512, maskable, apple-touch-icon e favicon-32x32) sem dependências externas pesadas (como sharp ou canvas compiladas nativamente no Windows), foi necessário desenhar o ícone em SVG vetorial médico profissional (cruz arredondada com gradiente esmeralda, coração suave e linha de eletrocardiograma/vitalidade) e renderizar as versões PNG em alta resolução com máxima fidelidade.
+  2. Ao executar comandos administrativos do Convex CLI via PowerShell no Windows (ex: `npx convex run clinic:updateSettings ...`), strings JSON contendo espaços ou caracteres especiais sofrem stripping de aspas no shell intermediário, gerando erros de parsing (`ArgumentError` / `JSON5 syntax error`).
+  3. No banco de dados em produção Convex (`exuberant-guanaco-180`), a tabela `clinicSettings` possuía `"Altar Fisio"` como valor pré-existente persistido. Apenas alterar os fallbacks de código não mudaria o nome na interface sem a devida sincronização no banco ou rotina preventiva.
+- **Mitigação / Regra**:
+  1. Geração de ícones em alta resolução sem binários nativos no Windows:
+     - Criar script Node (`scripts/generate-icons.mjs`) que produz os arquivos SVG em `public/` e utiliza o binário headless do Google Chrome instalado no sistema (`--headless=new --screenshot=... --window-size=...`) para rasterizar instantaneamente os PNGs em 192x192, 512x512, maskable, apple-touch-icon e favicon com antialiasing perfeito.
+     - Registrar os novos assets no `manifest.webmanifest`, `index.html` e `public/sw.js` (com incremento de versão de cache `clinicadrmarcelo-cache-v1`).
+  2. Execução resiliente do Convex CLI:
+     - Executar o CLI diretamente via Node chamando `node node_modules/convex/bin/main.js` através de `child_process.spawnSync(process.execPath, args)` passando argumentos no array direto. Isso contorna o shell intermediário (cmd ou powershell), garantindo preservação integral de strings JSON e caracteres reservados.
+  3. Sincronização e migração do nome da clínica:
+     - Realizar mutação direta no banco de produção (`clinic:updateSettings`) autenticando a sessão administrativa e revogando a sessão de teste em seguida.
+     - Criar rotina preventiva de migração em `convex/maintenance.ts` para converter automaticamente `"Altar Fisio"` para `"Clinica Dr Marcelo"` caso qualquer registro ainda aponte para o nome anterior.
+     - Atualizar fallbacks de `ThemeContext.tsx`, `AppLayout.tsx`, `SettingsPage.tsx`, `PatientPortalPage.tsx`, `FinancePage.tsx`, `QuickBookingPage.tsx`, `PublicBookingPage.tsx`, `DocumentGeneratorModal.tsx` e demais módulos do sistema.
+- **Validação**: 287 testes Vitest em 52 arquivos e 3 testes de service worker aprovados com 100% de sucesso. Typecheck TypeScript (`tsc -b`), build Vite de produção e oxlint aprovados com 0 erros. Configuração no banco de produção Convex (`exuberant-guanaco-180`) validada retornando `"clinicName": "Clinica Dr Marcelo"`.
+
 ### [2026-09-18] Refatoração Mobile-First Integral: Contenção de Overflow X, Cards Responsivos e Preservação A11y/Testes
 - **Ponto de Fricção**:
   1. Nas telas da clínica (Ficha Clínica, Agendamento Rápido, Turmas & Salas, Pacotes & Serviços, Notificações WhatsApp e Configurações da Clínica), layouts baseados em `flex justify-between items-center` ou grades rígidas sem `min-w-0` e sem `overflow-x-hidden` causavam overflow horizontal em smartphones (viewport de 393px × 852px do iPhone 14 Pro), empurrando a viewport e comprimindo títulos, botões e tabs.

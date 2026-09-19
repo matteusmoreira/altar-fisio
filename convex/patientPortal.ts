@@ -159,7 +159,7 @@ export const getPatientPortalData = query({
         return {
           ...pkg,
           status: actualStatus,
-          packageName: pkgDef?.name || "Plano Altar Fisio",
+          packageName: pkgDef?.name || "Plano Clinica Dr Marcelo",
           packagePrice: pkgDef?.price,
           serviceId: service?._id,
           serviceName,
@@ -213,7 +213,7 @@ export const getPatientPortalData = query({
         replacementExpiryDays: expiryDays,
         clinicPhone: settings?.phone || "(11) 98765-4321",
         clinicAddress: settings?.address || "Av. Paulista, 1000 - Bela Vista, Sao Paulo - SP",
-        clinicName: settings?.clinicName || "Altar Fisio",
+        clinicName: settings?.clinicName || "Clinica Dr Marcelo",
       },
     }
   },
@@ -721,7 +721,7 @@ export const bookAppointmentFromPortal = mutation({
     // Log interno para recepção
     await ctx.db.insert("notificationLogs", {
       channel: "whatsapp_uazapi",
-      recipientName: "Recepção Altar Fisio",
+      recipientName: "Recepção Clinica Dr Marcelo",
       recipientContact: patient.phone || "Portal Aluno",
       triggerType: "agendamento_portal_aluno",
       content: `O aluno ${patient.name} agendou ${schedule.title} para ${schedule.date} às ${schedule.startTime} via Portal do Aluno.`,

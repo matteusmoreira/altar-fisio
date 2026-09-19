@@ -518,7 +518,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   {theme.clinicName}
                 </span>
                 <span className="text-[10px] text-muted-foreground truncate">
-                  {navItems.find((n) => n.id === currentSection)?.label || "Altar Fisio"}
+                  {navItems.find((n) => n.id === currentSection)?.label || "Clinica Dr Marcelo"}
                 </span>
               </div>
             </>

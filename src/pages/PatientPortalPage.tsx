@@ -71,7 +71,7 @@ class PortalErrorBoundary extends React.Component<
             <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
               <HeartPulse className="h-7 w-7 text-primary" />
             </div>
-            <h2 className="text-xl font-bold">Portal Altar Fisio</h2>
+            <h2 className="text-xl font-bold">Portal Clinica Dr Marcelo</h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Detectamos uma alteração de dados do sistema no seu navegador. Os dados temporários foram limpos para garantir seu acesso seguro.
             </p>
@@ -307,7 +307,7 @@ const PatientPortalContent: React.FC = () => {
     return <div className="min-h-screen flex items-center justify-center p-6 bg-background"><Card className="max-w-md w-full"><CardContent className="p-6 space-y-4 text-center">
       <HeartPulse className="h-12 w-12 mx-auto text-primary" />
       <h1 className="text-xl font-bold">{clinicSettings?.clinicName || 'Portal do paciente'}</h1>
-      <p className="text-sm text-muted-foreground">{portalToken && currentPatient === undefined ? 'Verificando acesso…' : portalToken && currentPatient ? 'Carregando seus agendamentos…' : 'Acesse seus agendamentos com CPF ou telefone e senha.'}</p>
+      <p className="text-sm text-muted-foreground">{portalToken && currentPatient === undefined ? 'Verificando acesso…' : portalToken && currentPatient ? 'Carregando seus agendamentos…' : 'Acesse seus agendamentos com seu telefone e senha.'}</p>
       {currentPatient === null && <p role="status" className="text-sm text-muted-foreground">Sua sessão terminou. Entre novamente.</p>}
       {(!portalToken || currentPatient === null) && <PortalLoginForm onLogin={async args => {
         const { token } = await loginPortal(args)
@@ -360,7 +360,7 @@ const PatientPortalContent: React.FC = () => {
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground font-medium">
-              {clinicSettings?.clinicName || "Altar Fisio"} • {clinicSettings?.clinicSubtitle || "Dr. Marcelo"}
+              {clinicSettings?.clinicName || "Clinica Dr Marcelo"} • {clinicSettings?.clinicSubtitle || "Dr. Marcelo"}
             </p>
           </div>
         </div>
@@ -762,7 +762,7 @@ const PatientPortalContent: React.FC = () => {
                             onClick={() =>
                               window.open(
                                 `https://wa.me/55${policy.clinicPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                                  `Olá! Gostaria de renovar meu plano ${pkg.packageName} na Altar Fisio.`
+                                  `Olá! Gostaria de renovar meu plano ${pkg.packageName} na Clinica Dr Marcelo.`
                                 )}`,
                                 "_blank"
                               )

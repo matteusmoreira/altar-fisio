@@ -590,7 +590,7 @@ export const AttendanceReportView: React.FC<AttendanceReportViewProps> = ({ onBa
       {isLoading ? (
         <div className="py-16 flex flex-col items-center justify-center gap-2 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-xs">Carregando dados de frequência da Altar Fisio...</span>
+          <span className="text-xs">Carregando dados de frequência da Clinica Dr Marcelo...</span>
         </div>
       ) : viewMode === "detailed" ? (
         /* VISÃO 1: LISTA DETALHADA SESSÃO POR SESSÃO */

@@ -132,7 +132,7 @@ export function WhatsAppSummaryModal({
   onSend,
   patientName,
   patientPhone,
-  clinicName = 'Altar Fisio',
+  clinicName = 'Clinica Dr Marcelo',
   noticeHours = 2,
   items,
   isLoading = false,

@@ -110,6 +110,12 @@ export const runDailyMaintenance = internalMutation({
       }
     }
 
+    // 7. Atualização preventiva do nome institucional da clínica para Clinica Dr Marcelo
+    const clinicSettings = await ctx.db.query("clinicSettings").first()
+    if (clinicSettings && clinicSettings.clinicName === "Altar Fisio") {
+      await ctx.db.patch(clinicSettings._id, { clinicName: "Clinica Dr Marcelo" })
+    }
+
     return {
       success: true,
       clearedSessions: expiredSessions.length + expiredPatientSessions.length,

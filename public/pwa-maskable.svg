@@ -32,12 +32,12 @@
   </defs>
 
   <!-- Fundo Verde da Clínica -->
-  <rect width="512" height="512" rx="116" fill="url(#clinicGreen)" />
-  <rect width="512" height="512" rx="116" fill="url(#topGlow)" />
-  <rect x="5" y="5" width="502" height="502" rx="111" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3" />
+  <rect width="512" height="512" rx="0" fill="url(#clinicGreen)" />
+  <rect width="512" height="512" rx="0" fill="url(#topGlow)" />
+  
 
   <!-- Grupo Central da Cruz Médica com Efeito de Escala e Sombra -->
-  <g transform="translate(256 256) scale(0.94) translate(-256 -256)" filter="url(#dropShadow)">
+  <g transform="translate(256 256) scale(0.88) translate(-256 -256)" filter="url(#dropShadow)">
     <!-- Cruz Médica Branca com Cantos Arredondados Suaves -->
     <path fill="#FFFFFF" fill-rule="evenodd" d="
       M 214 96

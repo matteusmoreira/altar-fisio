@@ -1294,7 +1294,7 @@ export const dispatchBroadcastCampaignAction = action({
     }
 
     const token = defaultInstance.token
-    const clinicName = settings?.clinicName || "Altar Fisio"
+    const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
 
     // Busca template caso haja
     let templateData: any = null
@@ -1331,7 +1331,7 @@ export const dispatchBroadcastCampaignAction = action({
         telefone_clinica: settings?.phone || "",
         data: new Date().toLocaleDateString("pt-BR"),
         horario: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-        profissional: "Equipe Altar Fisio",
+        profissional: "Equipe Clinica Dr Marcelo",
         sala: "Recepção",
       }
 
@@ -1417,7 +1417,7 @@ export const processRecurringCampaignsAction = internalAction({
       if (!defaultInstance || !defaultInstance.token) continue
 
       const token = defaultInstance.token
-      const clinicName = settings?.clinicName || "Altar Fisio"
+      const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
 
       let templateData: any = null
       if (c.templateId) {
@@ -1449,7 +1449,7 @@ export const processRecurringCampaignsAction = internalAction({
           telefone_clinica: settings?.phone || "",
           data: new Date().toLocaleDateString("pt-BR"),
           horario: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          profissional: "Equipe Altar Fisio",
+          profissional: "Equipe Clinica Dr Marcelo",
           sala: "Recepção",
         }
 

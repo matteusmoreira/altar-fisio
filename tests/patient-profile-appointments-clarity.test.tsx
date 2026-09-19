@@ -139,3 +139,24 @@ test('renders friendly empty state when patient has no upcoming sessions', () =>
   expect(screen.getByText(/Nenhuma sessão futura agendada/i)).toBeTruthy()
   expect(screen.getByText(/Avulso \/ Sem turma/i)).toBeTruthy()
 })
+
+test('posiciona o acesso ao portal e redefinição de senha no rodapé como última opção na Visão Geral', () => {
+  render(
+    <PatientProfileModal
+      patient={testPatient as any}
+      isOpen={true}
+      onClose={() => {}}
+      onEdit={() => {}}
+    />
+  )
+
+  const contactsSection = screen.getByText(/Identificação & Contatos/i)
+  const upcomingSection = screen.getByText(/Próximas Sessões Marcadas/i)
+  const portalSection = screen.getByRole('heading', { name: /Acesso ao Portal & Redefinição de Senha/i })
+
+  expect(portalSection).toBeTruthy()
+  // Confere a ordem no DOM: Identificação -> Próximas Sessões -> Acesso ao Portal (última opção)
+  expect(contactsSection.compareDocumentPosition(portalSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(upcomingSection.compareDocumentPosition(portalSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+

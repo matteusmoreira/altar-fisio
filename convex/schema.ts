@@ -28,6 +28,21 @@ export default defineSchema({
         })
       )
     ),
+    patientCustomFields: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          label: v.string(),
+          type: v.union(
+            v.literal("text"),
+            v.literal("number"),
+            v.literal("date"),
+            v.literal("select")
+          ),
+          options: v.optional(v.array(v.string())),
+        })
+      )
+    ),
     // Regras de agendamento & reposição
     cancellationNoticeHours: v.number(), // Ex: 2 (horas de antecedência mínima para gerar reposição)
     replacementExpiryDays: v.number(), // Ex: 30 (dias para usar o crédito de reposição)
@@ -81,7 +96,7 @@ export default defineSchema({
     normalizedCpf: v.optional(v.string()),
     normalizedPhone: v.optional(v.string()),
     name: v.string(),
-    documentCpf: v.string(),
+    documentCpf: v.optional(v.string()),
     phone: v.string(),
     email: v.optional(v.string()),
     birthDate: v.string(),
@@ -92,6 +107,16 @@ export default defineSchema({
     emergencyPhone: v.optional(v.string()),
     healthInsurance: v.optional(v.string()), // Convênio ou Particular
     notes: v.optional(v.string()),
+    customFields: v.optional(
+      v.array(
+        v.object({
+          fieldId: v.optional(v.string()),
+          label: v.string(),
+          type: v.string(),
+          value: v.string(),
+        })
+      )
+    ),
     active: v.boolean(),
     createdAt: v.number(),
   })

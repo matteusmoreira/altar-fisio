@@ -333,7 +333,7 @@ export const ServicesCatalogTab: React.FC<ServicesCatalogTabProps> = ({
                   </CardTitle>
 
                   <CardDescription className="text-xs line-clamp-2 mt-1 min-h-[32px]">
-                    {svc.description || "Procedimento clínico padronizado da Altar Fisio."}
+                    {svc.description || "Procedimento clínico padronizado da Clinica Dr Marcelo."}
                   </CardDescription>
                 </CardHeader>
 

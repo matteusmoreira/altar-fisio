@@ -444,7 +444,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
                         <CardTitle className="text-base truncate font-semibold">{inst.name}</CardTitle>
                       </div>
                       <CardDescription className="truncate text-xs">
-                        {inst.profileName || inst.ownerNumber || "WhatsApp Altar Fisio"}
+                        {inst.profileName || inst.ownerNumber || "WhatsApp Clinica Dr Marcelo"}
                       </CardDescription>
                     </div>
                   </div>
@@ -564,7 +564,7 @@ export const WhatsAppInstanceManager: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">Nome da Instância</label>
               <Input
-                placeholder="Ex: Recepção Altar Fisio, Dr. Marcelo"
+                placeholder="Ex: Recepção Clinica Dr Marcelo, Dr. Marcelo"
                 value={newInstanceName}
                 onChange={(e) => setNewInstanceName(e.target.value)}
                 required

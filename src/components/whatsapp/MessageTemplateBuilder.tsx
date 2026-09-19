@@ -85,7 +85,7 @@ const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
     type: "button",
     content:
       "Olá, *{{paciente}}*! 🎉\n\nSeu agendamento na *{{clinica}}* foi realizado com sucesso!\n\n📌 *Atividade:* {{servico}}\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}\n\nEsperamos por você!",
-    footerText: "Altar Fisio • Cuidado e Movimento",
+    footerText: "Clinica Dr Marcelo • Cuidado e Movimento",
     buttons: [
       { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
       { text: "Ver Localização Maps", actionType: "url", payload: "https://maps.google.com" },
@@ -98,7 +98,7 @@ const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
     type: "button",
     content:
       "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}",
-    footerText: "Altar Fisio • Cuidado e Movimento",
+    footerText: "Clinica Dr Marcelo • Cuidado e Movimento",
     buttons: [
       { text: "Confirmar Presença", actionType: "reply", payload: "confirmar" },
       { text: "Solicitar Remarcação", actionType: "reply", payload: "remarcar" },
@@ -112,7 +112,7 @@ const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
     type: "button",
     content:
       "Olá, *{{paciente}}*! ⏰\n\nFalta pouco para seu atendimento na *{{clinica}}*!\n\n📅 *Hoje às {{horario}}*\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}{{dica}}\n\nEstamos prontos para te receber!",
-    footerText: "Altar Fisio",
+    footerText: "Clinica Dr Marcelo",
     buttons: [
       { text: "Estou a Caminho", actionType: "reply", payload: "a_caminho" },
       { text: "Falar na Recepção", actionType: "url", payload: "https://wa.me/5511987654321" },
@@ -125,7 +125,7 @@ const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
     type: "text",
     content:
       "Olá, *{{paciente}}*!\n\nConfira uma novidade da *{{clinica}}*:\n\nDigite aqui a mensagem que deseja compartilhar.",
-    footerText: "Altar Fisio",
+    footerText: "Clinica Dr Marcelo",
     buttons: [],
     listButtonText: "Ver Opções de Atendimento",
     carouselCards: [],
@@ -134,7 +134,7 @@ const CATEGORY_PRESETS: Record<MessageCategory, MessageTemplatePreset> = {
     title: "",
     type: "button",
     content: "Olá, *{{paciente}}*! Digite sua mensagem aqui...",
-    footerText: "Altar Fisio",
+    footerText: "Clinica Dr Marcelo",
     buttons: [{ text: "Confirmar", actionType: "reply", payload: "confirmar" }],
     listButtonText: "Ver Opções de Atendimento",
     carouselCards: [],
@@ -165,7 +165,7 @@ export const MessageTemplateBuilder: React.FC = () => {
   const [content, setContent] = useState(
     "Olá, *{{paciente}}*! 👋\n\nEste é um lembrete do seu atendimento amanhã na *{{clinica}}*:\n\n📅 *Data:* {{data}}\n⏰ *Horário:* {{horario}}\n👨‍⚕️ *Profissional:* {{profissional}}\n📍 *Local:* {{sala}}\n\n{{regras}}"
   )
-  const [footerText, setFooterText] = useState("Altar Fisio • Cuidado e Movimento")
+  const [footerText, setFooterText] = useState("Clinica Dr Marcelo • Cuidado e Movimento")
 
   // Botões
   const [buttons, setButtons] = useState<ButtonItem[]>([
@@ -401,7 +401,7 @@ export const MessageTemplateBuilder: React.FC = () => {
       "{{atividade}}": "Pilates Studio (Aparelhos)",
       "{{profissional}}": "Dra. Camila Duarte",
       "{{sala}}": "Studio Pilates Aparelhos",
-      "{{clinica}}": "Altar Fisio",
+      "{{clinica}}": "Clinica Dr Marcelo",
       "{{regras}}": "Desmarcações com menos de 2h de antecedência não geram crédito de reposição.",
       "{{dica}}": " 🧦 Lembre-se de trazer suas meias antiderrapantes!",
       "{{telefone_clinica}}": "(11) 98765-4321",
@@ -786,7 +786,7 @@ export const MessageTemplateBuilder: React.FC = () => {
                 <div className="space-y-1">
                   <label className="font-semibold text-foreground">Texto de Rodapé (Opcional)</label>
                   <Input
-                    placeholder="Ex: Altar Fisio • (11) 98765-4321"
+                    placeholder="Ex: Clinica Dr Marcelo • (11) 98765-4321"
                     value={footerText}
                     onChange={(e) => setFooterText(cleanLineBreaks(e.target.value))}
                     className="h-8 text-xs"
@@ -961,10 +961,10 @@ export const MessageTemplateBuilder: React.FC = () => {
             {/* Cabeçalho do Chat WhatsApp */}
             <div className="bg-emerald-700 dark:bg-emerald-900 text-white p-2.5 rounded-t-2xl flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">
-                AF
+                CM
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold truncate">Altar Fisio</div>
+                <div className="text-xs font-bold truncate">Clinica Dr Marcelo</div>
                 <div className="text-[10px] text-emerald-200">online</div>
               </div>
             </div>

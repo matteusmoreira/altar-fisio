@@ -976,7 +976,7 @@ export const FinancePage: React.FC = () => {
                 <span>Novo Lançamento Financeiro</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Cadastre uma receita de paciente ou despesa operacional da Altar Fisio.
+                Cadastre uma receita de paciente ou despesa operacional da Clinica Dr Marcelo.
               </DialogDescription>
             </DialogHeader>
 
@@ -1174,7 +1174,7 @@ export const FinancePage: React.FC = () => {
               <span>Baixa de Pagamento</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Confirme a liquidação do lançamento no caixa da Altar Fisio.
+              Confirme a liquidação do lançamento no caixa da Clinica Dr Marcelo.
             </DialogDescription>
           </DialogHeader>
 
@@ -1248,7 +1248,7 @@ export const FinancePage: React.FC = () => {
               <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-card space-y-4 font-sans print:border-solid">
                 <div className="flex justify-between items-start border-b border-border pb-3">
                   <div>
-                    <h3 className="font-bold text-base text-foreground tracking-tight">ALTAR FISIO</h3>
+                    <h3 className="font-bold text-base text-foreground tracking-tight">CLINICA DR MARCELO</h3>
                     <p className="text-[11px] text-muted-foreground">Fisioterapia Especializada, Pilates & RPG</p>
                     <p className="text-[11px] text-muted-foreground">Dr. Marcelo Henrique • CREFITO-3 / 184520-F</p>
                   </div>
@@ -1262,7 +1262,7 @@ export const FinancePage: React.FC = () => {
 
                 <div className="space-y-2 text-foreground text-xs leading-relaxed">
                   <p>
-                    Recebemos de <strong>{receiptTx.patientName || "Paciente Altar Fisio"}</strong> a quantia de:
+                    Recebemos de <strong>{receiptTx.patientName || "Paciente Clinica Dr Marcelo"}</strong> a quantia de:
                   </p>
                   <div className="p-3 bg-muted/30 rounded-xl text-center">
                     <span className="text-xl font-bold text-primary">
@@ -1439,7 +1439,7 @@ export const FinancePage: React.FC = () => {
               <div className="p-4 border border-border rounded-xl bg-card space-y-3 print:border-black">
                 <div className="flex justify-between items-start border-b border-border pb-3">
                   <div>
-                    <h3 className="font-bold text-base text-foreground">ALTAR FISIO — RELATÓRIO DE REPASSE</h3>
+                    <h3 className="font-bold text-base text-foreground">CLINICA DR MARCELO — RELATÓRIO DE REPASSE</h3>
                     <p className="text-xs text-muted-foreground">
                       Profissional: <strong className="text-foreground">{statementReport.professionalName}</strong> ({statementReport.crefito})
                     </p>

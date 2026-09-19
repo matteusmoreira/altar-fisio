@@ -8,26 +8,22 @@ import {
   formatDateWithWeekdayBR,
   getTodayDateString,
   getCurrentTimeString,
-  getCurrentMonthString,
 } from "@/lib/dateUtils"
 import { useQuery, useMutation } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import {
   Calendar,
   Layers,
-  DollarSign,
   CheckCircle2,
   Clock,
   Send,
   Building,
   ChevronRight,
-  TrendingUp,
   Plus,
   Search,
   Check,
   X,
   FileText,
-  Zap,
   CalendarCheck,
   UserX,
   Users,
@@ -44,11 +40,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const {
     rooms,
     schedules,
-    transactions,
     checkIn,
     cancelWithReplacement,
     sendWhatsAppReminder,
-    replacementCredits,
   } = useClinicData()
 
   // Agendamentos online pendentes da página pública /agendar
@@ -81,7 +75,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   // Horário e data de referência no fuso de Brasília
   const todayStr = getTodayDateString()
   const currentTime = getCurrentTimeString()
-  const currentMonth = getCurrentMonthString()
 
   // Saudação contextual por turno
   const greeting = useMemo(() => {
@@ -141,27 +134,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       vacanciesToday: vacancies,
     }
   }, [todaySchedules])
-
-  // Financeiro do mês atual
-  const { totalPaidMonth, pendingMonth } = useMemo(() => {
-    let paid = 0
-    let pending = 0
-
-    transactions.forEach((t) => {
-      const isThisMonth = !t.dueDate || t.dueDate.startsWith(currentMonth)
-      if (t.type === "income" && isThisMonth) {
-        if (t.status === "paid") paid += t.amount
-        if (t.status === "pending") pending += t.amount
-      }
-    })
-
-    return { totalPaidMonth: paid, pendingMonth: pending }
-  }, [transactions, currentMonth])
-
-  // Créditos de reposição ativos
-  const activeCredits = useMemo(() => {
-    return replacementCredits.filter((c) => c.status === "available")
-  }, [replacementCredits])
 
   // Spotlight ao Vivo: Atendimento Em Andamento ou Próximo Imediato
   const spotlightSession = useMemo(() => {
@@ -491,7 +463,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* ========================================================================= */}
       {/* 3. KPI CARDS OPERACIONAIS DE ALTA DENSIDADE (Executive Grid)               */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Card 1: Atendimentos do Dia */}
         <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
@@ -567,83 +539,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               </span>
               <span className="text-[10px] text-muted-foreground/80">Pilates & RPG</span>
             </p>
-          </CardContent>
-        </Card>
-
-        {/* Card 3: Receita do Mês Atual */}
-        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Receita do Mês
-            </CardTitle>
-            <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <DollarSign className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-1">
-            <div className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
-              R$ {totalPaidMonth.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </div>
-
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span>
-                + R$ {pendingMonth.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} a receber
-              </span>
-            </div>
-
-            <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Mensalidades e Sessões</span>
-              <button
-                type="button"
-                onClick={() => onNavigate("finance")}
-                className="text-primary hover:underline font-semibold"
-              >
-                Fluxo &rarr;
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 4: Créditos & Oportunidades de Reposição */}
-        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Reposições & Encaixes
-            </CardTitle>
-            <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <Clock className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
-                {activeCredits.length}
-              </span>
-              <span className="text-xs text-muted-foreground font-medium">créditos ativos</span>
-            </div>
-
-            <div className="mt-2.5">
-              {vacanciesToday > 0 && activeCredits.length > 0 ? (
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
-                  <Zap className="h-3 w-3" />
-                  <span>{Math.min(vacanciesToday, activeCredits.length)} encaixe(s) viável(is) hoje</span>
-                </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">Validade de até 30 dias</p>
-              )}
-            </div>
-
-            <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Avisos prévios</span>
-              <button
-                type="button"
-                onClick={() => onNavigate("schedule")}
-                className="text-primary hover:underline font-semibold"
-              >
-                Grade &rarr;
-              </button>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -978,13 +873,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       )}
 
       {/* ========================================================================= */}
-      {/* 5. GRID PRINCIPAL: TIMELINE DO DIA (2 cols) & INTELIGÊNCIA CLÍNICA (1 col) */}
+      {/* 5. AGENDA DO DIA: TIMELINE, FILTROS E CHECK-IN EM TEMPO REAL              */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ======================================================================= */}
-        {/* COLUNA 1 & 2: AGENDA DO DIA, FILTROS E CHECK-IN EM TEMPO REAL           */}
-        {/* ======================================================================= */}
-        <div className="lg:col-span-2 space-y-4">
+      <div className="space-y-4">
           {/* Barra de Filtros de Turno e Busca */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-2xs">
             {/* Segmented Controls por Turno */}
@@ -1318,59 +1209,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               })
             )}
           </div>
-        </div>
-
-        {/* ======================================================================= */}
-        {/* COLUNA 3: AÇÕES RÁPIDAS DA CLÍNICA                                      */}
-        {/* ======================================================================= */}
-        <div className="space-y-6">
-          {/* Card: Ações Clínicas e Administrativas Rápidas */}
-          <Card className="rounded-2xl border-border/80 shadow-2xs">
-            <CardHeader className="p-4 pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Zap className="h-4 w-4 text-primary" />
-                <span>Ações Rápidas da Clínica</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 grid grid-cols-1 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => onNavigate("clinical")}
-                className="w-full justify-start text-xs h-9 gap-2.5 rounded-xl hover:bg-muted/80 font-medium"
-              >
-                <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span>Nova Evolução SOAP</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => onNavigate("finance")}
-                className="w-full justify-start text-xs h-9 gap-2.5 rounded-xl hover:bg-muted/80 font-medium"
-              >
-                <DollarSign className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span>Novo Pagamento / Receita</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => onNavigate("packages")}
-                className="w-full justify-start text-xs h-9 gap-2.5 rounded-xl hover:bg-muted/80 font-medium"
-              >
-                <Layers className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                <span>Catálogo de Pacientes & Planos</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => onNavigate("online_bookings")}
-                className="w-full justify-start text-xs h-9 gap-2.5 rounded-xl hover:bg-muted/80 font-medium"
-              >
-                <CalendarCheck className="h-3.5 w-3.5 text-sky-600 shrink-0" />
-                <span>Gerenciar Agendamentos Online</span>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* ========================================================================= */}

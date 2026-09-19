@@ -1,4 +1,5 @@
 import { ClinicalSpecialtiesManager } from '@/components/settings/ClinicalSpecialtiesManager'
+import { PatientCustomFieldsManager } from '@/components/settings/PatientCustomFieldsManager'
 import { PortalBookingSettings } from '@/components/patients/PortalMessage'
 import React, { useState, useEffect } from "react"
 import { useTheme, PRESET_COLORS, type ColorPreset, normalizeToHex } from "@/contexts/ThemeContext"
@@ -548,7 +549,7 @@ export const SettingsPage: React.FC = () => {
                           <div className="h-6 w-6 rounded-lg bg-primary/15 text-primary flex items-center justify-center border border-primary/20 overflow-hidden shadow-xs shrink-0">
                             <HeartPulse className="h-3.5 w-3.5" />
                           </div>
-                          <span className="text-[10px] font-medium truncate max-w-[100px]">{clinicName || "Altar Fisio"}</span>
+                          <span className="text-[10px] font-medium truncate max-w-[100px]">{clinicName || "Clinica Dr Marcelo"}</span>
                         </div>
                       )}
                     </div>
@@ -616,7 +617,7 @@ export const SettingsPage: React.FC = () => {
                 <Input
                   value={clinicName}
                   onChange={(e) => setClinicName(e.target.value)}
-                  placeholder="Altar Fisio"
+                  placeholder="Clinica Dr Marcelo"
                 />
               </div>
 
@@ -851,6 +852,9 @@ export const SettingsPage: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Campos Livres dos Pacientes */}
+        <PatientCustomFieldsManager />
 
         {/* Trilha de Auditoria LGPD e COFFITO */}
         <AuditTrailViewer logs={auditLogs} onClearLogs={handleClearAuditLogs} />

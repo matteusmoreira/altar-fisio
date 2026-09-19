@@ -202,7 +202,7 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({
               <Input
                 value={clinicName}
                 onChange={(e) => setClinicName(e.target.value)}
-                placeholder="Nome da clínica (ex: Altar Fisio)"
+                placeholder="Nome da clínica (ex: Clinica Dr Marcelo)"
                 className="h-9 text-sm"
               />
               <Input

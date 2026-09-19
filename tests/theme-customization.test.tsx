@@ -10,7 +10,7 @@ const mockSettings = {
   mode: 'light',
   colorPreset: 'emerald',
   primaryColor: '158 64% 38%',
-  clinicName: 'Altar Fisio',
+  clinicName: 'Clinica Dr Marcelo',
   clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
   logoUrl: undefined,
 }

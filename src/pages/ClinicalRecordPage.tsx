@@ -1107,7 +1107,9 @@ export const ClinicalRecordPage: React.FC<ClinicalRecordPageProps> = ({
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
-                  <span className="shrink-0">CPF: {patient.documentCpf}</span>
+                  {patient.documentCpf && (
+                    <span className="shrink-0">CPF: {patient.documentCpf}</span>
+                  )}
                   <span className="shrink-0">WhatsApp: {patient.phone}</span>
                   <span className="shrink-0">Nasc: {formatDateBR(patient.birthDate)}</span>
                 </div>

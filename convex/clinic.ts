@@ -1,5 +1,5 @@
 import { requireStaff } from './lib/security'
-import { query, mutation } from "./_generated/server"
+import { query, mutation, internalMutation } from "./_generated/server"
 import { ConvexError, v } from "convex/values"
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../shared/healthInsurance'
 import { DEFAULT_CLINICAL_SPECIALTIES, slugifySpecialtyId } from '../shared/clinicalSpecialties'
@@ -15,7 +15,7 @@ export const updatePortalBooking = mutation({
     const settings = await ctx.db.query('clinicSettings').first()
     const patch = { portalBookingEnabled: args.enabled, portalBookingMessage: message }
     if (settings) await ctx.db.patch(settings._id, patch)
-    else await ctx.db.insert('clinicSettings', { clinicName: 'Altar Fisio', clinicSubtitle: '', primaryColor: '#10b981', colorPreset: 'emerald', mode: 'light', cancellationNoticeHours: 2, replacementExpiryDays: 30, ...patch })
+    else await ctx.db.insert('clinicSettings', { clinicName: 'Clinica Dr Marcelo', clinicSubtitle: '', primaryColor: '#10b981', colorPreset: 'emerald', mode: 'light', cancellationNoticeHours: 2, replacementExpiryDays: 30, ...patch })
     await ctx.db.insert('auditLogs', { action: 'update_portal_booking', userName: actor.name, userRole: actor.role, details: `Reservas no portal: ${args.enabled ? 'abertas' : 'fechadas'}. Mensagem atualizada.`, timestamp: Date.now() })
     if (args.enabled && settings?.portalBookingEnabled === false) await ctx.scheduler.runAfter(0, internal.waitlist.resume, { cursor: null })
   },
@@ -106,7 +106,7 @@ export const updateHealthInsuranceOptions = mutation({
     }
 
     await ctx.db.insert('clinicSettings', {
-      clinicName: 'Altar Fisio',
+      clinicName: 'Clinica Dr Marcelo',
       clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
       primaryColor: '#10b981',
       colorPreset: 'emerald',
@@ -116,6 +116,66 @@ export const updateHealthInsuranceOptions = mutation({
       healthInsuranceOptions: options,
     })
     return options
+  },
+})
+
+export const getPatientCustomFields = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx, args.sessionToken, ['admin', 'professional', 'reception'])
+    const settings = await ctx.db.query('clinicSettings').first()
+    return settings?.patientCustomFields ?? []
+  },
+})
+
+export const updatePatientCustomFields = mutation({
+  args: {
+    sessionToken: v.string(),
+    fields: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        type: v.union(
+          v.literal("text"),
+          v.literal("number"),
+          v.literal("date"),
+          v.literal("select")
+        ),
+        options: v.optional(v.array(v.string())),
+      })
+    ),
+  },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ['admin', 'reception'])
+
+    const sanitized = input.fields
+      .map((f) => ({
+        id: f.id.trim() || `field_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        label: f.label.trim(),
+        type: f.type,
+        options: f.type === 'select' && f.options
+          ? f.options.map((o) => o.trim()).filter(Boolean)
+          : undefined,
+      }))
+      .filter((f) => Boolean(f.label))
+
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (settings) {
+      await ctx.db.patch(settings._id, { patientCustomFields: sanitized })
+      return sanitized
+    }
+
+    await ctx.db.insert('clinicSettings', {
+      clinicName: 'Clinica Dr Marcelo',
+      clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
+      primaryColor: '#10b981',
+      colorPreset: 'emerald',
+      mode: 'light',
+      cancellationNoticeHours: 2,
+      replacementExpiryDays: 30,
+      patientCustomFields: sanitized,
+    })
+    return sanitized
   },
 })
 
@@ -175,7 +235,7 @@ export const updateClinicalSpecialties = mutation({
       await ctx.db.patch(settings._id, { clinicalSpecialties: sanitized })
     } else {
       await ctx.db.insert('clinicSettings', {
-        clinicName: 'Altar Fisio',
+        clinicName: 'Clinica Dr Marcelo',
         clinicSubtitle: 'Dr. Marcelo - Fisio, Pilates & RPG',
         primaryColor: '#10b981',
         colorPreset: 'emerald',
@@ -299,3 +359,25 @@ export const removeLogo = mutation({
     return true
   },
 })
+
+export const updateClinicNameInternal = internalMutation({
+  args: { clinicName: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("clinicSettings").first()
+    if (existing) {
+      await ctx.db.patch(existing._id, { clinicName: args.clinicName })
+      return existing._id
+    } else {
+      return await ctx.db.insert("clinicSettings", {
+        clinicName: args.clinicName,
+        clinicSubtitle: "Dr. Marcelo - Fisioterapia, Pilates & RPG",
+        primaryColor: "#10b981",
+        colorPreset: "emerald",
+        mode: "light",
+        cancellationNoticeHours: 2,
+        replacementExpiryDays: 30,
+      })
+    }
+  },
+})
+

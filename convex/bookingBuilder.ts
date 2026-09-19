@@ -85,7 +85,7 @@ export const getBookingConfig = query({
         steps: DEFAULT_BOOKING_STEPS,
         fields: DEFAULT_BOOKING_FIELDS,
         welcomeTitle: "Agende sua Consulta ou Sessão",
-        welcomeMessage: "Bem-vindo à Altar Fisio (Dr. Marcelo). Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade.",
+        welcomeMessage: "Bem-vindo à Clinica Dr Marcelo. Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade.",
         successMessage: "Seu agendamento foi registrado com sucesso! Entraremos em contato via WhatsApp com os detalhes da sua sessão.",
         updatedAt: Date.now(),
         isDefault: true,
@@ -226,7 +226,7 @@ export const resetBookingConfigToDefault = mutation({
         steps: DEFAULT_BOOKING_STEPS,
       fields: DEFAULT_BOOKING_FIELDS,
       welcomeTitle: "Agende sua Consulta ou Sessão",
-      welcomeMessage: "Bem-vindo à Altar Fisio (Dr. Marcelo). Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade.",
+      welcomeMessage: "Bem-vindo à Clinica Dr Marcelo. Escolha o serviço, tire suas dúvidas e reserve seu horário online com rapidez e comodidade.",
       successMessage: "Seu agendamento foi registrado com sucesso! Entraremos em contato via WhatsApp com os detalhes da sua sessão.",
       updatedAt: now,
     }
@@ -454,7 +454,7 @@ export const persistPublicBooking = internalMutation({
 
     await ctx.db.insert("notificationLogs", {
       channel: "whatsapp_uazapi",
-      recipientName: "Recepção Altar Fisio",
+      recipientName: "Recepção Clinica Dr Marcelo",
       recipientContact: args.phone,
       triggerType: "agendamento_online",
       content: `O paciente ${args.name} (${args.phone}) agendou para ${args.date} às ${args.startTime}. ${planInfo}. Status: ${initialStatus}`,

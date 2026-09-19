@@ -1,9 +1,9 @@
 import { useAuth } from '@/contexts/AuthContext'
-import { formatCep, formatCpf, formatPhone, isValidCpf, isValidPhone, normalizeCep } from '../../shared/patientIdentity'
+import { formatCep, formatPhone, isValidPhone, normalizeCep } from '../../shared/patientIdentity'
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../../shared/healthInsurance'
 import React, { useRef, useState, useEffect, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
-import type { Patient } from "@/types"
+import type { Patient, PatientCustomFieldDefinition, PatientCustomFieldValue, PatientCustomFieldType } from "@/types"
 import { useMutation, useQuery } from "@/lib/staffConvex"
 import { api } from "@convex/_generated/api"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -25,7 +25,6 @@ import {
   Search,
   Plus,
   Phone,
-  Mail,
   FileText,
   CheckCircle2,
   Calendar,
@@ -54,6 +53,13 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const healthInsuranceOptionsQuery = useQuery(api.clinic.getHealthInsuranceOptions)
   const updateHealthInsuranceOptionsMutation = useMutation(api.clinic.updateHealthInsuranceOptions)
   const healthInsuranceOptions = healthInsuranceOptionsQuery ?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
+  const clinicCustomFieldsQuery = useQuery(api.clinic.getPatientCustomFields)
+  const updatePatientCustomFieldsMutation = useMutation(api.clinic.updatePatientCustomFields)
+  const clinicCustomFields: PatientCustomFieldDefinition[] = Array.isArray(clinicCustomFieldsQuery)
+    ? (clinicCustomFieldsQuery as any[]).filter(
+        (f): f is PatientCustomFieldDefinition => Boolean(f && typeof f === "object" && typeof f.label === "string")
+      )
+    : []
 
   const [selectedProfFilter, setSelectedProfFilter] = useState<string>(() =>
     isProfessional && user?.professionalId ? user.professionalId : "all"
@@ -110,11 +116,8 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null)
   const [name, setName] = useState("")
-  const [cpf, setCpf] = useState("")
   const [phone, setPhone] = useState("")
-  const [email, setEmail] = useState("")
   const [birthDate, setBirthDate] = useState("1990-01-01")
-  const [gender, setGender] = useState("Feminino")
   const [cep, setCep] = useState("")
   const [address, setAddress] = useState("")
   const [emergencyContact, setEmergencyContact] = useState("")
@@ -129,6 +132,18 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [notes, setNotes] = useState("")
   const [active, setActive] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Campos Livres / Personalizados
+  const [patientCustomFields, setPatientCustomFields] = useState<PatientCustomFieldValue[]>([])
+  const [showCustomFieldsManager, setShowCustomFieldsManager] = useState(false)
+  const [customFieldsDraft, setCustomFieldsDraft] = useState<PatientCustomFieldDefinition[]>([])
+  const [newFieldLabel, setNewFieldLabel] = useState("")
+  const [newFieldType, setNewFieldType] = useState<PatientCustomFieldType>("text")
+  const [newFieldOptions, setNewFieldOptions] = useState("")
+  const [isSavingCustomFields, setIsSavingCustomFields] = useState(false)
+  const [showAddAdHocField, setShowAddAdHocField] = useState(false)
+  const [adHocLabel, setAdHocLabel] = useState("")
+  const [adHocType, setAdHocType] = useState<PatientCustomFieldType>("text")
   const cepLookupSequence = useRef(0)
 
   // Modal de Exclusão
@@ -229,15 +244,122 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
     }
   }
 
+  const handleOpenCustomFieldsManager = () => {
+    setCustomFieldsDraft(
+      clinicCustomFields.map((f) => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        options: f.options ? [...f.options] : undefined,
+      }))
+    )
+    setNewFieldLabel("")
+    setNewFieldType("text")
+    setNewFieldOptions("")
+    setShowCustomFieldsManager(true)
+  }
+
+  const handleAddClinicField = () => {
+    const label = newFieldLabel.trim()
+    if (!label) return
+    if (customFieldsDraft.some((f) => f.label.toLowerCase() === label.toLowerCase())) {
+      showToast("Já existe um campo com este nome.")
+      return
+    }
+    const options =
+      newFieldType === "select"
+        ? newFieldOptions
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : undefined
+
+    const newField: PatientCustomFieldDefinition = {
+      id: `field_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      label,
+      type: newFieldType,
+      options,
+    }
+    setCustomFieldsDraft((prev) => [...prev, newField])
+    setNewFieldLabel("")
+    setNewFieldOptions("")
+  }
+
+  const handleRemoveClinicField = (fieldId: string) => {
+    setCustomFieldsDraft((prev) => prev.filter((f) => f.id !== fieldId))
+  }
+
+  const handleSaveClinicCustomFields = async () => {
+    setIsSavingCustomFields(true)
+    try {
+      await updatePatientCustomFieldsMutation({
+        fields: customFieldsDraft,
+      })
+      showToast("Campos padrão da clínica atualizados com sucesso!")
+      setShowCustomFieldsManager(false)
+      setPatientCustomFields((prev) => {
+        const next = [...prev]
+        customFieldsDraft.forEach((cf) => {
+          if (
+            !next.some(
+              (item) =>
+                (item.fieldId && cf.id && item.fieldId === cf.id) ||
+                (item.label && cf.label && item.label.toLowerCase() === cf.label.toLowerCase())
+            )
+          ) {
+            next.push({
+              fieldId: cf.id,
+              label: cf.label,
+              type: cf.type,
+              value: "",
+            })
+          }
+        })
+        return next
+      })
+    } catch (err: any) {
+      alert("Erro ao salvar campos da clínica: " + (err?.message || "Tente novamente."))
+    } finally {
+      setIsSavingCustomFields(false)
+    }
+  }
+
+  const handleAddAdHocField = () => {
+    const label = adHocLabel.trim()
+    if (!label) return
+    if (patientCustomFields.some((f) => f.label && f.label.toLowerCase() === label.toLowerCase())) {
+      showToast("Este campo já foi adicionado ao paciente.")
+      return
+    }
+    setPatientCustomFields((prev) => [
+      ...prev,
+      {
+        label,
+        type: adHocType,
+        value: "",
+      },
+    ])
+    setAdHocLabel("")
+    setShowAddAdHocField(false)
+  }
+
+  const handleRemovePatientField = (index: number) => {
+    setPatientCustomFields((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleUpdatePatientFieldValue = (index: number, value: string) => {
+    setPatientCustomFields((prev) =>
+      prev.map((field, i) => (i === index ? { ...field, value } : field))
+    )
+  }
+
   // Filtragem
   const filteredPatients = useMemo(() => {
     return patients.filter((p) => {
       const term = searchTerm.toLowerCase()
       const matchesSearch =
         p.name.toLowerCase().includes(term) ||
-        p.documentCpf.includes(term) ||
-        p.phone.includes(term) ||
-        (p.email && p.email.toLowerCase().includes(term))
+        p.phone.includes(term)
 
       if (!matchesSearch) return false
 
@@ -276,20 +398,27 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
     setIsLookingUpCep(false)
     setEditingPatientId(null)
     setName("")
-    setCpf("")
     setPhone("")
-    setEmail("")
     setBirthDate("1990-01-01")
-    setGender("Feminino")
     setCep("")
     setAddress("")
     setEmergencyContact("")
     setEmergencyPhone("")
     setHealthInsurance(hasInsuranceOption("Particular") ? "Particular" : "")
     setShowInsuranceManager(false)
+    setShowCustomFieldsManager(false)
+    setShowAddAdHocField(false)
     setCepFeedback(null)
     setNotes("")
     setActive(true)
+    setPatientCustomFields(
+      clinicCustomFields.map((f) => ({
+        fieldId: f.id,
+        label: f.label,
+        type: f.type,
+        value: "",
+      }))
+    )
     setIsModalOpen(true)
   }
 
@@ -299,64 +428,88 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
     setIsLookingUpCep(false)
     setEditingPatientId(patient.id)
     setName(patient.name)
-    setCpf(formatCpf(patient.documentCpf))
     setPhone(formatPhone(patient.phone))
-    setEmail(patient.email || "")
     setBirthDate(patient.birthDate || "1990-01-01")
-    setGender(patient.gender || "Feminino")
     setCep(formatCep(patient.cep || ""))
     setAddress(patient.address || "")
     setEmergencyContact(patient.emergencyContact || "")
     setEmergencyPhone(formatPhone(patient.emergencyPhone || ""))
     setHealthInsurance(patient.healthInsurance || (hasInsuranceOption("Particular") ? "Particular" : ""))
     setShowInsuranceManager(false)
+    setShowCustomFieldsManager(false)
+    setShowAddAdHocField(false)
     setCepFeedback(null)
     setNotes(patient.notes || "")
     setActive(patient.active)
+
+    const existing = patient.customFields || []
+    const merged = [...existing]
+    clinicCustomFields.forEach((cf) => {
+      if (
+        !merged.some(
+          (m) =>
+            (m.fieldId && cf.id && m.fieldId === cf.id) ||
+            (m.label && cf.label && m.label.toLowerCase() === cf.label.toLowerCase())
+        )
+      ) {
+        merged.push({
+          fieldId: cf.id,
+          label: cf.label,
+          type: cf.type,
+          value: "",
+        })
+      }
+    })
+    setPatientCustomFields(merged)
     setIsModalOpen(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (editingPatientId && !canEditPatient) return
-    if (!name.trim() || !isValidCpf(cpf) || !isValidPhone(phone)) {
-      alert("Informe nome, CPF válido e telefone com DDD.")
+    if (!name.trim() || !isValidPhone(phone)) {
+      alert("Informe o nome do paciente e telefone válido com DDD.")
       return
     }
 
     setIsSubmitting(true)
     try {
+      const sanitizedCustomFields = patientCustomFields
+        .map((f) => ({
+          fieldId: f.fieldId,
+          label: f.label.trim(),
+          type: f.type,
+          value: f.value.trim(),
+        }))
+        .filter((f) => f.value !== "")
+
       if (editingPatientId) {
         await updatePatient(editingPatientId, {
           name,
-          documentCpf: cpf,
           phone,
-          email,
           birthDate,
-          gender,
           cep,
           address,
           emergencyContact,
           emergencyPhone,
           healthInsurance,
           notes,
+          customFields: sanitizedCustomFields,
           active,
         })
         showToast(`Paciente "${name}" atualizado com sucesso!`)
       } else {
         await addPatient({
           name,
-          documentCpf: cpf,
           phone,
-          email,
           birthDate,
-          gender,
           cep,
           address,
           emergencyContact,
           emergencyPhone,
           healthInsurance,
           notes,
+          customFields: sanitizedCustomFields,
         })
         showToast(`Paciente "${name}" cadastrado com sucesso! Acesso ao portal criado com a senha @mudar123.`)
       }
@@ -489,7 +642,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nome, CPF, WhatsApp ou e-mail..."
+              placeholder="Buscar por nome ou WhatsApp..."
               className="pl-10 h-10 text-xs sm:text-sm"
             />
           </div>
@@ -653,9 +806,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <p className="text-xs font-mono text-muted-foreground mt-0.5">
-                          CPF: {patient.documentCpf}
-                        </p>
                       </div>
                     </div>
 
@@ -690,15 +840,9 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                       <Phone className="h-3.5 w-3.5 text-primary shrink-0" />
                       <span>{patient.phone}</span>
                     </div>
-                    {patient.email && (
-                      <div className="flex items-center gap-2 truncate">
-                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="truncate">{patient.email}</span>
-                      </div>
-                    )}
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
-                      <span>Nasc: {formatDateBR(patient.birthDate)} ({patient.gender})</span>
+                      <span>Nasc: {formatDateBR(patient.birthDate)}</span>
                     </div>
                   </div>
 
@@ -814,9 +958,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                             >
                               {patient.name}
                             </div>
-                            <div className="text-[11px] font-mono text-muted-foreground">
-                              CPF: {patient.documentCpf}
-                            </div>
                           </div>
                         </div>
                       </td>
@@ -826,16 +967,10 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                           <Phone className="h-3 w-3 text-primary shrink-0" />
                           <span className="font-medium text-foreground">{patient.phone}</span>
                         </div>
-                        {patient.email && (
-                          <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                            {patient.email}
-                          </div>
-                        )}
                       </td>
 
                       <td className="p-3 whitespace-nowrap text-muted-foreground">
                         <div>{formatDateBR(patient.birthDate)}</div>
-                        <div className="text-[11px] text-muted-foreground/80">{patient.gender}</div>
                       </td>
 
                       <td className="p-3 whitespace-nowrap">
@@ -954,8 +1089,8 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                         >
                           {patient.name}
                         </div>
-                        <div className="text-xs font-mono text-muted-foreground mt-0.5">
-                          CPF: {patient.documentCpf}
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {patient.healthInsurance || "Particular"}
                         </div>
                       </div>
                     </div>
@@ -1059,15 +1194,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">CPF *</label>
-                  <Input
-                    required
-                    value={cpf}
-                    onChange={(e) => setCpf(formatCpf(e.target.value))}
-                    placeholder="000.000.000-00"
-                  />
-                </div>
-                <div>
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">WhatsApp / Telefone *</label>
                   <Input
                     required
@@ -1076,19 +1202,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                     placeholder="(11) 98888-8888"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-foreground/85 mb-1.5">E-mail</label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="paciente@exemplo.com"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Data de Nascimento</label>
                   <Input
@@ -1096,17 +1209,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Gênero</label>
-                  <Select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                  >
-                    <option value="Feminino">Feminino</option>
-                    <option value="Masculino">Masculino</option>
-                    <option value="Outro">Outro</option>
-                  </Select>
                 </div>
               </div>
 
@@ -1265,6 +1367,276 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                 )}
               </div>
 
+              {/* Seção Campos Livres / Personalizados */}
+              <div className="space-y-3 rounded-xl border border-border/80 bg-muted/10 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground/90">Campos Livres</label>
+                    <p className="text-[11px] text-muted-foreground">Informações personalizadas do paciente.</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {canEditPatient && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (showCustomFieldsManager) {
+                            setShowCustomFieldsManager(false)
+                          } else {
+                            handleOpenCustomFieldsManager()
+                          }
+                        }}
+                        className="h-7 gap-1 px-2 text-[11px] text-primary"
+                      >
+                        <Settings2 className="h-3.5 w-3.5" />
+                        {showCustomFieldsManager ? "Fechar opções" : "Gerenciar campos da clínica"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Gerenciador de Campos Padrão da Clínica */}
+                {canEditPatient && showCustomFieldsManager && (
+                  <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Configurar Campos da Clínica</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Campos definidos aqui aparecerão automaticamente para todos os pacientes.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2">
+                      <Input
+                        value={newFieldLabel}
+                        onChange={(e) => setNewFieldLabel(e.target.value)}
+                        placeholder="Nome do campo (ex: Profissão, Como conheceu)"
+                        className="h-9 text-xs"
+                      />
+                      <Select
+                        value={newFieldType}
+                        onChange={(e) => setNewFieldType(e.target.value as PatientCustomFieldType)}
+                        className="h-9 text-xs"
+                      >
+                        <option value="text">Texto Curto</option>
+                        <option value="number">Número</option>
+                        <option value="date">Data</option>
+                        <option value="select">Lista / Opções</option>
+                      </Select>
+                    </div>
+
+                    {newFieldType === "select" && (
+                      <div>
+                        <Input
+                          value={newFieldOptions}
+                          onChange={(e) => setNewFieldOptions(e.target.value)}
+                          placeholder="Opções separadas por vírgula (ex: Instagram, Indicação, Google)"
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddClinicField}
+                        className="h-8 gap-1 px-3 text-xs"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar Campo
+                      </Button>
+                    </div>
+
+                    {/* Lista dos campos cadastrados na clínica */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {customFieldsDraft.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground">Nenhum campo padrão cadastrado.</span>
+                      ) : (
+                        customFieldsDraft.map((field) => (
+                          <span
+                            key={field.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground"
+                          >
+                            <span>{field.label}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase bg-muted/60 px-1 py-0.5 rounded">
+                              {field.type === "text"
+                                ? "Texto"
+                                : field.type === "number"
+                                ? "Número"
+                                : field.type === "date"
+                                ? "Data"
+                                : "Lista"}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Remover campo ${field.label}`}
+                              onClick={() => handleRemoveClinicField(field.id)}
+                              className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 border-t border-border/60 pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setShowCustomFieldsManager(false)}
+                        className="h-8 px-3 text-xs"
+                      >
+                        Fechar
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSaveClinicCustomFields}
+                        disabled={isSavingCustomFields}
+                        className="h-8 px-3 text-xs"
+                      >
+                        {isSavingCustomFields ? "Salvando..." : "Salvar Campos da Clínica"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preenchimento dos campos no paciente */}
+                {patientCustomFields.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic py-1">
+                    Nenhum campo personalizado ativo no momento.
+                  </p>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    {patientCustomFields.map((field, idx) => {
+                      const fieldLabel = field.label || ""
+                      const def = clinicCustomFields.find(
+                        (c) => c.id === field.fieldId || (c.label && c.label.toLowerCase() === fieldLabel.toLowerCase())
+                      )
+                      const options = def?.options || []
+
+                      return (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-foreground/80 mb-1">
+                              {fieldLabel}
+                            </label>
+                            {field.type === "select" && options.length > 0 ? (
+                              <Select
+                                value={field.value}
+                                onChange={(e) => handleUpdatePatientFieldValue(idx, e.target.value)}
+                                className="h-9 text-xs"
+                              >
+                                <option value="">Selecione...</option>
+                                {options.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                                {field.value && !options.includes(field.value) && (
+                                  <option value={field.value}>{field.value}</option>
+                                )}
+                              </Select>
+                            ) : field.type === "number" ? (
+                              <Input
+                                type="number"
+                                value={field.value}
+                                onChange={(e) => handleUpdatePatientFieldValue(idx, e.target.value)}
+                                placeholder="Valor numérico"
+                                className="h-9 text-xs"
+                              />
+                            ) : field.type === "date" ? (
+                              <Input
+                                type="date"
+                                value={field.value}
+                                onChange={(e) => handleUpdatePatientFieldValue(idx, e.target.value)}
+                                className="h-9 text-xs"
+                              />
+                            ) : (
+                              <Input
+                                type="text"
+                                value={field.value}
+                                onChange={(e) => handleUpdatePatientFieldValue(idx, e.target.value)}
+                                placeholder={`Preencha ${fieldLabel.toLowerCase()}`}
+                                className="h-9 text-xs"
+                              />
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`Remover campo ${fieldLabel} deste paciente`}
+                            onClick={() => handleRemovePatientField(idx)}
+                            className="mt-5 rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Remover campo deste paciente"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Adição de campo avulso para o paciente */}
+                {showAddAdHocField ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-background p-3 mt-2">
+                    <p className="text-xs font-medium text-foreground">Novo Campo Avulso para este Paciente</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2">
+                      <Input
+                        value={adHocLabel}
+                        onChange={(e) => setAdHocLabel(e.target.value)}
+                        placeholder="Nome do campo"
+                        className="h-9 text-xs"
+                      />
+                      <Select
+                        value={adHocType}
+                        onChange={(e) => setAdHocType(e.target.value as PatientCustomFieldType)}
+                        className="h-9 text-xs"
+                      >
+                        <option value="text">Texto Curto</option>
+                        <option value="number">Número</option>
+                        <option value="date">Data</option>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowAddAdHocField(false)
+                          setAdHocLabel("")
+                        }}
+                        className="h-7 px-2 text-xs"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddAdHocField}
+                        className="h-7 px-3 text-xs"
+                      >
+                        Adicionar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddAdHocField(true)}
+                    className="h-8 gap-1 px-3 text-xs mt-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Adicionar campo livre ao paciente
+                  </Button>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Observações Iniciais</label>
                 <Input
@@ -1297,8 +1669,16 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
               >
                 Cancelar
               </Button>
-              <Button type="submit" className="h-10 px-6 rounded-xl font-semibold shadow-xs">
-                {editingPatientId ? "Salvar Alterações" : "Cadastrar Paciente"}
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-10 px-6 rounded-xl font-semibold shadow-xs"
+              >
+                {isSubmitting
+                  ? "Salvando..."
+                  : editingPatientId
+                  ? "Salvar Alterações"
+                  : "Cadastrar Paciente"}
               </Button>
             </DialogFooter>
           </form>
@@ -1315,7 +1695,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
             <DialogTitle>Excluir Paciente</DialogTitle>
             <DialogDescription>
               Tem certeza que deseja excluir o cadastro de{" "}
-              <strong>{deletingPatient?.name}</strong> (CPF: {deletingPatient?.documentCpf})?
+              <strong>{deletingPatient?.name}</strong>?
               Esta ação removerá o paciente do sistema.
             </DialogDescription>
           </DialogHeader>

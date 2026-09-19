@@ -23,7 +23,6 @@ import { formatSpecialtyName, formatScheduleTitle, DEFAULT_CLINICAL_SPECIALTIES 
 import {
   User,
   Phone,
-  Mail,
   Calendar,
   MapPin,
   HeartPulse,
@@ -376,7 +375,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
   const cleanPhone = cleanPhoneDigits(patient.phone)
   const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(
-    `Olá, ${patient.name}! Entramos em contato da clínica Altar Fisio.`
+    `Olá, ${patient.name}! Entramos em contato da Clinica Dr Marcelo.`
   )}`
 
   const handlePrint = () => {
@@ -388,7 +387,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden border-border rounded-2xl shadow-2xl">
           {/* Header Superior Estilizado */}
-          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/70 p-5 sm:p-6 pb-4">
+          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/70 p-5 sm:p-6 pb-4 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start sm:items-center gap-3.5">
                 <div className="h-14 w-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
@@ -425,8 +424,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap font-mono">
-                    <span>CPF: {patient.documentCpf}</span>
-                    <span>•</span>
                     <span>{formatPhoneBR(patient.phone)}</span>
                     {age !== null && (
                       <>
@@ -584,10 +581,10 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           <Tabs
             value={activeTab}
             onValueChange={(val) => setActiveTab(val as any)}
-            className="flex-1 flex flex-col overflow-hidden"
+            className="flex-1 flex flex-col overflow-hidden min-h-0"
           >
-            <div className="px-4 sm:px-6 pt-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none">
-              <TabsList className="bg-transparent h-10 p-0 flex gap-2 sm:gap-4 border-b-0 w-max shrink-0">
+            <div className="px-4 sm:px-6 py-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none shrink-0 touch-pan-x">
+              <TabsList className="bg-transparent h-9 p-0 flex gap-2 sm:gap-4 border-b-0 w-max shrink-0">
                 <TabsTrigger
                   value="overview"
                   className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
@@ -646,12 +643,11 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             </div>
 
             {/* Conteúdo com Scroll Suave */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-6">
               {/* ========================================================= */}
               {/* ABA 1: VISÃO GERAL & DADOS CADASTRAIS                     */}
               {/* ========================================================= */}
               <TabsContent value="overview" className="m-0 space-y-5">
-                {canEditPatient && <PortalAccessSettings key={patient.id} patientId={patient.id as any} />}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Dados Pessoais & Contato */}
                   <Card className="border-border shadow-xs">
@@ -662,15 +658,9 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 space-y-3 text-xs">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-muted-foreground block text-[11px]">Nome Completo</span>
-                          <span className="font-semibold text-foreground text-sm">{patient.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground block text-[11px]">CPF</span>
-                          <span className="font-mono font-medium text-foreground">{patient.documentCpf}</span>
-                        </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[11px]">Nome do Paciente</span>
+                        <span className="font-semibold text-foreground text-sm">{patient.name}</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
@@ -687,24 +677,9 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                           </a>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block text-[11px]">E-mail</span>
-                          <span className="text-foreground truncate block font-medium">
-                            {patient.email || "Não informado"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                        <div>
                           <span className="text-muted-foreground block text-[11px]">Data de Nascimento</span>
                           <span className="text-foreground font-medium">
                             {formatDateBR(patient.birthDate)} {age !== null && `(${age} anos)`}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground block text-[11px]">Gênero</span>
-                          <span className="text-foreground font-medium">
-                            {patient.gender || "Não informado"}
                           </span>
                         </div>
                       </div>
@@ -723,6 +698,24 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                           </span>
                         </span>
                       </div>
+
+                      {patient.customFields && patient.customFields.length > 0 && (
+                        <div className="pt-2 border-t border-border/50">
+                          <span className="text-muted-foreground block text-[11px] font-semibold uppercase tracking-wider mb-1.5">
+                            Campos Livres
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {patient.customFields.map((cf, idx) => (
+                              <div key={idx} className="rounded-lg bg-muted/20 border border-border/50 p-2">
+                                <span className="text-muted-foreground block text-[11px] font-medium">{cf.label}</span>
+                                <span className="text-foreground font-semibold text-xs mt-0.5 block break-words">
+                                  {cf.type === "date" ? formatDateBR(cf.value) : cf.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -867,6 +860,11 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Acesso ao Portal & Redefinição de Senha (Última opção da ficha) */}
+                {canEditPatient && (
+                  <PortalAccessSettings key={patient.id} patientId={patient.id as any} />
+                )}
               </TabsContent>
 
               {/* ========================================================= */}
@@ -1668,7 +1666,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         <div className="border-b-2 border-black pb-4 mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-wide">
-              Altar Fisio — Clínica de Fisioterapia & Pilates
+              Clinica Dr Marcelo — Fisioterapia & Pilates
             </h1>
             <p className="text-xs text-gray-600 mt-0.5">
               Ficha Clínica Cadastral & Resumo Integrado do Paciente
@@ -1687,15 +1685,15 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           </h2>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div><strong>Nome:</strong> {patient.name}</div>
-            <div><strong>CPF:</strong> {patient.documentCpf}</div>
             <div><strong>Telefone:</strong> {formatPhoneBR(patient.phone)}</div>
-            <div><strong>E-mail:</strong> {patient.email || "Não informado"}</div>
             <div><strong>Nascimento:</strong> {formatDateBR(patient.birthDate)} ({age} anos)</div>
-            <div><strong>Gênero:</strong> {patient.gender || "Não informado"}</div>
             <div><strong>Convênio / Modalidade:</strong> {patient.healthInsurance || "Particular"}</div>
             <div><strong>Contato Emergência:</strong> {patient.emergencyContact || "—"} ({patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"})</div>
             <div><strong>CEP:</strong> {patient.cep ? formatCep(patient.cep) : "—"}</div>
             <div className="col-span-2"><strong>Endereço:</strong> {patient.address || "Não informado"}</div>
+            {patient.customFields && patient.customFields.length > 0 && patient.customFields.map((cf, idx) => (
+              <div key={idx}><strong>{cf.label}:</strong> {cf.type === 'date' ? formatDateBR(cf.value) : cf.value}</div>
+            ))}
           </div>
         </div>
 

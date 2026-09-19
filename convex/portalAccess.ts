@@ -59,7 +59,7 @@ export const migratePatient = internalMutation({
   handler: async (ctx, args) => {
     const patient = await ctx.db.get(args.patientId)
     if (!patient) return { created: false, duplicateCpf: false }
-    const normalizedCpf = normalizeCpf(patient.documentCpf)
+    const normalizedCpf = patient.documentCpf ? normalizeCpf(patient.documentCpf) : undefined
     const normalizedPhone = normalizePhone(patient.phone)
     const duplicateCpf = !!normalizedCpf && (await findPatients(ctx, 'cpf', normalizedCpf)).length > 1
     await ctx.db.patch(patient._id, { normalizedCpf, normalizedPhone })

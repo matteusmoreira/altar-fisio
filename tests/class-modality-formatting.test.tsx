@@ -39,6 +39,14 @@ vi.mock('@/contexts/ClinicDataContext', () => ({
   }),
 }))
 
+vi.mock('@/lib/dateUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/dateUtils')>()
+  return {
+    ...actual,
+    getTodayDateString: () => '2026-09-17',
+  }
+})
+
 describe('formatSpecialtyName & formatScheduleTitle', () => {
   const customSpecialties: ClinicalSpecialty[] = [
     { id: 'pilates_e_fortalecimento_muscula', name: 'Pilates e Fortalecimento Muscular' },

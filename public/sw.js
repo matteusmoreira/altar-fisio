@@ -1,7 +1,12 @@
-// Service Worker Altar Fisio — Cache Estático & Offline Resilience
-const CACHE_NAME = "altarfisio-cache-v2"
+// Service Worker Clinica Dr Marcelo — Cache Estático & Offline Resilience
+const CACHE_NAME = "clinicadrmarcelo-cache-v1"
 const STATIC_ASSETS = [
   "/favicon.svg",
+  "/favicon-32x32.png",
+  "/apple-touch-icon.png",
+  "/pwa-192x192.png",
+  "/pwa-512x512.png",
+  "/pwa-maskable-512x512.png",
   "/manifest.webmanifest"
 ]
 

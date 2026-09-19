@@ -297,7 +297,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
       setIsReschedulingLoading(true)
       try {
         let resultScheduleId: string | undefined
-        const clinicName = clinicSettings?.clinicName || 'Altar Fisio'
+        const clinicName = clinicSettings?.clinicName || 'Clinica Dr Marcelo'
         const oldDateFormatted = formatDateBR(activeReschedule.originDate)
         const newDateFormatted = formatDateBR(slot.day)
         const oldInfo = `${oldDateFormatted} às ${activeReschedule.originStartTime}`
@@ -1005,7 +1005,7 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
         onSend={handleSendWhatsApp}
         patientName={patientContext?.patient.name || activeReschedule?.patientName || ''}
         patientPhone={patientContext?.patient.phone}
-        clinicName={clinicSettings?.clinicName || 'Altar Fisio'}
+        clinicName={clinicSettings?.clinicName || 'Clinica Dr Marcelo'}
         noticeHours={clinicSettings?.cancellationNoticeHours ?? 2}
         items={whatsAppScheduleItems}
         initialCustomMessage={rescheduleWhatsAppMessage || undefined}

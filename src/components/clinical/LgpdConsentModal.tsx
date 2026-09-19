@@ -62,7 +62,7 @@ export const LgpdConsentModal: React.FC<LgpdConsentModalProps> = ({
         accepted: !currentAccepted,
         signedByName: signedByName || patient.name,
         documentVersion: "v1.2-2026",
-        notes: "Consentimento registrado eletronicamente pela interface do sistema clínico Altar Fisio.",
+        notes: "Consentimento registrado eletronicamente pela interface do sistema clínico Clinica Dr Marcelo.",
       })
       setSuccessMsg("Status de consentimento atualizado com sucesso!")
       setTimeout(() => setSuccessMsg(null), 3000)
@@ -134,7 +134,11 @@ export const LgpdConsentModal: React.FC<LgpdConsentModalProps> = ({
             <div>
               <span className="text-[10px] text-muted-foreground uppercase font-semibold">Paciente</span>
               <p className="font-bold text-foreground">{patient.name}</p>
-              <p className="font-mono text-muted-foreground text-[11px]">CPF: {patient.documentCpf}</p>
+              {patient.documentCpf ? (
+                <p className="font-mono text-muted-foreground text-[11px]">CPF: {patient.documentCpf}</p>
+              ) : (
+                <p className="text-muted-foreground text-[11px]">Tel: {patient.phone}</p>
+              )}
             </div>
             <div className="text-right">
               <span className="text-[10px] text-muted-foreground uppercase font-semibold">Assinante / Titular</span>

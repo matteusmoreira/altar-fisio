@@ -785,12 +785,13 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSe
       emergencyPhone: patientData.emergencyPhone,
       healthInsurance: patientData.healthInsurance,
       notes: patientData.notes,
+      customFields: patientData.customFields,
     })
   }
 
   const updatePatient = async (id: string, data: Partial<Patient>) => {
-    const { name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes } = data
-    await updatePatientMutation({ id: id as any, name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes })
+    const { name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes, customFields } = data
+    await updatePatientMutation({ id: id as any, name, documentCpf, phone, birthDate, active, email, gender, cep, address, emergencyContact, emergencyPhone, healthInsurance, notes, customFields })
   }
 
   const deletePatient = async (id: string) => {
@@ -1383,7 +1384,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSe
         date: formatDateISOInTz(record.updatedAt),
         painLevel: record.painScaleEva,
         sessionLabel: "Avaliação Inicial (Anamnese)",
-        professionalName: "Equipe Altar Fisio",
+        professionalName: "Equipe Clinica Dr Marcelo",
         technique: "Avaliação",
       })
     }
@@ -1642,7 +1643,7 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSe
     schedule: Schedule,
     participant: { name: string; phone: string }
   ) => {
-    const message = `Olá, *${participant.name}*! 👋\n\nEste é um lembrete do seu atendimento na *Altar Fisio*:\n\n📅 *Data:* ${formatDateBR(schedule.date)}\n⏰ *Horário:* ${schedule.startTime}\n👨‍⚕️ *Profissional:* ${schedule.professionalName}\n📍 *Local:* ${schedule.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
+    const message = `Olá, *${participant.name}*! 👋\n\nEste é um lembrete do seu atendimento na *Clinica Dr Marcelo*:\n\n📅 *Data:* ${formatDateBR(schedule.date)}\n⏰ *Horário:* ${schedule.startTime}\n👨‍⚕️ *Profissional:* ${schedule.professionalName}\n📍 *Local:* ${schedule.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
 
     const newLog: NotificationLog = {
       id: `log_${Date.now()}`,

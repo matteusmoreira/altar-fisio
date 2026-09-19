@@ -113,7 +113,7 @@ test('renderiza o painel de alto destaque de "Lotação das Salas" com dados de 
   expect(screen.getAllByText('/8')).toHaveLength(2)
 })
 
-test('o card "Central WhatsApp (UAZAPI)" foi removido do dashboard', () => {
+test('os cards removidos não devem existir no dashboard (Receita do Mês, Reposições & Encaixes, Ações Rápidas, Central WhatsApp)', () => {
   render(<DashboardPage onNavigate={vi.fn()} />)
 
   // O card "Central WhatsApp (UAZAPI)" e seus elementos não devem existir no dashboard
@@ -121,7 +121,13 @@ test('o card "Central WhatsApp (UAZAPI)" foi removido do dashboard', () => {
   expect(screen.queryByText('Disparar Lembretes de Hoje')).toBeNull()
   expect(screen.queryByText('Lembretes automatizados de presença e avisos')).toBeNull()
 
-  // O card de Ações Rápidas da Clínica deve continuar presente
-  expect(screen.getByText('Ações Rápidas da Clínica')).toBeTruthy()
+  // Os cards removidos a pedido do usuário não devem existir
+  expect(screen.queryByText('Receita do Mês')).toBeNull()
+  expect(screen.queryByText('Reposições & Encaixes')).toBeNull()
+  expect(screen.queryByText('Ações Rápidas da Clínica')).toBeNull()
+
+  // Os cards essenciais devem continuar presentes
+  expect(screen.getByText('Atendimentos Hoje')).toBeTruthy()
+  expect(screen.getByText('Ocupação da Grade')).toBeTruthy()
 })
 

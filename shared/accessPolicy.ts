@@ -24,6 +24,8 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "clinic:getNotificationSettings": ["admin", "reception"],
   "clinic:getHealthInsuranceOptions": ["admin", "professional", "reception"],
   "clinic:updateHealthInsuranceOptions": ["admin"],
+  "clinic:getPatientCustomFields": ["admin", "professional", "reception"],
+  "clinic:updatePatientCustomFields": ["admin", "reception"],
   "clinic:getClinicalSpecialties": "public",
   "clinic:updateClinicalSpecialties": ["admin"],
   "clinical:attachPosturalPhoto": ["admin", "professional"],

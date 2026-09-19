@@ -391,7 +391,7 @@ export const ProfessionalsPage: React.FC = () => {
           <Stethoscope className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-foreground">Nenhum profissional encontrado</h3>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-            Ajuste os filtros de busca ou cadastre um novo membro para o corpo clínico da Altar Fisio.
+            Ajuste os filtros de busca ou cadastre um novo membro para o corpo clínico da Clinica Dr Marcelo.
           </p>
           <Button onClick={handleOpenCreate} variant="outline" size="sm" className="mt-4 gap-2 text-xs">
             <Plus className="h-3.5 w-3.5" />

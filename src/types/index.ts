@@ -32,10 +32,26 @@ export interface Professional {
   active: boolean
 }
 
+export type PatientCustomFieldType = "text" | "number" | "date" | "select"
+
+export interface PatientCustomFieldDefinition {
+  id: string
+  label: string
+  type: PatientCustomFieldType
+  options?: string[]
+}
+
+export interface PatientCustomFieldValue {
+  fieldId?: string
+  label: string
+  type: PatientCustomFieldType
+  value: string
+}
+
 export interface Patient {
   id: string
   name: string
-  documentCpf: string
+  documentCpf?: string
   phone: string
   email?: string
   birthDate: string
@@ -46,6 +62,7 @@ export interface Patient {
   emergencyPhone?: string
   healthInsurance?: string
   notes?: string
+  customFields?: PatientCustomFieldValue[]
   active: boolean
   createdAt: number
 }

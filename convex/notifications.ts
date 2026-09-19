@@ -414,7 +414,7 @@ async function sendEmailDirectHelper(
   }
 ): Promise<{ success: boolean; status: "sent" | "failed"; errorMessage?: string }> {
   const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-  const clinicName = settings?.clinicName || "Altar Fisio"
+  const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
   const fromEmail = settings?.resendFromEmail || "contato@altarfisio.com.br"
 
   let status: "sent" | "failed" = "sent"
@@ -534,7 +534,7 @@ export const sendReplacementCreditNoticeAction = internalAction({
   },
   handler: async (ctx, args) => {
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
+    const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
 
     const message = `Olá, *${args.patientName}*! ✅\n\nConfirmamos a desmarcação da sua sessão agendada para *${formatDateBR(args.scheduleDate)} às ${args.scheduleTime}* na *${clinicName}*.\n\n✨ *Crédito de Reposição Liberado!*\nComo você avisou com a antecedência necessária, um crédito de reposição foi gerado na sua conta com validade até *${formatDateBR(args.expiryDate)}*.\n\nPara agendar sua reposição em um horário disponível, fale diretamente com a nossa recepção.`
 
@@ -562,7 +562,7 @@ export const sendReceiptNotificationAction = action({
     await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
 
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
+    const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
     const clinicAddress = settings?.address || "São Paulo - SP"
     const clinicPhone = settings?.phone || ""
 
@@ -658,7 +658,7 @@ export const testUazapiConnectionAction = action({
     const { sessionToken, ...args } = input
     await requireStaffAction(ctx, sessionToken, ["admin","reception"]);
 
-    const message = `🔔 *Teste de Conexão Altar Fisio (UAZAPI)*\n\nOlá, ${args.testName}! Este é um teste automático de validação do gateway WhatsApp UAZAPI.\nData e Hora: ${new Date().toLocaleString("pt-BR")}\nStatus: Operacional ✅`
+    const message = `🔔 *Teste de Conexão Clinica Dr Marcelo (UAZAPI)*\n\nOlá, ${args.testName}! Este é um teste automático de validação do gateway WhatsApp UAZAPI.\nData e Hora: ${new Date().toLocaleString("pt-BR")}\nStatus: Operacional ✅`
 
     return await sendWhatsAppDirectHelper(ctx, {
       recipientName: args.testName,
@@ -680,7 +680,7 @@ export const testResendConnectionAction = action({
 
     const html = `
       <div style="font-family: Arial, sans-serif; padding: 24px; max-width: 500px; border: 1px solid #10b981; border-radius: 12px;">
-        <h2 style="color: #10b981; margin-top: 0;">✅ Teste de Conexão Resend — Altar Fisio</h2>
+        <h2 style="color: #10b981; margin-top: 0;">✅ Teste de Conexão Resend — Clinica Dr Marcelo</h2>
         <p>Olá, <strong>${args.testName}</strong>!</p>
         <p>Sua chave de API do <strong>Resend</strong> está funcionando perfeitamente.</p>
         <p style="font-size: 12px; color: #64748b;">Disparado em: ${new Date().toLocaleString("pt-BR")}</p>
@@ -690,7 +690,7 @@ export const testResendConnectionAction = action({
     return await sendEmailDirectHelper(ctx, {
       recipientName: args.testName,
       email: args.testEmail,
-      subject: "Teste de Conexão Resend — Altar Fisio",
+      subject: "Teste de Conexão Resend — Clinica Dr Marcelo",
       html,
       triggerType: "teste_resend",
     })
@@ -710,7 +710,7 @@ export const sendScheduleConfirmationAction = internalAction({
   },
   handler: async (ctx, args) => {
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
-    const clinicName = settings?.clinicName || "Altar Fisio"
+    const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
     const noticeHours = settings?.cancellationNoticeHours || 2
     const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})
     const effectiveToken = defaultInst?.token || settings?.activeWhatsappInstanceToken || settings?.uazapiToken
@@ -806,7 +806,7 @@ export const sendWhatsAppReminder = mutation({
     await requireStaff(ctx, sessionToken, ["admin","reception"]);
 
     const settings = await ctx.db.query("clinicSettings").first()
-    const clinicName = settings?.clinicName || "Altar Fisio"
+    const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
     const noticeHours = settings?.cancellationNoticeHours || 2
 
     const message = `Olá, *${args.recipientName}*! 👋\n\nEste é um lembrete do seu atendimento na *${clinicName}*:\n\n📅 *Data:* ${formatDateBR(args.scheduleDate)}\n⏰ *Horário:* ${args.scheduleTime}\n👨‍⚕️ *Profissional:* ${args.professionalName}\n📍 *Local:* ${args.roomName}\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com no mínimo ${noticeHours}h de antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`

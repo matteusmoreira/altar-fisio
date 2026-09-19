@@ -69,7 +69,7 @@ export function exportSingleBookingToXls(booking: PublicBookingExportItem) {
     <body>
       <table>
         <tr>
-          <td colspan="2" class="header">ALTAR FISIO • FICHA DE AGENDAMENTO ONLINE</td>
+          <td colspan="2" class="header">CLINICA DR MARCELO • FICHA DE AGENDAMENTO ONLINE</td>
         </tr>
         <tr>
           <td colspan="2" class="subheader">Dr. Marcelo • Fisioterapia, Studio de Pilates & RPG</td>
@@ -227,7 +227,7 @@ export function exportAllBookingsToXls(bookings: PublicBookingExportItem[]) {
       </style>
     </head>
     <body>
-      <h2>Relatório de Agendamentos Online • Altar Fisio (Dr. Marcelo)</h2>
+      <h2>Relatório de Agendamentos Online • Clinica Dr Marcelo</h2>
       <p>Exportado em: ${new Date().toLocaleString("pt-BR")} | Total de registros: ${bookings.length}</p>
       <table>
         <thead>

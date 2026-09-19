@@ -497,13 +497,13 @@ export const PublicBookingPage: React.FC = () => {
   // Gerador de link do Google Calendar
   const getGoogleCalendarUrl = () => {
     if (!bookingSuccessData) return "#"
-    const title = encodeURIComponent(`Sessão de ${selectedSpecialty.toUpperCase()} - Altar Fisio`)
+    const title = encodeURIComponent(`Sessão de ${selectedSpecialty.toUpperCase()} - Clinica Dr Marcelo`)
     const details = encodeURIComponent(
-      `Atendimento de Fisioterapia/Pilates na Altar Fisio (Dr. Marcelo).\nEndereço: ${
+      `Atendimento de Fisioterapia/Pilates na Clinica Dr Marcelo.\nEndereço: ${
         confirmation.address || clinicSettings?.address || "Endereço não informado"
       }\nTelefone: ${clinicSettings?.phone || "(11) 98765-4321"}\nRecomendações: ${confirmation.instructionsMessage}`
     )
-    const location = encodeURIComponent(confirmation.address || clinicSettings?.address || "Altar Fisio")
+    const location = encodeURIComponent(confirmation.address || clinicSettings?.address || "Clinica Dr Marcelo")
     const dateFormatted = selectedDate.replace(/-/g, "")
     const startHour = selectedSlot?.startTime.replace(":", "") || "0800"
     const endHour = selectedSlot?.endTime.replace(":", "") || "0855"
@@ -514,7 +514,7 @@ export const PublicBookingPage: React.FC = () => {
   const clinicWhatsAppUrl = useMemo(() => {
     const rawPhone = (clinicSettings?.phone || "11987654321").replace(/\D/g, "")
     const msg = encodeURIComponent(
-      `Olá Dr. Marcelo / Altar Fisio! Acabei de realizar meu agendamento online de ${selectedSpecialty.toUpperCase()} para o dia ${formatDateBR(
+      `Olá Clinica Dr Marcelo! Acabei de realizar meu agendamento online de ${selectedSpecialty.toUpperCase()} para o dia ${formatDateBR(
         selectedDate
       )} às ${selectedSlot?.startTime || ""}. Meu nome é ${patientName}. Poderiam me confirmar as orientações?`
     )
@@ -786,7 +786,7 @@ export const PublicBookingPage: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="font-extrabold text-sm sm:text-base tracking-tight text-foreground flex items-center gap-2">
-                <span className="truncate">{clinicSettings?.clinicName || "Altar Fisio"}</span>
+                <span className="truncate">{clinicSettings?.clinicName || "Clinica Dr Marcelo"}</span>
                 <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 border border-border/60 shrink-0">
                   <Award className="h-3 w-3 text-primary" />
                   {clinicSettings?.clinicSubtitle || "Dr. Marcelo"}
@@ -1975,7 +1975,7 @@ export const PublicBookingPage: React.FC = () => {
           </div>
           <span className="hidden sm:inline opacity-40">•</span>
           <div className="font-medium">
-            Altar Fisio • Dr. Marcelo • Registro COFFITO / CREFITO-3
+            Clinica Dr Marcelo • Dr. Marcelo • Registro COFFITO / CREFITO-3
           </div>
         </div>
       </main>

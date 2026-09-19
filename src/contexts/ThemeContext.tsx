@@ -177,7 +177,7 @@ const defaultTheme: ClinicThemeConfig = {
   mode: "light",
   preset: "emerald",
   customHex: "#10b981",
-  clinicName: "Altar Fisio",
+  clinicName: "Clinica Dr Marcelo",
   clinicSubtitle: "Dr. Marcelo - Fisio, Pilates & RPG",
   logoUrl: undefined,
   phone: undefined,

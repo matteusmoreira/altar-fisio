@@ -89,7 +89,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
   const { theme } = useTheme()
   const clinicSettings = useQuery(api.clinic.getSettings)
 
-  const clinicDisplayName = theme.clinicName || clinicSettings?.clinicName || "Altar Fisio"
+  const clinicDisplayName = theme.clinicName || clinicSettings?.clinicName || "Clinica Dr Marcelo"
   const clinicSubtitle = theme.clinicSubtitle || clinicSettings?.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"
   const clinicLogoUrl = theme.logoUrl || clinicSettings?.logoUrl
   const clinicPhone = theme.phone || clinicSettings?.phone || ""
@@ -398,7 +398,7 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
             </div>
             {patient && (
               <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20 shrink-0">
-                Paciente: {patient.name.split(" ")[0]} ({patient.documentCpf})
+                Paciente: {patient.name.split(" ")[0]}{patient.documentCpf ? ` (${patient.documentCpf})` : ""}
               </Badge>
             )}
           </div>
@@ -1018,9 +1018,15 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                           <p className="font-bold text-foreground print:text-black">
                             {patient?.name || "Paciente Selecionado"}
                           </p>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            CPF: {patient?.documentCpf || "000.000.000-00"}
-                          </span>
+                          {patient?.documentCpf ? (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              CPF: {patient.documentCpf}
+                            </span>
+                          ) : patient?.phone ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              Tel: {patient.phone}
+                            </span>
+                          ) : null}
                         </div>
                         <div>
                           <span className="text-[10px] text-muted-foreground block uppercase font-semibold">
@@ -1145,10 +1151,14 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                       <strong className="font-bold text-foreground print:text-black">
                         {patient?.name || "Paciente Selecionado"}
                       </strong>
-                      , portador(a) do CPF nº{" "}
-                      <span className="font-mono font-semibold">
-                        {patient?.documentCpf || "000.000.000-00"}
-                      </span>
+                      {patient?.documentCpf && (
+                        <>
+                          , portador(a) do CPF nº{" "}
+                          <span className="font-mono font-semibold">
+                            {patient.documentCpf}
+                          </span>
+                        </>
+                      )}
                       {patient?.healthInsurance && (
                         <span> (Convênio: {patient.healthInsurance})</span>
                       )}
@@ -1209,8 +1219,12 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                       <strong className="font-bold text-foreground print:text-black">
                         {patient?.name || "Paciente Selecionado"}
                       </strong>
-                      , inscrito(a) no CPF/MF sob o nº{" "}
-                      <strong className="font-mono">{patient?.documentCpf || "000.000.000-00"}</strong>, a quantia líquida de{" "}
+                      {patient?.documentCpf && (
+                        <>
+                          , inscrito(a) no CPF/MF sob o nº{" "}
+                          <strong className="font-mono">{patient.documentCpf}</strong>
+                        </>
+                      )}, a quantia líquida de{" "}
                       <strong className="text-sm font-bold text-primary print:text-black">
                         R$ {receiptAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </strong>
@@ -1265,11 +1279,11 @@ export const DocumentGeneratorModal: React.FC<DocumentGeneratorModalProps> = ({
                           ? `${tcleRepresentativeName} (inscrito(a) no CPF/MF sob o nº ${tcleRepresentativeCpf || "_________________"}, na qualidade de ${tcleRepresentativeKinship} do(a) paciente ${patient?.name || "Paciente"}, CPF nº ${patient?.documentCpf || "_________________"})`
                           : patient?.name || "_________________________________"}
                       </strong>
-                      {!tcleHasRepresentative && (
+                      {!tcleHasRepresentative && patient?.documentCpf && (
                         <>
                           , portador(a) do CPF/MF nº{" "}
                           <span className="font-mono font-semibold">
-                            {patient?.documentCpf || "_________________"}
+                            {patient.documentCpf}
                           </span>
                         </>
                       )}

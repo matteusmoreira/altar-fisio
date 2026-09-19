@@ -125,7 +125,7 @@ export const NotificationsPage: React.FC = () => {
   const [testName, setTestName] = useState("Juliana Mendes da Silva")
   const [testNumber, setTestNumber] = useState("(11) 98877-6655")
   const [testEmail, setTestEmail] = useState("juliana.mendes@email.com")
-  const [testSubject, setTestSubject] = useState("Confirmação de Atendimento — Altar Fisio")
+  const [testSubject, setTestSubject] = useState("Confirmação de Atendimento — Clinica Dr Marcelo")
   const [isSendingTest, setIsSendingTest] = useState(false)
 
   // Estado do Botão de Varredura Manual
@@ -172,7 +172,7 @@ export const NotificationsPage: React.FC = () => {
 
     setIsSendingTest(true)
 
-    const formattedMessage = `Olá, *${testName}*! 👋\n\nEste é um lembrete do seu atendimento na *Altar Fisio*:\n📅 *Data:* ${formatDateBR(getTodayDateString())}\n⏰ *Horário:* 08:00\n👨‍⚕️ *Profissional:* Dra. Camila Duarte\n📍 *Local:* Studio Pilates Aparelhos\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
+    const formattedMessage = `Olá, *${testName}*! 👋\n\nEste é um lembrete do seu atendimento na *Clinica Dr Marcelo*:\n📅 *Data:* ${formatDateBR(getTodayDateString())}\n⏰ *Horário:* 08:00\n👨‍⚕️ *Profissional:* Dra. Camila Duarte\n📍 *Local:* Studio Pilates Aparelhos\n\n⚠️ *Aviso importante:* Caso precise desmarcar, avise com antecedência para liberar seu crédito de reposição.\n\nEstamos ansiosos para te receber! ✨`
 
     try {
       const res = await sendWhatsAppAction({
@@ -757,7 +757,7 @@ export const NotificationsPage: React.FC = () => {
                 <p className="font-mono text-[11px] text-foreground whitespace-pre-line leading-relaxed bg-background p-2.5 rounded-lg border border-border/60">
                   {`Olá, *${testName}*! 👋
 
-Este é um lembrete do seu atendimento na *Altar Fisio*:
+Este é um lembrete do seu atendimento na *Clinica Dr Marcelo*:
 📅 *Data:* ${formatDateBR(getTodayDateString())}
 ⏰ *Horário:* 08:00
 👨‍⚕️ *Profissional:* Dra. Camila Duarte
@@ -807,7 +807,7 @@ Estamos ansiosos para te receber! ✨`}
                   Template de Comprovante Resend:
                 </span>
                 <p className="text-muted-foreground text-[11px]">
-                  O e-mail conterá o cabeçalho oficial da Altar Fisio, tabela de discriminação de valores (R$ 380,00), data de quitação e carimbo fiscal para convênios.
+                  O e-mail conterá o cabeçalho oficial da Clinica Dr Marcelo, tabela de discriminação de valores (R$ 380,00), data de quitação e carimbo fiscal para convênios.
                 </p>
               </div>
 

@@ -1,5 +1,5 @@
 /**
- * Altar Fisio — Utilitários de Data e Horário
+ * Clinica Dr Marcelo — Utilitários de Data e Horário
  * Fuso Horário Padrão Oficial: America/Sao_Paulo (UTC-3 / Horário de Brasília)
  * Formato Padrão de Exibição: dd/mm/aaaa
  */
