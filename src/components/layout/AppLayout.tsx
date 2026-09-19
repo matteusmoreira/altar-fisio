@@ -538,7 +538,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               title={`Perfil: ${user.name}`}
             >
               <RoleIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-[11px] truncate max-w-[55px] sm:max-w-[80px]">{user.name.split(" ")[0]}</span>
+              <span className="text-[11px] truncate max-w-[65px] sm:max-w-[80px]">
+                {user.name.startsWith("Dr.") || user.name.startsWith("Dra.")
+                  ? user.name.split(" ").slice(0, 2).join(" ")
+                  : user.name.split(" ")[0]}
+              </span>
             </button>
           )}
 

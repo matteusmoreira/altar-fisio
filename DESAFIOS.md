@@ -1,5 +1,31 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Contenção de Transbordamento Horizontal no Dashboard Mobile-First (iPhone 14 Pro e Telas < 400px)
+- **Ponto de Fricção**:
+  1. Em visualizações móveis (ex: iPhone 14 Pro, 393px de largura), todo o lado direito do Dashboard sofria um corte visual rígido de ~50px:
+     - O botão de ação rápida "Novo Paciente" era cortado para `+ Novo Paci`.
+     - A linha de contagem de atendimentos cortava no final: `0 atendimentos previstos hoje (0 cc`.
+     - No card da sala, o badge de status e legenda eram cortados na lateral: `S...`.
+     - A saudação operacional exibia `Boa tarde, Dr.` de forma incompleta, pois `user.name.split(" ")[0]` extraía apenas o prefixo honorífico quando o nome cadastrado era `Dr. Marcelo Santos`.
+  2. **Causa Raiz do Corte Lateral**:
+     - No CSS Flexbox, containers filhos possuem `min-width: auto` por padrão.
+     - A barra de filtros de turnos da Agenda do Dia continha 5 botões com `whitespace-nowrap` sem `min-w-0` e o container de busca possuía `min-w-[200px]`. Somados ao padding `p-4` da página, a largura intrínseca mínima forçada atingia 446px.
+     - Como `<main>` no `AppLayout` utiliza `overflow-x-hidden` para conter scroll horizontal, qualquer conteúdo além de 393px era fisicamente cortado na borda direita da viewport, esticando os botões `flex-1` para fora da tela.
+- **Mitigação / Regra**:
+  1. No `src/pages/DashboardPage.tsx`:
+     - Container principal flexibilizado com `p-3.5 sm:p-6 lg:p-8 w-full min-w-0 max-w-7xl mx-auto space-y-5 sm:space-y-6`.
+     - Ajustado `doctorName` para preservar o nome após prefixos `Dr.` ou `Dra.` (`user.name.split(" ").slice(0, 2).join(" ")`), renderizando `Dr. Marcelo`.
+     - Subtítulo da data com quebra harmônica em coluna no mobile (`flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2`), prevenindo colisão em linha única.
+     - Botões rápidos organizados em grid simétrico de 2 colunas no mobile (`grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto`), com `min-w-0` e `truncate` em cada botão e o botão "Lembretes WhatsApp" ocupando a linha inteira abaixo (`col-span-2 sm:col-auto`).
+     - Painel de Lotação das Salas e cards com `w-full min-w-0`, e botão "Gerenciar Salas & Turmas" com largura total no mobile (`w-full sm:w-auto justify-center`).
+     - Barra de turnos com `overflow-x-auto w-full min-w-0 max-w-full scrollbar-none` e busca com `w-full sm:w-64 sm:min-w-[200px] shrink-0`, eliminando a causa raiz da expansão indevida.
+     - Linhas de sessões e participantes da timeline com `min-w-0`, `truncate` e botões de ação adaptados com `justify-end sm:justify-start w-full sm:w-auto`.
+  2. No `src/components/layout/AppLayout.tsx`:
+     - Badge do perfil móvel no cabeçalho superior ajustado com `shortUserName` para renderizar `Dr. Marcelo` com `max-w-[65px] sm:max-w-[80px]`.
+  3. Testes dedicados:
+     - Criado `tests/dashboard-mobile-first-layout.test.tsx` com validações de `w-full min-w-0`, grid de 2 colunas no mobile, rolagem contida de filtros e saudação completa.
+- **Validação**: 64 arquivos de teste e 333 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build de produção Vite (2.10s) e linter oxlint com 0 erros.
+
 ### [2026-09-19] Polimento Geral de Layout Responsivo & Mobile-First (Bottom Nav, Dashboard, Turmas, Ficha do Paciente e Laudos)
 - **Ponto de Fricção**:
   1. Em telas móveis de smartphones modernos (ex: iPhone 14 Pro, 393px × 852px), elementos críticos da interface sofriam compressão visual, truncamento indevido ou transbordamento horizontal:

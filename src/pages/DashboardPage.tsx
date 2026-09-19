@@ -84,7 +84,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     return "Boa noite"
   }, [currentTime])
 
-  const doctorName = user?.name ? user.name.split(" ")[0] : "Doutor(a)"
+  const doctorName = user?.name
+    ? user.name.startsWith("Dr.") || user.name.startsWith("Dra.")
+      ? user.name.split(" ").slice(0, 2).join(" ")
+      : user.name.split(" ")[0]
+    : "Doutor(a)"
 
   // Atendimentos do dia
   const todaySchedules = useMemo(() => {
@@ -338,7 +342,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in text-foreground">
+    <div className="p-3.5 sm:p-6 lg:p-8 w-full min-w-0 max-w-7xl mx-auto space-y-5 sm:space-y-6 animate-fade-in text-foreground">
       {/* Toast Feedback Flutuante */}
       {notificationToast && (
         <div className="fixed top-5 right-5 z-50 bg-foreground text-background px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-semibold animate-fade-in border border-border">
@@ -352,13 +356,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* ========================================================================= */}
       {/* 1. CENTRAL DE COMANDO SUPERIOR (Sleek Command Header)                      */}
       {/* ========================================================================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border/60">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4 pb-2 border-b border-border/60 w-full min-w-0">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight truncate">
               {greeting}, <span className="text-primary">{doctorName}</span>
             </h1>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+            <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-xs font-semibold shrink-0">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -366,7 +370,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <span>Clínica em Atendimento</span>
             </div>
           </div>
-          <div className="text-xs sm:text-sm text-muted-foreground font-medium flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <div className="text-xs sm:text-sm text-muted-foreground font-medium flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
             <span>{formatDateWithWeekdayBR(todayStr)}</span>
             <span className="hidden sm:inline">•</span>
             <span>
@@ -376,24 +380,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
 
         {/* Grupo de Ações Rápidas no Topo */}
-        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
           <Button
             size="sm"
             onClick={() => onNavigate("schedule")}
-            className="gap-1.5 sm:gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-2.5 sm:px-3.5 flex-1 sm:flex-initial whitespace-nowrap"
+            className="gap-1.5 sm:gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-2 sm:px-3.5 min-w-0 justify-center"
           >
             <Calendar className="h-4 w-4 shrink-0" />
-            <span>Ver Agenda</span>
+            <span className="truncate">Ver Agenda</span>
           </Button>
 
           <Button
             size="sm"
             variant="outline"
             onClick={() => onNavigate("patients")}
-            className="gap-1.5 sm:gap-2 rounded-xl text-xs h-9 px-2.5 sm:px-3.5 hover:bg-muted flex-1 sm:flex-initial whitespace-nowrap"
+            className="gap-1.5 sm:gap-2 rounded-xl text-xs h-9 px-2 sm:px-3.5 hover:bg-muted min-w-0 justify-center"
           >
             <Plus className="h-4 w-4 text-primary shrink-0" />
-            <span>Novo Paciente</span>
+            <span className="truncate">Novo Paciente</span>
           </Button>
 
           <Button
@@ -401,11 +405,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             variant="ghost"
             onClick={handleBatchReminders}
             disabled={isActionLoading || pendingToday === 0}
-            className="gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20 w-full sm:w-auto font-medium"
+            className="col-span-2 sm:col-auto gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20 w-full sm:w-auto font-medium justify-center"
             title="Disparar lembrete via WhatsApp para todos os agendados de hoje"
           >
             <Send className={`h-3.5 w-3.5 shrink-0 ${isActionLoading ? "animate-spin" : ""}`} />
-            <span>Lembretes WhatsApp</span>
+            <span className="truncate">Lembretes WhatsApp</span>
           </Button>
         </div>
       </div>
@@ -463,10 +467,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* ========================================================================= */}
       {/* 3. KPI CARDS OPERACIONAIS DE ALTA DENSIDADE (Executive Grid)               */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full min-w-0">
         {/* Card 1: Atendimentos do Dia */}
-        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5">
+        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5 min-w-0">
             <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-normal sm:tracking-wider truncate">
               Atendimentos Hoje
             </CardTitle>
@@ -474,15 +478,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-1">
-            <div className="flex items-baseline gap-1.5 sm:gap-2">
+          <CardContent className="p-3 sm:p-4 pt-1 min-w-0">
+            <div className="flex items-baseline gap-1.5 sm:gap-2 min-w-0">
               <span className="text-xl sm:text-3xl font-extrabold tracking-tight">
                 {completedToday}
                 <span className="text-muted-foreground/60 text-base sm:text-xl font-medium">
                   /{totalAttendancesToday}
                 </span>
               </span>
-              <span className="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <span className="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
                 {completionRate}%
               </span>
             </div>
@@ -495,7 +499,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               />
             </div>
 
-            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1">
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1 min-w-0">
               <span className="truncate">{pendingToday} a realizar</span>
               <span className="text-emerald-600 font-medium shrink-0">{completedToday} presentes</span>
             </p>
@@ -503,8 +507,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </Card>
 
         {/* Card 2: Ocupação das Turmas & Vagas */}
-        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5">
+        <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all min-w-0">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5 min-w-0">
             <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-normal sm:tracking-wider truncate">
               Ocupação da Grade
             </CardTitle>
@@ -512,8 +516,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <Layers className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 pt-1">
-            <div className="flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
+          <CardContent className="p-3 sm:p-4 pt-1 min-w-0">
+            <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap min-w-0">
               <span className="text-xl sm:text-3xl font-extrabold tracking-tight">
                 {occupancyRate}%
               </span>
@@ -529,7 +533,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               />
             </div>
 
-            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1">
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1 min-w-0">
               <span className="truncate">
                 {vacanciesToday > 0 ? (
                   <span className="text-emerald-600 font-bold">{vacanciesToday} vaga(s)</span>
@@ -546,33 +550,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* ========================================================================= */}
       {/* 4. PAINEL DE ALTO DESTAQUE: LOTAÇÃO DAS SALAS EM TEMPO REAL               */}
       {/* ========================================================================= */}
-      <div className="space-y-3 bg-card p-4 sm:p-5 rounded-2xl border border-border shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/50">
-          <div className="flex items-center gap-2.5">
+      <div className="space-y-3 bg-card p-3 sm:p-5 rounded-2xl border border-border shadow-2xs w-full min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/50 w-full min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
               <Building className="h-4 w-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-base font-bold tracking-tight text-foreground">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                <h2 className="text-sm sm:text-base font-bold tracking-tight text-foreground truncate">
                   Lotação das Salas
                 </h2>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
                   Tempo Real
                 </span>
                 {roomsInUseCount > 0 ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     {roomsInUseCount} de {rooms.length} sala(s) agora
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground shrink-0 whitespace-nowrap">
                     <span className="sm:hidden">Salas disponíveis</span>
                     <span className="hidden sm:inline">Salas disponíveis no momento</span>
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground truncate">
                 Ocupação física instantânea e capacidade acumulada do dia
               </p>
             </div>
@@ -582,7 +586,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             variant="outline"
             size="sm"
             onClick={() => onNavigate("classes")}
-            className="text-xs font-semibold rounded-xl h-8 px-3 gap-1.5 self-start sm:self-auto hover:bg-muted"
+            className="text-xs font-semibold rounded-xl h-8 px-3 gap-1.5 w-full sm:w-auto justify-center hover:bg-muted mt-0.5 sm:mt-0 shrink-0"
           >
             <span>Gerenciar Salas & Turmas</span>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -590,13 +594,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
 
         {/* Grade de Cards das Salas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1 w-full min-w-0">
           {realRoomStats.map((room) => {
             const roomBorderColor = room.color || "#10b981"
             return (
               <Card
                 key={room.id}
-                className="relative overflow-hidden rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all bg-background/60 flex flex-col justify-between"
+                className="relative overflow-hidden rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all bg-background/60 flex flex-col justify-between w-full min-w-0"
               >
                 {/* Linha superior de destaque na cor configurada da sala */}
                 <div
@@ -604,9 +608,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   style={{ backgroundColor: roomBorderColor }}
                 />
 
-                <CardContent className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-3">
+                <CardContent className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-3 min-w-0">
                   {/* Cabeçalho do Card da Sala */}
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
                     <div className="space-y-0.5 min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
@@ -617,7 +621,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           {room.name}
                         </h3>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground truncate">
                         Capacidade:{" "}
                         <strong className="font-semibold text-foreground">{room.capacity} alunos</strong>
                       </p>
@@ -768,33 +772,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* 5. SPOTLIGHT "AGORA NA CLÍNICA / PRÓXIMO ATENDIMENTO"                      */}
       {/* ========================================================================= */}
       {spotlightSession && (
-        <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-4 sm:p-5 shadow-xs">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
+        <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-3.5 sm:p-5 shadow-xs w-full min-w-0">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 w-full min-w-0">
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
                 {spotlightSession.isLive ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 animate-pulse">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 animate-pulse shrink-0">
                     <span className="h-2 w-2 rounded-full bg-rose-500" />
                     EM ANDAMENTO AGORA
                   </span>
                 ) : spotlightSession.isFinishedDay ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground border border-border">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground border border-border shrink-0">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                     ATENDIMENTOS DO DIA CONCLUÍDOS
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/15 text-primary border border-primary/25">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/15 text-primary border border-primary/25 shrink-0">
                     <Clock className="h-3.5 w-3.5" />
                     A SEGUIR NA CLÍNICA
                   </span>
                 )}
 
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-background/80 border border-border">
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-background/80 border border-border shrink-0">
                   {spotlightSession.schedule.startTime} - {spotlightSession.schedule.endTime}
                 </span>
 
                 <span
-                  className="text-xs font-semibold px-2.5 py-0.5 rounded-md border"
+                  className="text-xs font-semibold px-2.5 py-0.5 rounded-md border shrink-0"
                   style={{
                     backgroundColor: `${spotlightSession.schedule.roomColor}15`,
                     borderColor: `${spotlightSession.schedule.roomColor}40`,
@@ -805,10 +809,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 </span>
               </div>
 
-              <h2 className="text-base sm:text-lg font-bold text-foreground">
+              <h2 className="text-base sm:text-lg font-bold text-foreground truncate">
                 {spotlightSession.schedule.title}
               </h2>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground truncate">
                 Profissional responsável:{" "}
                 <strong className="text-foreground font-semibold">
                   {spotlightSession.schedule.professionalName}
@@ -817,20 +821,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
 
             {/* Participantes em Foco no Horário Atual */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               {spotlightSession.schedule.participants.map((p) => {
                 const isPresent = p.status === "present"
                 return (
                   <div
                     key={p.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all min-w-0 max-w-full ${
                       isPresent
                         ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
                         : "bg-background/80 border-border text-foreground"
                     }`}
                   >
                     <div
-                      className={`h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs ${
+                      className={`h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                         isPresent
                           ? "bg-emerald-500 text-white"
                           : "bg-muted text-muted-foreground"
@@ -838,7 +842,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                     >
                       {p.patientName.charAt(0)}
                     </div>
-                    <div className="text-left">
+                    <div className="text-left min-w-0 flex-1">
                       <div className="text-xs font-semibold truncate max-w-[120px] sm:max-w-[160px]">
                         {p.patientName}
                       </div>
@@ -857,7 +861,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           p.patientName
                         )
                       }
-                      className="h-7 text-[11px] px-2.5 rounded-lg gap-1"
+                      className="h-7 text-[11px] px-2.5 rounded-lg gap-1 shrink-0"
                     >
                       <Check className="h-3 w-3" />
                       <span>{isPresent ? "Confirmado" : "Check-in"}</span>
@@ -873,11 +877,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       {/* ========================================================================= */}
       {/* 5. AGENDA DO DIA: TIMELINE, FILTROS E CHECK-IN EM TEMPO REAL              */}
       {/* ========================================================================= */}
-      <div className="space-y-4">
+      <div className="space-y-4 w-full min-w-0">
           {/* Barra de Filtros de Turno e Busca */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 bg-card p-2.5 sm:p-3 rounded-2xl border border-border shadow-2xs w-full min-w-0">
             {/* Segmented Controls por Turno */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full min-w-0 max-w-full">
               {(
                 [
                   { id: "all", label: "Todos", count: todaySchedules.length },
@@ -913,7 +917,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveShiftFilter(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                     activeShiftFilter === tab.id
                       ? "bg-primary text-primary-foreground shadow-2xs"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -934,7 +938,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
 
             {/* Campo de Busca Rápida de Paciente */}
-            <div className="relative min-w-[200px]">
+            <div className="relative w-full sm:w-64 sm:min-w-[200px] shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="text"
@@ -956,7 +960,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
 
           {/* Lista de Sessões / Turmas da Timeline */}
-          <div className="space-y-3">
+          <div className="space-y-3 w-full min-w-0">
             {filteredSchedules.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/50">
                 <Calendar className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
@@ -990,37 +994,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 return (
                   <Card
                     key={schedule.id}
-                    className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                    className={`rounded-2xl border transition-all duration-200 overflow-hidden w-full min-w-0 ${
                       isLiveNow
                         ? "border-primary/60 shadow-sm ring-1 ring-primary/30"
                         : "border-border/80 hover:border-border hover:shadow-2xs"
                     }`}
                   >
                     {/* Cabeçalho da Sessão */}
-                    <div className="p-3.5 sm:p-4 bg-muted/20 border-b border-border/70 flex flex-wrap items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-3">
-                        <div className="font-mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-background border border-border shadow-2xs text-foreground">
+                    <div className="p-3 sm:p-4 bg-muted/20 border-b border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div className="font-mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-background border border-border shadow-2xs text-foreground shrink-0">
                           {schedule.startTime} - {schedule.endTime}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-sm text-foreground">{schedule.title}</h4>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                            <h4 className="font-bold text-sm text-foreground truncate">{schedule.title}</h4>
                             {isLiveNow && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/15 px-2 py-0.5 rounded-full">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/15 px-2 py-0.5 rounded-full shrink-0">
                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
                                 Agora
                               </span>
                             )}
                             {isPast && (
-                              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.2 rounded-full">
+                              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.2 rounded-full shrink-0">
                                 Finalizado
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                            <span>{schedule.professionalName}</span>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 truncate">
+                            <span className="truncate">{schedule.professionalName}</span>
                             <span>•</span>
-                            <span className="inline-flex items-center gap-1 font-medium">
+                            <span className="inline-flex items-center gap-1 font-medium shrink-0">
                               <span
                                 className="h-2 w-2 rounded-full"
                                 style={{ backgroundColor: schedule.roomColor }}
@@ -1031,7 +1035,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
                         <Badge
                           variant={schedule.type === "turma" ? "purple" : "info"}
                           className="text-[10px] font-semibold"
@@ -1049,7 +1053,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                     </div>
 
                     {/* Lista de Alunos / Pacientes no Horário */}
-                    <div className="p-3 sm:p-4 divide-y divide-border/50">
+                    <div className="p-3 sm:p-4 divide-y divide-border/50 min-w-0">
                       {schedule.participants.length === 0 ? (
                         <div className="py-3 text-center">
                           <p className="text-xs text-muted-foreground italic">
@@ -1073,9 +1077,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           return (
                             <div
                               key={p.id}
-                              className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0"
+                              className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 first:pt-0 last:pb-0 min-w-0"
                             >
-                              <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                 <div
                                   className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
                                     isPresent
@@ -1092,29 +1096,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                                   )}
                                 </div>
 
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                     <span className="text-xs font-bold text-foreground truncate">
                                       {p.patientName}
                                     </span>
                                     {isReplacement && (
-                                      <Badge variant="warning" className="text-[9px] py-0 px-1.5">
+                                      <Badge variant="warning" className="text-[9px] py-0 px-1.5 shrink-0">
                                         Reposição
                                       </Badge>
                                     )}
                                     {isPresent && (
-                                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
                                         <CheckCircle2 className="h-3 w-3" />
                                         Presente
                                       </span>
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
-                                    <span className="font-mono">{p.patientPhone}</span>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+                                    <span className="font-mono shrink-0">{p.patientPhone}</span>
                                     {p.hasActivePackage && (
                                       <>
-                                        <span>•</span>
+                                        <span className="hidden sm:inline">•</span>
                                         <span className="text-primary font-medium truncate">
                                           {p.activePackageName || "Plano Ativo"} (
                                           {p.remainingSessions ?? 0} rest.)
@@ -1122,7 +1126,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                                       </>
                                     )}
                                     {isJustified && (
-                                      <span className="text-amber-600 text-[10px] font-semibold">
+                                      <span className="text-amber-600 text-[10px] font-semibold shrink-0">
                                         Crédito gerado
                                       </span>
                                     )}
@@ -1131,7 +1135,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                               </div>
 
                               {/* Ações de Check-in, Desmarcar e WhatsApp */}
-                              <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                              <div className="flex items-center justify-end sm:justify-start gap-1.5 w-full sm:w-auto flex-wrap sm:flex-nowrap shrink-0 pt-1 sm:pt-0 border-t border-border/30 sm:border-t-0">
                                 {!isJustified ? (
                                   <>
                                     <Button
