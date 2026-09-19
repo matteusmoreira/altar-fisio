@@ -152,12 +152,11 @@ test('renders RichTextEditor and action buttons inside Queixa principal tab', as
 
   // Botões de ação
   const saveBtn = screen.getByRole('button', { name: /Salvar Queixa/i })
-  const printBtn = screen.getByRole('button', { name: /^Imprimir$/i })
-  const downloadPdfBtn = screen.getByRole('button', { name: /Baixar PDF/i })
+  const topPrintBtn = screen.getByRole('button', { name: /Imprimir PDF/i })
 
   expect(saveBtn).toBeDefined()
-  expect(printBtn).toBeDefined()
-  expect(downloadPdfBtn).toBeDefined()
+  expect(topPrintBtn).toBeDefined()
+  expect(screen.queryByRole('button', { name: /Baixar PDF/i })).toBeNull()
 
   // Barra de ferramentas do editor rico
   expect(screen.getByTitle(/Negrito/i)).toBeDefined()
@@ -197,7 +196,7 @@ test('clicking Salvar Queixa triggers saveChiefComplaint mutation', async () => 
   })
 })
 
-test('clicking Imprimir triggers window.print', async () => {
+test('clicking Imprimir PDF triggers window.print and saves complaint if active tab', async () => {
   render(
     <PatientProfileModal
       isOpen={true}
@@ -210,7 +209,7 @@ test('clicking Imprimir triggers window.print', async () => {
   const tabButton = screen.getByRole('tab', { name: /Queixa principal/i })
   activateTab(tabButton)
 
-  const printBtn = screen.getByRole('button', { name: /^Imprimir$/i })
+  const printBtn = screen.getByRole('button', { name: /Imprimir PDF/i })
   fireEvent.click(printBtn)
 
   await waitFor(() => {
@@ -218,7 +217,7 @@ test('clicking Imprimir triggers window.print', async () => {
   })
 })
 
-test('printable chief complaint element contains clinic header and footer', () => {
+test('printable chief complaint element contains clinic header, contact info and website without signatures', () => {
   const { container } = render(
     <PatientProfileModal
       isOpen={true}
@@ -230,8 +229,9 @@ test('printable chief complaint element contains clinic header and footer', () =
 
   const printableElement = container.querySelector('#printable-chief-complaint')
   expect(printableElement).toBeDefined()
-  expect(printableElement?.textContent).toContain('Clinica Dr Marcelo')
   expect(printableElement?.textContent).toContain('Moreira 2')
   expect(printableElement?.textContent).toContain('Queixa Principal & Avaliação Clínica')
-  expect(printableElement?.textContent).toContain('CREFITO')
+  expect(printableElement?.textContent).toContain('https://clinicadrmarcelo.com.br')
+  expect(printableElement?.textContent).not.toContain('Doc ID')
+  expect(printableElement?.textContent).not.toContain('CREFITO')
 })

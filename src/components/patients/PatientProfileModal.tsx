@@ -7,7 +7,6 @@ import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient, Specialty } from "@/types"
 import { RichTextEditor } from "./RichTextEditor"
-import { downloadElementAsPdf } from "@/lib/pdfDownloader"
 import {
   Dialog,
   DialogContent,
@@ -41,7 +40,6 @@ import {
   CalendarX,
   AlertTriangle,
   Loader2,
-  Download,
   Save,
   MapPin,
   CalendarDays,
@@ -94,8 +92,9 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   const clinicDisplayName = theme.clinicName || clinicSettings?.clinicName || "Clinica Dr Marcelo"
   const clinicSubtitle = theme.clinicSubtitle || clinicSettings?.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"
   const clinicLogoUrl = theme.logoUrl || clinicSettings?.logoUrl
-  const clinicPhone = theme.phone || clinicSettings?.phone || ""
-  const clinicAddress = theme.address || clinicSettings?.address || ""
+  const clinicPhone = theme.phone || clinicSettings?.phone || "(22) 99999-1417"
+  const clinicAddress = theme.address || clinicSettings?.address || "Amaral Peixoto, 4473 · Sala 302 · Centro · Rio das Ostras - RJ"
+  const clinicWebsite = "https://clinicadrmarcelo.com.br"
   const clinicCnpj = theme.cnpj || clinicSettings?.cnpj || ""
 
   const canEditPatient = role === 'admin'
@@ -114,7 +113,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   const [chiefComplaintText, setChiefComplaintText] = useState("")
   const [isSavingComplaint, setIsSavingComplaint] = useState(false)
   const [complaintSaveStatus, setComplaintSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved")
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [printTarget, setPrintTarget] = useState<"patient-sheet" | "chief-complaint">("patient-sheet")
   const complaintDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const saveChiefComplaintMutation = useMutation(api.clinical.saveChiefComplaint)
@@ -462,33 +460,14 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     }, 1500)
   }
 
-  const handlePrint = () => {
-    setPrintTarget("patient-sheet")
-    setTimeout(() => window.print(), 50)
-  }
-
-  const handlePrintComplaint = async () => {
-    await handleSaveComplaint()
-    setPrintTarget("chief-complaint")
-    setTimeout(() => window.print(), 50)
-  }
-
-  const handleDownloadPdf = async () => {
-    const el = document.getElementById("printable-chief-complaint")
-    if (!el || !patient) return
-    setIsDownloadingPdf(true)
-    try {
+  const handlePrint = async () => {
+    if (activeTab === "complaint") {
       await handleSaveComplaint()
-      const cleanName = patient.name.replace(/\s+/g, "_")
-      await downloadElementAsPdf(el, {
-        fileName: `Queixa_Principal_${cleanName}.pdf`,
-      })
-    } catch (err) {
-      console.error("Erro ao gerar PDF:", err)
-      alert("Não foi possível gerar o arquivo PDF. Tente novamente.")
-    } finally {
-      setIsDownloadingPdf(false)
+      setPrintTarget("chief-complaint")
+    } else {
+      setPrintTarget("patient-sheet")
     }
+    setTimeout(() => window.print(), 50)
   }
 
   // Agendamentos filtrados
@@ -587,8 +566,8 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                   size="sm"
                   variant="outline"
                   onClick={handlePrint}
-                  className="gap-1.5 text-xs h-9 shadow-2xs"
-                  title="Imprimir Ficha Completa em PDF (A4)"
+                  className="gap-1.5 text-xs h-9 shadow-2xs font-medium"
+                  title={activeTab === "complaint" ? "Imprimir Queixa Principal em folha timbrada (A4)" : "Imprimir Ficha Completa do Paciente (A4)"}
                 >
                   <Printer className="h-3.5 w-3.5 text-primary" />
                   <span className="hidden sm:inline">Imprimir PDF</span>
@@ -1362,40 +1341,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                       <Save className="h-3.5 w-3.5 text-primary" />
                       <span>Salvar Queixa</span>
                     </Button>
-
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handlePrintComplaint}
-                      className="h-8 text-xs gap-1.5 shadow-2xs font-medium"
-                      title="Imprimir Queixa Principal em folha A4 oficial"
-                    >
-                      <Printer className="h-3.5 w-3.5 text-primary" />
-                      <span>Imprimir</span>
-                    </Button>
-
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="default"
-                      onClick={handleDownloadPdf}
-                      disabled={isDownloadingPdf}
-                      className="h-8 text-xs gap-1.5 shadow-2xs font-semibold px-3"
-                      title="Baixar arquivo PDF montado com cabeçalho e rodapé da clínica"
-                    >
-                      {isDownloadingPdf ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span>Gerando PDF...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="h-3.5 w-3.5" />
-                          <span>Baixar PDF</span>
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
 
@@ -1530,18 +1475,29 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           printTarget === "patient-sheet" ? "hidden print:block" : "hidden"
         } font-sans text-black p-6`}
       >
-        <div className="border-b-2 border-black pb-4 mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold uppercase tracking-wide">
-              Clinica Dr Marcelo — Fisioterapia & Pilates
-            </h1>
-            <p className="text-xs text-gray-600 mt-0.5">
-              Ficha Clínica Cadastral & Resumo Integrado do Paciente
-            </p>
+        <div className="border-b-2 border-primary/40 pb-4 mb-5 flex items-center justify-between">
+          <div className="flex items-center">
+            {clinicLogoUrl ? (
+              <img
+                src={clinicLogoUrl}
+                alt={clinicDisplayName}
+                crossOrigin="anonymous"
+                className="h-16 max-h-20 w-auto object-contain"
+              />
+            ) : (
+              <div>
+                <h1 className="text-xl font-bold uppercase tracking-wide text-black">
+                  {clinicDisplayName}
+                </h1>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  {clinicSubtitle}
+                </p>
+              </div>
+            )}
           </div>
-          <div className="text-right text-xs">
-            <div>Data de Emissão: {formatDateBR(getTodayDateString())}</div>
-            <div className="font-bold text-sm text-gray-800">Doc ID: {patient.id.slice(0, 10)}</div>
+          <div className="text-right text-xs text-gray-600">
+            <div className="font-semibold text-gray-900">Ficha Clínica Cadastral</div>
+            <div className="mt-0.5">Data de Emissão: {formatDateBR(getTodayDateString())}</div>
           </div>
         </div>
 
@@ -1596,8 +1552,19 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             <h2 className="text-sm font-bold uppercase border-b border-gray-400 pb-1 mb-2">
               3. Resumo Clínico & Metas Terapêuticas
             </h2>
-            <div className="text-xs space-y-1.5">
-              <div><strong>Queixa Principal:</strong> {clinicalRecord.chiefComplaint}</div>
+            <div className="text-xs space-y-2">
+              <div>
+                <strong>Queixa Principal:</strong>
+                <div
+                  className="mt-1 text-gray-800 [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      chiefComplaintText ||
+                      clinicalRecord.chiefComplaint ||
+                      "Não informada",
+                  }}
+                />
+              </div>
               <div><strong>Escala EVA de Dor Atual:</strong> {currentPainEva !== null ? `${currentPainEva}/10` : "Não informada"} ({clinicalRecord.painLocation || "Sem localização"})</div>
               <div><strong>História da Moléstia Atual:</strong> {clinicalRecord.hpi}</div>
               <div><strong>Metas Terapêuticas:</strong> {clinicalRecord.clinicalGoals}</div>
@@ -1606,13 +1573,18 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           </div>
         )}
 
-        {/* Assinatura */}
-        <div className="mt-12 pt-4 border-t border-gray-400 flex justify-between text-xs text-gray-700">
-          <div>
-            Assinatura do Paciente / Responsável Legal
-          </div>
-          <div className="text-right">
-            Fisioterapeuta Responsável Técnico • CREFITO
+        {/* Rodapé Institucional da Clínica */}
+        <div className="mt-8 pt-4 border-t border-gray-300 text-center text-xs text-gray-600 space-y-1 print:text-[11px]">
+          <p className="font-medium text-gray-800">{clinicAddress}</p>
+          <div className="flex items-center justify-center gap-3 text-gray-600 flex-wrap">
+            <span>Tel / WhatsApp: {clinicPhone}</span>
+            <span>•</span>
+            <span>
+              Site:{" "}
+              <span className="font-semibold text-gray-900">
+                {clinicWebsite}
+              </span>
+            </span>
           </div>
         </div>
       </div>
@@ -1626,37 +1598,30 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         } fixed -left-[99999px] top-0 bg-white text-black p-10 font-sans z-[-100] print:static print:left-auto print:p-8 print:w-full`}
       >
         {/* Cabeçalho Oficial Timbrado da Clínica */}
-        <div className="border-b-2 border-primary/40 pb-4 mb-5 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold print:border print:border-black overflow-hidden shrink-0">
-              {clinicLogoUrl ? (
-                <img
-                  src={clinicLogoUrl}
-                  alt={clinicDisplayName}
-                  crossOrigin="anonymous"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <HeartPulse className="h-7 w-7 text-primary print:text-black" />
-              )}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold uppercase tracking-tight text-black">
-                {clinicDisplayName}
-              </h1>
-              <p className="text-[11px] text-gray-600 tracking-wider uppercase font-medium">
-                {clinicSubtitle}
-              </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">
-                {user?.name || "Dr. Marcelo"} {user?.crefito ? `• ${user.crefito}` : "• CREFITO-3 / Fisioterapeuta Responsável"}
-              </p>
-            </div>
+        <div className="border-b-2 border-primary/40 pb-4 mb-5 flex items-center justify-between">
+          <div className="flex items-center">
+            {clinicLogoUrl ? (
+              <img
+                src={clinicLogoUrl}
+                alt={clinicDisplayName}
+                crossOrigin="anonymous"
+                className="h-16 max-h-20 w-auto object-contain"
+              />
+            ) : (
+              <div>
+                <h1 className="text-xl font-bold uppercase tracking-wide text-black">
+                  {clinicDisplayName}
+                </h1>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  {clinicSubtitle}
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="text-right text-[10px] text-gray-600 space-y-0.5">
-            {clinicCnpj && <p className="font-semibold text-black">CNPJ: {clinicCnpj}</p>}
-            {clinicAddress ? <p>{clinicAddress}</p> : <p>Endereço não informado</p>}
-            {clinicPhone && <p>Tel/WhatsApp: {clinicPhone}</p>}
+          <div className="text-right text-xs text-gray-600">
+            <div className="font-semibold text-gray-900">Registro Clínico Timbrado</div>
+            <div className="mt-0.5">Data de Emissão: {formatDateBR(getTodayDateString())}</div>
           </div>
         </div>
 
@@ -1689,9 +1654,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           <h2 className="text-base font-extrabold uppercase tracking-wide border-b border-gray-400 pb-1.5 inline-block px-8">
             Queixa Principal & Avaliação Clínica
           </h2>
-          <p className="text-[10px] text-gray-500 mt-1">
-            Emitido em {formatDateBR(getTodayDateString())} • Registro Oficial da Clínica
-          </p>
         </div>
 
         {/* Conteúdo Rico Formatado da Queixa Principal */}
@@ -1709,27 +1671,18 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           }}
         />
 
-        {/* Rodapé Oficial com Praça, Data e Assinatura */}
-        <div className="mt-14 pt-6 border-t border-gray-400 flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-gray-700">
-          <div>
-            <p className="font-medium">
-              São Paulo, {formatDateExtendedBR(getTodayDateString())}.
-            </p>
-            <p className="text-[10px] text-gray-500 mt-0.5">
-              Documento gerado e emitido via Sistema {clinicDisplayName}.
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="border-t border-black w-60 pt-1">
-              <p className="font-bold text-black text-xs">
-                {user?.name || "Dr. Marcelo"}
-              </p>
-              <p className="text-[10px] text-gray-600">
-                {user?.crefito || "Fisioterapeuta Responsável Técnico • CREFITO"}
-              </p>
-              <p className="text-[9px] text-gray-500">{clinicDisplayName}</p>
-            </div>
+        {/* Rodapé Oficial da Clínica */}
+        <div className="mt-10 pt-4 border-t border-gray-300 text-center text-xs text-gray-600 space-y-1 print:text-[11px]">
+          <p className="font-medium text-gray-800">{clinicAddress}</p>
+          <div className="flex items-center justify-center gap-3 text-gray-600 flex-wrap">
+            <span>Tel / WhatsApp: {clinicPhone}</span>
+            <span>•</span>
+            <span>
+              Site:{" "}
+              <span className="font-semibold text-gray-900">
+                {clinicWebsite}
+              </span>
+            </span>
           </div>
         </div>
       </div>

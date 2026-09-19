@@ -1,5 +1,21 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Polimento no Layout da Ficha do Paciente e Padronização da Impressão em PDF (Logo Inteira, Sem ID, Sem Assinaturas e Rodapé Institucional com Site)
+- **Ponto de Fricção**:
+  1. A emissão de documentos impressos e geração de PDF possuía dois pontos de ação concorrentes (`Imprimir PDF` no topo do modal da Ficha do Paciente e os botões `Imprimir` e `Baixar PDF` via `html2canvas` dentro da aba de Queixa Principal). O usuário preferiu o comportamento da impressão nativa vetorial do botão superior e solicitou a remoção do botão de download de PDF da aba.
+  2. O cabeçalho dos documentos impressos repetia o nome e subtítulo da clínica em texto tipográfico ao lado do logotipo oficial, gerando poluição visual, visto que a arte gráfica do logotipo já contém a tipografia médica e o nome institucional. Além disso, a exibição de `Doc ID: ...` poluia o cabeçalho para vias entregues ao paciente.
+  3. O rodapé das folhas impressas possuía campos e linhas estáticas de assinaturas manuais desnecessárias e omitia informações essenciais de contato da clínica, como o site oficial `https://clinicadrmarcelo.com.br` e dados completos de endereço e telefone.
+- **Mitigação / Regra**:
+  1. No `src/components/patients/PatientProfileModal.tsx`:
+     - Centralizada a impressão no botão do topo `[Imprimir PDF]`, com inteligência contextual: se acionado na aba "Queixa principal", salva atomicamente as alterações pendentes e imprime a folha timbrada da Queixa; nas demais abas, imprime a Ficha Cadastral com assiduidade e histórico.
+     - Removidos os botões `Baixar PDF` e `Imprimir` de dentro da aba "Queixa principal", mantendo a barra focada no status (`Salvo` / `Salvando...`) e no botão `Salvar Queixa`.
+     - Removidas dependências órfãs (`Download`, `downloadElementAsPdf`, `isDownloadingPdf`).
+     - Cabeçalho timbrado atualizado para exibir exclusivamente a logo inteira sem texto adicional quando presente (`max-h-20 w-auto object-contain`), e removido o `Doc ID: ...`.
+     - Rodapé atualizado: removidas todas as linhas e blocos de assinatura manual, inserindo rodapé institucional limpo com endereço, telefone/WhatsApp e site `https://clinicadrmarcelo.com.br`.
+  2. Testes dedicados:
+     - Atualizado `tests/patient-chief-complaint-tab.test.tsx` validando a ausência do botão `Baixar PDF`, disparo de impressão via botão superior e presença dos dados institucionais no rodapé sem assinaturas ou Doc ID.
+- **Validação**: 60 arquivos de teste e 319 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build Vite de produção (1.12s) e linter oxlint sem erros.
+
 ### [2026-09-19] Sincronização e Deploy do Backend Convex em Produção para Mutação saveChiefComplaint
 - **Ponto de Fricção**:
   1. Ao introduzir a mutação `clinical:saveChiefComplaint` em `convex/clinical.ts` para persistência exclusiva da Queixa Principal, o código do frontend foi integrado e enviado, porém o deploy do Convex na nuvem de produção (`exuberant-guanaco-180`) não havia sido acionado (`npx convex deploy`).
