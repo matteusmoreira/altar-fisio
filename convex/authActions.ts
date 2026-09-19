@@ -5,7 +5,7 @@ import { v } from 'convex/values'
 import { randomBytes } from 'node:crypto'
 import { hashPassword, verifyPassword } from './lib/password'
 export const login = action({
-  args: { email: v.string(), password: v.string() },
+  args: { email: v.string(), password: v.string(), rememberMe: v.optional(v.boolean()) },
   handler: async (ctx, args): Promise<{token: string; user: any}> => {
     const email = args.email.trim().toLowerCase()
     if (!email || email.length > 254 || args.password.length > 256) throw new Error('Credenciais inválidas.')
@@ -13,7 +13,7 @@ export const login = action({
     if (!user?.active || !user.passwordHash.startsWith('scrypt-v1:')) throw new Error('Credenciais inválidas.')
     if (!await verifyPassword(args.password, user.salt, user.passwordHash)) throw new Error('Credenciais inválidas.')
     const token = randomBytes(32).toString('hex')
-    await ctx.runMutation(internal.auth.createSession, { userId: user._id, expectedHash: user.passwordHash, token })
+    await ctx.runMutation(internal.auth.createSession, { userId: user._id, expectedHash: user.passwordHash, token, rememberMe: args.rememberMe })
     return { token, user: { id: user._id, name: user.name, email: user.email, role: user.role, professionalId: user.professionalId, avatarUrl: user.avatarUrl } }
   },
 })

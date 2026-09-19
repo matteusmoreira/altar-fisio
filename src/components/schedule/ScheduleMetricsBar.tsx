@@ -47,7 +47,7 @@ export const ScheduleMetricsBar: React.FC<ScheduleMetricsBarProps> = ({
 
   return (
     <div
-      className={`grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-card border border-border/80 shadow-2xs ${className}`}
+      className={`grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 p-3 sm:p-3.5 rounded-2xl bg-card border border-border/80 shadow-2xs w-full min-w-0 ${className}`}
     >
       {/* Total de Sessões */}
       <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-muted/30 border border-border/40">

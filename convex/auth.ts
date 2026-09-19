@@ -32,11 +32,12 @@ export const reserveLoginAttempt = internalMutation({
   },
 })
 export const createSession = internalMutation({
-  args: { userId: v.id('users'), expectedHash: v.string(), token: v.string() },
+  args: { userId: v.id('users'), expectedHash: v.string(), token: v.string(), rememberMe: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId)
     if (!user?.active || user.passwordHash !== args.expectedHash) throw new Error('Credenciais inválidas.')
-    await ctx.db.insert('userSessions', { userId: user._id, token: args.token, expiresAt: Date.now() + 8 * 60 * 60_000, createdAt: Date.now(), authVersion: 2 })
+    const durationMs = args.rememberMe !== false ? 30 * 24 * 60 * 60_000 : 8 * 60 * 60_000
+    await ctx.db.insert('userSessions', { userId: user._id, token: args.token, expiresAt: Date.now() + durationMs, createdAt: Date.now(), authVersion: 2 })
     const attempts = await ctx.db.query('authAttempts').withIndex('by_key', q => q.eq('key', `login:${user.email}`)).first()
     if (attempts) await ctx.db.delete(attempts._id)
   },

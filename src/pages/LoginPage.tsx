@@ -20,8 +20,15 @@ export const LoginPage: React.FC = () => {
   const { login, isLoading } = useAuth()
   const { theme } = useTheme()
 
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem("altar_remembered_email") || ""
+    } catch {
+      return ""
+    }
+  })
   const [password, setPassword] = useState("")
+  const [rememberMe, setRememberMe] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -37,7 +44,12 @@ export const LoginPage: React.FC = () => {
 
     setIsSubmitting(true)
     try {
-      await login(email, password)
+      if (!rememberMe) {
+        try {
+          localStorage.removeItem("altar_remembered_email")
+        } catch {}
+      }
+      await login(email, password, rememberMe)
     } catch (err: any) {
       setErrorMessage(err?.message || "E-mail ou senha incorretos. Tente novamente.")
     } finally {
@@ -108,16 +120,19 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} method="post" autoComplete="on" className="space-y-4">
               {/* Campo E-mail */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <label htmlFor="login-email" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                   E-mail Profissional
                 </label>
                 <div className="relative">
                   <input
+                    id="login-email"
+                    name="email"
                     type="email"
+                    autoComplete="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="marcelo@altarfisio.com.br"
@@ -130,7 +145,7 @@ export const LoginPage: React.FC = () => {
               {/* Campo Senha */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <label htmlFor="login-password" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                     Senha
                   </label>
@@ -140,7 +155,10 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <div className="relative">
                   <input
+                    id="login-password"
+                    name="password"
                     type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -152,6 +170,7 @@ export const LoginPage: React.FC = () => {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
                     tabIndex={-1}
+                    aria-label={showPassword ? "Ocultar senha" : "Ver senha"}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -160,6 +179,19 @@ export const LoginPage: React.FC = () => {
                     )}
                   </button>
                 </div>
+              </div>
+
+              {/* Opção Manter Conectado (PWA / Dispositivo) */}
+              <div className="flex items-center justify-between pt-0.5">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20 accent-primary cursor-pointer"
+                  />
+                  <span>Manter conectado neste dispositivo</span>
+                </label>
               </div>
 
               {/* Botão de Enviar */}

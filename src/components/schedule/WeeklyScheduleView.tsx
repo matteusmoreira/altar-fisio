@@ -134,9 +134,9 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   }, [weekInfo.days, schedulesByDate, normalizedSearch])
 
   return (
-    <div className="space-y-4">
-      {/* SELETOR MOBILE EM PÍLULAS (Visível apenas em telas menores < sm) */}
-      <div className="sm:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar select-none">
+    <div className="space-y-4 w-full min-w-0">
+      {/* SELETOR MOBILE EM PÍLULAS (Visível apenas em telas menores < md) */}
+      <div className="md:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar select-none">
         {weekInfo.days.map((dayStr, idx) => {
           const isSelected = activeMobileDay === dayStr
           const dayIsToday = isToday(dayStr)
@@ -175,7 +175,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
       </div>
 
       {/* MOBILE: EXIBIÇÃO DO DIA SELECIONADO EM LARGURA TOTAL */}
-      <div className="sm:hidden space-y-3 animate-fade-in">
+      <div className="md:hidden space-y-3 animate-fade-in">
         <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border">
           <div>
             <div className="flex items-center gap-2">
@@ -331,8 +331,8 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
       </div>
 
       {/* DESKTOP & TABLET: GRADE DE 7 COLUNAS (SEGUNDA A DOMINGO) */}
-      <div className="hidden sm:block overflow-x-auto pb-2">
-        <div className="grid grid-cols-7 gap-2.5 min-w-[920px]">
+      <div className="hidden md:block w-full min-w-0 overflow-x-auto pb-2 touch-pan-x">
+        <div className="grid grid-cols-7 gap-1.5 lg:gap-2 xl:gap-2.5 min-w-[680px] xl:min-w-0 w-full">
           {weekInfo.days.map((dayStr, idx) => {
             const daySchedules = schedulesByDate[dayStr] || []
             const dayParticipants = participantsByDate[dayStr] || []
@@ -359,7 +359,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
             return (
               <div
                 key={dayStr}
-                className={`flex flex-col rounded-2xl border transition-all ${
+                className={`flex flex-col rounded-2xl border transition-all min-w-0 ${
                   hasSearchMatch
                     ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/40"
                     : dayIsToday
@@ -370,28 +370,28 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                 }`}
               >
                 {/* Cabeçalho do Dia */}
-                <div className="p-2.5 border-b border-border/80 flex items-center justify-between gap-1">
+                <div className="p-2 sm:p-2.5 border-b border-border/80 flex items-center justify-between gap-1 min-w-0">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1">
                       <span
-                        className={`text-xs font-bold leading-none ${
+                        className={`text-[11px] sm:text-xs font-bold leading-none ${
                           dayIsToday ? "text-primary font-extrabold" : "text-foreground"
                         }`}
                       >
                         {WEEKDAY_NAMES_SHORT[idx]}
                       </span>
                       {dayIsToday && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                       )}
                     </div>
-                    <span className="text-[11px] font-semibold text-muted-foreground">
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground">
                       {dayNumber}/{dayStr.split("-")[1]}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                     <span
-                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                      className={`text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.2 rounded-full ${
                         hasSearchMatch
                           ? "bg-amber-500 text-white font-black"
                           : dayParticipants.length > 0
@@ -407,7 +407,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                       size="icon"
                       variant="ghost"
                       onClick={() => onCreateScheduleAtDate(dayStr)}
-                      className="h-6 w-6 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      className="h-5 w-5 sm:h-6 sm:w-6 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
                       title={`Adicionar agendamento em ${formatDateBR(dayStr)}`}
                     >
                       <Plus className="h-3 w-3" />
@@ -416,8 +416,8 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                 </div>
 
                 {/* Lista de Pacientes da Coluna */}
-                <div className="p-2 flex-1 space-y-2 min-h-[380px] flex flex-col justify-between">
-                  <div className="space-y-1.5 flex-1">
+                <div className="p-1.5 sm:p-2 flex-1 space-y-2 min-h-[380px] flex flex-col justify-between min-w-0">
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     {dayParticipants.length === 0 && vacantSlots.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center p-3 text-center min-h-[160px]">
                         <p className="text-[11px] text-muted-foreground/60 mb-2">Sem marcações</p>
@@ -448,20 +448,20 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                                 onSelectSchedule(schedule)
                               }
                             }}
-                            className={`p-2 rounded-xl border bg-background/95 hover:bg-background hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between text-left ${
+                            className={`p-1.5 sm:p-2 rounded-xl border bg-background/95 hover:bg-background hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between text-left min-w-0 ${
                               isMatch
                                 ? "ring-2 ring-amber-500 border-amber-500 bg-amber-500/10"
                                 : "border-border/80 hover:border-primary/50"
                             }`}
                           >
-                            <div>
+                            <div className="min-w-0">
                               {/* Horário & Status */}
                               <div className="flex items-center justify-between gap-1 mb-1">
-                                <span className="font-extrabold text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded leading-none">
+                                <span className="font-extrabold text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded leading-none shrink-0">
                                   {schedule.startTime}
                                 </span>
 
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 shrink-0">
                                   {participant.status === "replacement" && (
                                     <Badge variant="purple" className="text-[8px] px-1 py-0 h-3.5">
                                       Reposição
@@ -476,12 +476,12 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                               </div>
 
                               {/* Nome do Paciente em Destaque */}
-                              <h5 className="font-bold text-xs text-foreground leading-tight group-hover:text-primary transition-colors truncate">
+                              <h5 className="font-bold text-[11px] sm:text-xs text-foreground leading-tight group-hover:text-primary transition-colors truncate">
                                 {participant.patientName}
                               </h5>
 
                               {/* Fisioterapeuta e Sala */}
-                              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground truncate">
+                              <div className="flex items-center gap-1.5 mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate">
                                 <span
                                   className="w-1.5 h-1.5 rounded-full shrink-0"
                                   style={{ backgroundColor: schedule.roomColor }}
@@ -491,8 +491,8 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                             </div>
 
                             {/* Rodapé do Card: Ação rápida de desmarcar */}
-                            <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center justify-between">
-                              <span className="text-[9px] text-muted-foreground truncate max-w-[80px]">
+                            <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center justify-between gap-1 min-w-0">
+                              <span className="text-[9px] text-muted-foreground truncate max-w-[55px] sm:max-w-[75px]">
                                 {schedule.professionalName.split(" ")[0]}
                               </span>
 
@@ -504,7 +504,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                                     onSelectPatientSchedule(schedule, participant)
                                   }
                                 }}
-                                className="text-[9px] font-bold text-destructive hover:underline cursor-pointer"
+                                className="text-[9px] font-bold text-destructive hover:underline cursor-pointer shrink-0"
                                 title="Desmarcar horário deste paciente"
                               >
                                 Desmarcar

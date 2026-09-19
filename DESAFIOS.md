@@ -1,5 +1,57 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Persistência de Sessão PWA e Credenciais no Dispositivo (localStorage, Manter Conectado 30 Dias e Gerenciador de Senhas com 1 Clique)
+- **Ponto de Fricção**:
+  1. Em PWAs instalados (desktop ou mobile), armazenar tokens de autenticação exclusivamente em `sessionStorage` causava deslogamento obrigatório toda vez que a janela do app era fechada e reaberta, pois o `sessionStorage` é compulsoriamente destruído pelo ciclo de vida do WebView e do navegador ao fechar janelas avulsas.
+  2. No arquivo `src/main.tsx`, uma rotina legada de expurgo de dados mock offline executava `localStorage.removeItem('altar_auth_session_token')`, impedindo que qualquer tentativa de persistir a sessão no `localStorage` sobrevivesse ao carregamento inicial da aplicação.
+  3. No backend Convex (`convex/auth.ts`), as sessões de equipe eram criadas com expiração fixa de apenas 8 horas (`8 * 60 * 60_000`), forçando reautenticações recorrentes durante o expediente da clínica.
+  4. No formulário de login (`LoginPage.tsx`), a ausência de atributos semânticos (`name="email"`, `name="password"`, `autoComplete="username"`, `autoComplete="current-password"`) e IDs vinculados aos labels impedia os gerenciadores de senhas nativos (Google Password Manager, Apple Keychain, Edge) de detectar os campos para oferecer salvar e preencher com 1 clique ou biometria.
+  5. Em testes jsdom no Vitest, ao buscar senhas com regex `/Senha/i`, botões de alternância de visualização com `aria-label="Ver senha"` geram conflito de múltiplos nós no `getByLabelText`; o seletor precisa especificar `{ selector: 'input' }`.
+- **Mitigação / Regra**:
+  1. No `AuthContext.tsx`:
+     - Leitura unificada de token: `localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)`.
+     - Ao fazer login com `rememberMe === true` (padrão ativo), persiste o token em `localStorage` e salva o e-mail em `altar_remembered_email`.
+     - Ao desmarcar "Manter conectado", armazena em `sessionStorage` e limpa o `localStorage`.
+     - Ao deslogar (`logout()`) ou ao detectar token expirado/revogado pelo backend, limpa atômica e imediatamente ambos os armazenamentos (`localStorage` e `sessionStorage`).
+  2. No `main.tsx`:
+     - Removido `'altar_auth_session_token'` da lista de expurgo de chaves legadas no boot da aplicação.
+  3. No backend Convex (`convex/auth.ts` e `convex/authActions.ts`):
+     - Parâmetro `rememberMe?: boolean` incorporado à action `login` e mutação interna `createSession`.
+     - Se `rememberMe !== false`, validade de **30 dias** (`30 * 24 * 60 * 60_000`); se falso, 8 horas (`8 * 60 * 60_000`).
+  4. No `LoginPage.tsx`:
+     - Checkbox nativo estilizado "Manter conectado neste dispositivo" (marcado por padrão).
+     - Pré-preenchimento automático do último e-mail lembrado no dispositivo.
+     - Suporte semântico completo com `autoComplete="username"` / `autoComplete="current-password"`, `name="email"`, `name="password"`, permitindo salvar no navegador e fazer login com 1 clique.
+  5. Testes automatizados:
+     - Criados `tests/auth-persistence-pwa.test.tsx` e `tests/auth-context-persistence.test.tsx` com 11 testes aprovados cobrindo atributos semânticos, ciclo de vida do PWA, duração de 30 dias no Convex e limpeza segura no logout.
+- **Validação**: 59 arquivos de teste e 314 testes aprovados no Vitest, mais 3 testes de service worker aprovados (100% de aprovação). Typecheck TypeScript (`tsc -b`), build de produção Vite concluído em 1.16s e deploy Convex em produção (`exuberant-guanaco-180`) sincronizado com sucesso.
+
+### [2026-09-19] Responsividade e Contenção de Corte na Agenda & Marcações para Monitores Menores e Laptops
+- **Ponto de Fricção**:
+  1. Em monitores menores (resoluções comuns de 1024x768, 1280x720/800 e 1366x768 em laptops), a barra de navegação temporal e filtros em `SchedulePage.tsx` forçava `lg:flex-row lg:items-center justify-between` mantendo lado a lado a navegação de data (~500px) e os filtros de sala, profissional, busca e toggles (~800px). Como a soma ultrapassava 1300px e o container com sidebar tem apenas 700px a 1050px úteis com `<main overflow-x-hidden>`, os botões de alternância (`[Dia | Semana | Mês]`), o seletor `[Grade | Lista]` e a busca de pacientes ficavam fisicamente cortados para fora da tela.
+  2. Na visualização mensal (`MonthlyScheduleView.tsx`), a ativação de `lg:flex-row` combinada a uma barra lateral rígida de `lg:w-96` (384px) deixava apenas 300px a 600px para o calendário de 7 colunas, comprimindo as células dos dias para 40px a 80px de largura e truncando os chips com nomes dos pacientes e badges de vagas.
+  3. Na visualização semanal (`WeeklyScheduleView.tsx`), a grade de 7 colunas possuía `min-w-[920px]` fixo a partir de `sm` (640px). Em telas entre 640px e 1200px, a grade transbordava horizontalmente escondendo as colunas de Sexta, Sábado e Domingo. Como as colunas de agendamentos são altas, a barra de scroll horizontal ficava escondida centenas de pixels abaixo da dobra do monitor (viewport fold), dando a impressão visual de corte irreversível.
+  4. Na barra de métricas (`ScheduleMetricsBar.tsx`), o grid `sm:grid-cols-4` comprimia excessivamente os 4 cards de KPIs em viewports intermediárias.
+- **Mitigação / Regra**:
+  1. Em `SchedulePage.tsx`:
+     - O container principal agora utiliza `p-3 sm:p-5 lg:p-6 w-full min-w-0 max-w-7xl mx-auto space-y-5`, liberando espaço útil horizontal nos monitores menores.
+     - A barra de filtros foi reorganizada em 2 tiers fluidos e harmônicos dentro do card:
+       - **Linha Superior**: Seletor de data (anterior, input, próximo, hoje e período descritivo) à esquerda; alternador de período `[Dia | Semana | Mês]` e modo `[Grade | Lista]` à direita. Ambos cabem confortavelmente em qualquer largura a partir de telas móveis.
+       - **Linha Inferior**: Filtro de sala (`sm:w-44 lg:w-48`), filtro de profissional (`sm:w-48 lg:w-52`) e busca por paciente em largura flexível (`flex-1 min-w-[180px]`), com divisória sutil `border-t border-border/60`. Elimina 100% dos transbordamentos e cortes.
+     - Nos cards da visualização diária em grade (`viewMode === "grid"`), as linhas de participantes receberam `flex-wrap sm:flex-nowrap`, `min-w-0` e `truncate` no nome do paciente, prevenindo estouramento de ações.
+  2. Em `MonthlyScheduleView.tsx`:
+     - O breakpoint da barra lateral do dia selecionado foi ajustado para `flex-col xl:flex-row`, garantindo 100% de largura para a grade mensal de 7 colunas em telas menores que 1280px.
+     - Em telas maiores (`>= xl`), a largura da barra lateral foi flexibilizada para `xl:w-80 2xl:w-96 min-w-0`, garantindo colunas de no mínimo 100px para o calendário.
+     - Células do calendário e chips individuais receberam `min-w-0`, respiros tipográficos adaptativos (`text-[9px] sm:text-[10px]`) e badge compacta `{count} pac.`.
+  3. Em `WeeklyScheduleView.tsx`:
+     - O seletor em pílulas mobile por dia foi estendido até `< md` (telas e tablets menores que 768px), oferecendo visão completa e limpa por dia.
+     - A grade de 7 colunas no desktop (`md+`) agora utiliza `w-full min-w-[680px] xl:min-w-0 touch-pan-x` com `gap-1.5 lg:gap-2 xl:gap-2.5`, adaptando-se a 100% da largura em monitores de 1280px e 1366px sem gerar barra de rolagem horizontal desnecessária.
+  4. Em `ScheduleMetricsBar.tsx`:
+     - Configurado para `grid-cols-2 lg:grid-cols-4`, exibindo um grid 2x2 equilibrado e legível em tablets e monitores compactos, e 4 colunas em monitores amplos.
+  5. Teste dedicado:
+     - Criado `tests/schedule-responsive-layout.test.tsx` garantindo a persistência das classes responsivas, ausência de larguras rígidas incompatíveis e integridade de renderização.
+- **Validação**: 58 arquivos de teste e 309 testes aprovados 100% no Vitest e Node (`npm test`). Typecheck TypeScript (`tsc -b`), build de produção Vite (`npm run build`) e oxlint aprovados com 0 erros.
+
 ### [2026-09-19] Agenda & Marcações Centrada em Pacientes (Mês, Semana e Dia), Busca Rápida e Desmarcação Ágil com Modal de Resumo
 - **Ponto de Fricção**:
   1. A página Agenda & Marcações exibia blocos agregados de turmas e salas nas visualizações de Mês e Semana, tornando impossível "bater o olho" e identificar diretamente quais pacientes estavam agendados e em quais dias específicos. Para descobrir quem estava numa aula, era necessário clicar na turma e abrir um drawer lateral.

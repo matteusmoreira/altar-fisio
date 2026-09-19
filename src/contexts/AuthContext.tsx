@@ -30,17 +30,35 @@ interface AuthContextType {
   canAccessSettings: boolean
   canAccessNotifications: boolean
   canAccessBookingBuilder: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const TOKEN_KEY = "altar_auth_session_token"
+export const REMEMBERED_EMAIL_KEY = "altar_remembered_email"
+
+function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+function clearStoredToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {}
+  try {
+    sessionStorage.removeItem(TOKEN_KEY)
+  } catch {}
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
-    return sessionStorage.getItem(TOKEN_KEY) || null
+    return getStoredToken()
   })
 
   // Query reativa ao Convex pelo usuário atual usando o token
@@ -65,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (convexUser !== undefined) {
       if (convexUser === null) {
         // Token inválido ou expirado no backend
-        sessionStorage.removeItem(TOKEN_KEY)
+        clearStoredToken()
         setToken(null)
         setUser(null)
       } else {
@@ -75,11 +93,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token, convexUser])
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, rememberMe = true) => {
     setIsLoading(true)
     try {
-      const res = await loginMutation({ email, password })
-      sessionStorage.setItem(TOKEN_KEY, res.token)
+      const res = await loginMutation({ email, password, rememberMe })
+      if (rememberMe) {
+        try {
+          localStorage.setItem(TOKEN_KEY, res.token)
+          localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim().toLowerCase())
+        } catch {}
+        try {
+          sessionStorage.removeItem(TOKEN_KEY)
+        } catch {}
+      } else {
+        try {
+          sessionStorage.setItem(TOKEN_KEY, res.token)
+        } catch {}
+        try {
+          localStorage.removeItem(TOKEN_KEY)
+        } catch {}
+      }
       setToken(res.token)
       setUser(res.user as AuthUser)
     } finally {
@@ -95,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn("Erro ao invalidar sessão no backend:", err)
       }
     }
-    sessionStorage.removeItem(TOKEN_KEY)
+    clearStoredToken()
     setToken(null)
     setUser(null)
   }

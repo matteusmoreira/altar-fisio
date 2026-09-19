@@ -141,16 +141,16 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
   }, [selectedDaySchedules])
 
   return (
-    <div className="flex flex-col lg:flex-row gap-5 items-start">
+    <div className="flex flex-col xl:flex-row gap-4 lg:gap-5 items-start w-full min-w-0">
       {/* GRADE DO CALENDÁRIO MENSAL (7 COLUNAS) */}
-      <div className="flex-1 w-full space-y-2">
-        <Card className="p-3 sm:p-4 rounded-2xl border-border bg-card shadow-xs overflow-hidden">
+      <div className="flex-1 w-full min-w-0 space-y-2">
+        <Card className="p-2.5 sm:p-4 rounded-2xl border-border bg-card shadow-xs overflow-hidden w-full min-w-0">
           {/* Cabeçalho dos Dias da Semana */}
           <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2 pb-2 border-b border-border/70 text-center">
             {WEEKDAY_HEADERS.map((name, i) => (
               <div
                 key={name}
-                className={`text-[11px] sm:text-xs font-bold uppercase tracking-wider py-1 ${
+                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider py-1 ${
                   i === 5 || i === 6
                     ? "text-muted-foreground/60"
                     : "text-foreground/80"
@@ -206,7 +206,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                 <div
                   key={cell.date}
                   onClick={() => setSelectedDayCell(cell)}
-                  className={`min-h-[82px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left select-none relative group ${
+                  className={`min-h-[80px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between text-left select-none relative group min-w-0 ${
                     !cell.isCurrentMonth
                       ? "opacity-35 bg-muted/20 border-transparent hover:opacity-60"
                       : matchesSearch
@@ -221,11 +221,11 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                   }`}
                 >
                   {/* Número do Dia e Contagem de Pacientes */}
-                  <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
                     <span
                       className={`text-xs sm:text-sm font-bold leading-none ${
                         cell.isToday
-                          ? "h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-extrabold text-xs shadow-2xs"
+                          ? "h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-extrabold text-[11px] sm:text-xs shadow-2xs shrink-0"
                           : isSelected
                           ? "text-primary font-extrabold"
                           : "text-foreground"
@@ -236,7 +236,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
 
                     {dayParticipants.length > 0 && (
                       <span
-                        className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                        className={`text-[9px] sm:text-[10px] font-extrabold px-1 sm:px-1.5 py-0.2 rounded-full leading-tight shrink-0 ${
                           matchesSearch
                             ? "bg-amber-500 text-white font-black"
                             : "bg-primary/15 text-primary"
@@ -249,7 +249,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                   </div>
 
                   {/* Chips Individuais dos Pacientes Agendados */}
-                  <div className="space-y-1 my-1 overflow-hidden flex-1">
+                  <div className="space-y-1 my-1 overflow-hidden flex-1 min-w-0">
                     {dayParticipants.slice(0, 3).map(({ schedule, participant }) => {
                       const isMatch =
                         normalizedSearch &&
@@ -266,7 +266,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                               onSelectSchedule(schedule)
                             }
                           }}
-                          className={`hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold truncate transition-colors border ${
+                          className={`hidden sm:flex items-center gap-1 px-1 sm:px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold truncate transition-colors border min-w-0 ${
                             isMatch
                               ? "bg-amber-500 text-white border-amber-600 shadow-xs"
                               : participant.status === "present"
@@ -281,7 +281,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                             className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: schedule.roomColor }}
                           />
-                          <span className="truncate">
+                          <span className="truncate min-w-0">
                             {schedule.startTime} • {participant.patientName}
                           </span>
                         </div>
@@ -301,13 +301,13 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
                     </div>
 
                     {dayParticipants.length > 3 && (
-                      <span className="hidden sm:block text-[9px] font-bold text-muted-foreground pl-1 leading-none">
+                      <span className="hidden sm:block text-[9px] font-bold text-muted-foreground pl-0.5 leading-none truncate">
                         +{dayParticipants.length - 3} mais
                       </span>
                     )}
 
                     {dayParticipants.length === 0 && daySchedules.length > 0 && (
-                      <div className="hidden sm:block text-[10px] text-muted-foreground/60 italic pl-1 leading-tight">
+                      <div className="hidden sm:block text-[9px] sm:text-[10px] text-muted-foreground/60 italic pl-0.5 leading-tight truncate">
                         Sem alunos
                       </div>
                     )}
@@ -327,7 +327,7 @@ export const MonthlyScheduleView: React.FC<MonthlyScheduleViewProps> = ({
       </div>
 
       {/* PAINEL LATERAL (DRAWER / SIDEBAR DO DIA SELECIONADO) */}
-      <div className="w-full lg:w-96 shrink-0 space-y-3">
+      <div className="w-full xl:w-80 2xl:w-96 shrink-0 space-y-3 min-w-0">
         {selectedDayCell ? (
           <Card className="p-4 sm:p-5 rounded-2xl border-border bg-card shadow-xs space-y-4 animate-fade-in">
             {/* Header do Dia Selecionado */}

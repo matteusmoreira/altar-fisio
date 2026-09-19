@@ -42,10 +42,8 @@ import {
   Send,
   CheckCircle2,
   AlertCircle,
-  Filter,
   Repeat,
   ShieldAlert,
-  Sparkles,
   AlertTriangle,
   Search,
   X,
@@ -456,7 +454,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-3 sm:p-5 lg:p-6 w-full min-w-0 max-w-7xl mx-auto space-y-5 animate-fade-in">
       {feedback && (
         <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
           <CheckCircle2 className="h-4 w-4" />
@@ -465,13 +463,13 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
       )}
 
       {/* Header & Seletor de Data */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <CalendarIcon className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+            <CalendarIcon className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
             <span>Agenda & Marcações</span>
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Gestão de atendimentos individuais, turmas de pilates e controle de presença.
           </p>
         </div>
@@ -480,7 +478,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           <Button
             variant="outline"
             onClick={() => setIsAvailabilityModalOpen(true)}
-            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto"
+            className="gap-2 shadow-sm border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto text-xs sm:text-sm"
             title="Configurar horários de atendimento, salas e folgas"
           >
             <Clock className="h-4 w-4" />
@@ -489,7 +487,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
 
           <Button
             onClick={() => (onNavigate ? onNavigate("quick_booking") : setIsNewModalOpen(true))}
-            className="gap-2 shadow-sm bg-primary text-primary-foreground font-semibold w-full sm:w-auto"
+            className="gap-2 shadow-sm bg-primary text-primary-foreground font-semibold w-full sm:w-auto text-xs sm:text-sm"
           >
             <Plus className="h-4 w-4" />
             <span>Novo Agendamento / Turma</span>
@@ -497,157 +495,104 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Barra de Navegação de Data & Filtros */}
-      <Card className="p-4 bg-card shadow-xs border-border">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Seletor de Período / Data */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => handleDateChange(-1)}
-                className="h-10 w-10 rounded-xl"
-                title={
-                  schedulePeriodMode === "day"
-                    ? "Dia anterior"
-                    : schedulePeriodMode === "week"
-                    ? "Semana anterior"
-                    : "Mês anterior"
-                }
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl border border-input bg-background shadow-2xs">
-                <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
-                <input
-                  type={schedulePeriodMode === "month" ? "month" : "date"}
-                  value={
-                    schedulePeriodMode === "month"
-                      ? selectedDate.slice(0, 7)
-                      : selectedDate
+      {/* Barra de Navegação de Data & Filtros (Totalmente Responsiva) */}
+      <Card className="p-3.5 sm:p-4 bg-card shadow-xs border-border w-full min-w-0 overflow-hidden">
+        <div className="flex flex-col gap-3.5">
+          {/* Linha Superior: Navegação Temporal & Alternadores de Período/Modo */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Seletor de Período / Data */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleDateChange(-1)}
+                  className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0"
+                  title={
+                    schedulePeriodMode === "day"
+                      ? "Dia anterior"
+                      : schedulePeriodMode === "week"
+                      ? "Semana anterior"
+                      : "Mês anterior"
                   }
-                  onChange={(e) => {
-                    if (schedulePeriodMode === "month") {
-                      setSelectedDate(`${e.target.value}-01`)
-                    } else {
-                      setSelectedDate(e.target.value)
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-xl border border-input bg-background shadow-2xs">
+                  <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+                  <input
+                    type={schedulePeriodMode === "month" ? "month" : "date"}
+                    value={
+                      schedulePeriodMode === "month"
+                        ? selectedDate.slice(0, 7)
+                        : selectedDate
                     }
-                  }}
-                  className="bg-transparent text-sm font-semibold text-foreground focus:outline-none cursor-pointer"
-                />
+                    onChange={(e) => {
+                      if (schedulePeriodMode === "month") {
+                        setSelectedDate(`${e.target.value}-01`)
+                      } else {
+                        setSelectedDate(e.target.value)
+                      }
+                    }}
+                    className="bg-transparent text-xs sm:text-sm font-semibold text-foreground focus:outline-none cursor-pointer"
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleDateChange(1)}
+                  className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl shrink-0"
+                  title={
+                    schedulePeriodMode === "day"
+                      ? "Próximo dia"
+                      : schedulePeriodMode === "week"
+                      ? "Próxima semana"
+                      : "Próximo mês"
+                  }
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
 
               <Button
                 variant="outline"
-                size="icon"
-                onClick={() => handleDateChange(1)}
-                className="h-10 w-10 rounded-xl"
-                title={
-                  schedulePeriodMode === "day"
-                    ? "Próximo dia"
-                    : schedulePeriodMode === "week"
-                    ? "Próxima semana"
-                    : "Próximo mês"
-                }
+                size="sm"
+                onClick={() => setSelectedDate(getTodayDateString())}
+                className="h-9 sm:h-10 px-3 sm:px-3.5 rounded-xl text-xs font-semibold text-primary border-primary/30 hover:bg-primary/5"
               >
-                <ChevronRight className="h-4 w-4" />
+                Hoje
               </Button>
-            </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedDate(getTodayDateString())}
-              className="h-10 px-3.5 rounded-xl text-xs font-semibold text-primary border-primary/30 hover:bg-primary/5"
-            >
-              Hoje
-            </Button>
-
-            {/* Rótulo Descritivo do Período */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border text-xs text-foreground">
-              {schedulePeriodMode === "day" ? (
-                <>
-                  <span className="font-semibold">{formatDateWithWeekdayBR(selectedDate)}</span>
-                  <span className="text-primary font-bold">({formatDateBR(selectedDate)})</span>
-                </>
-              ) : schedulePeriodMode === "week" ? (
-                <>
-                  <span className="font-semibold">Semana:</span>
-                  <span className="text-primary font-bold">
-                    {formatWeekRangeBR(
-                      getWeekRange(selectedDate).startDate,
-                      getWeekRange(selectedDate).endDate
-                    )}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-semibold">Mês de</span>
-                  <span className="text-primary font-bold">{formatMonthYearBR(selectedDate)}</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Filtros de Sala, Profissional e Modo de Período */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              {/* Filtro por Sala */}
-              <div className="w-full sm:w-40">
-                <Select
-                  value={selectedRoom}
-                  onChange={(e) => setSelectedRoom(e.target.value)}
-                >
-                  <option value="all">Todas as Salas</option>
-                  {rooms.filter(r => r.isActive).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Filtro por Profissional */}
-              <div className="w-full sm:w-44">
-                <Select
-                  value={selectedProf}
-                  onChange={(e) => setSelectedProf(e.target.value)}
-                >
-                  <option value="all">Todos os Profissionais</option>
-                  {professionals.filter(p => p.active).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Busca Rápida por Nome do Paciente */}
-              <div className="relative w-full sm:w-52">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="text"
-                  placeholder="Buscar paciente..."
-                  value={patientSearchQuery}
-                  onChange={(e) => setPatientSearchQuery(e.target.value)}
-                  className="h-10 pl-8.5 pr-7 text-xs rounded-xl"
-                />
-                {patientSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setPatientSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    title="Limpar busca"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {/* Rótulo Descritivo do Período */}
+              <div className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 border border-border text-xs text-foreground shrink-0">
+                {schedulePeriodMode === "day" ? (
+                  <>
+                    <span className="font-semibold">{formatDateWithWeekdayBR(selectedDate)}</span>
+                    <span className="text-primary font-bold">({formatDateBR(selectedDate)})</span>
+                  </>
+                ) : schedulePeriodMode === "week" ? (
+                  <>
+                    <span className="font-semibold">Semana:</span>
+                    <span className="text-primary font-bold">
+                      {formatWeekRangeBR(
+                        getWeekRange(selectedDate).startDate,
+                        getWeekRange(selectedDate).endDate
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">Mês de</span>
+                    <span className="text-primary font-bold">{formatMonthYearBR(selectedDate)}</span>
+                  </>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-start gap-2">
+            {/* Alternadores de Período e Modo de Visualização */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
               {/* Alternador de Período [ Dia | Semana | Mês ] */}
               <SchedulePeriodToggle
                 period={schedulePeriodMode}
@@ -657,6 +602,61 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
               {/* Alternador Grade/Lista (Apenas no Modo Dia) */}
               {schedulePeriodMode === "day" && (
                 <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
+              )}
+            </div>
+          </div>
+
+          {/* Linha Inferior: Filtros de Sala, Profissional e Busca Rápida por Paciente */}
+          <div className="pt-3 border-t border-border/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full">
+            {/* Filtro por Sala */}
+            <div className="w-full sm:w-44 lg:w-48 shrink-0">
+              <Select
+                value={selectedRoom}
+                onChange={(e) => setSelectedRoom(e.target.value)}
+              >
+                <option value="all">Todas as Salas</option>
+                {rooms.filter(r => r.isActive).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Filtro por Profissional */}
+            <div className="w-full sm:w-48 lg:w-52 shrink-0">
+              <Select
+                value={selectedProf}
+                onChange={(e) => setSelectedProf(e.target.value)}
+              >
+                <option value="all">Todos os Profissionais</option>
+                {professionals.filter(p => p.active).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Busca Rápida por Nome do Paciente */}
+            <div className="relative flex-1 min-w-[180px] w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Buscar paciente..."
+                value={patientSearchQuery}
+                onChange={(e) => setPatientSearchQuery(e.target.value)}
+                className="h-10 pl-8.5 pr-7 text-xs rounded-xl w-full"
+              />
+              {patientSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setPatientSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               )}
             </div>
           </div>
@@ -825,9 +825,9 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                             key={p.id}
                             className="py-2.5 flex flex-col gap-2 first:pt-0 last:pb-0"
                           >
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
                               <div
-                                className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0 flex-1"
                                 onClick={() => setSelectedPatientSchedule({ schedule, participant: p })}
                                 title="Ver resumo do agendamento"
                               >
@@ -842,9 +842,9 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                                 >
                                   {p.patientName.charAt(0)}
                                 </div>
-                                <div>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-semibold text-foreground">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                    <span className="text-xs font-semibold text-foreground truncate">
                                       {p.patientName}
                                     </span>
                                     {p.status === "replacement" && (
@@ -853,7 +853,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
                                     <span>{p.patientPhone}</span>
                                     {p.hasActivePackage && (
                                       <span className="text-[10px] text-primary font-medium">
@@ -864,7 +864,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
                                 {!isJustified ? (
                                   <>
                                     <Button
