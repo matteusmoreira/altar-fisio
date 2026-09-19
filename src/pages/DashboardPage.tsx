@@ -366,13 +366,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <span>Clínica em Atendimento</span>
             </div>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground font-medium flex items-center gap-2">
+          <div className="text-xs sm:text-sm text-muted-foreground font-medium flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span>{formatDateWithWeekdayBR(todayStr)}</span>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
             <span>
               {totalAttendancesToday} atendimentos previstos hoje ({completedToday} concluídos)
             </span>
-          </p>
+          </div>
         </div>
 
         {/* Grupo de Ações Rápidas no Topo */}
@@ -380,9 +380,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           <Button
             size="sm"
             onClick={() => onNavigate("schedule")}
-            className="gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-3.5 flex-1 sm:flex-initial"
+            className="gap-1.5 sm:gap-2 shadow-sm font-semibold rounded-xl text-xs h-9 px-2.5 sm:px-3.5 flex-1 sm:flex-initial whitespace-nowrap"
           >
-            <Calendar className="h-4 w-4" />
+            <Calendar className="h-4 w-4 shrink-0" />
             <span>Ver Agenda</span>
           </Button>
 
@@ -390,9 +390,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             size="sm"
             variant="outline"
             onClick={() => onNavigate("patients")}
-            className="gap-2 rounded-xl text-xs h-9 px-3.5 hover:bg-muted flex-1 sm:flex-initial"
+            className="gap-1.5 sm:gap-2 rounded-xl text-xs h-9 px-2.5 sm:px-3.5 hover:bg-muted flex-1 sm:flex-initial whitespace-nowrap"
           >
-            <Plus className="h-4 w-4 text-primary" />
+            <Plus className="h-4 w-4 text-primary shrink-0" />
             <span>Novo Paciente</span>
           </Button>
 
@@ -401,10 +401,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             variant="ghost"
             onClick={handleBatchReminders}
             disabled={isActionLoading || pendingToday === 0}
-            className="gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20 w-full sm:w-auto"
+            className="gap-2 rounded-xl text-xs h-9 px-3 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-emerald-500/20 w-full sm:w-auto font-medium"
             title="Disparar lembrete via WhatsApp para todos os agendados de hoje"
           >
-            <Send className={`h-3.5 w-3.5 ${isActionLoading ? "animate-spin" : ""}`} />
+            <Send className={`h-3.5 w-3.5 shrink-0 ${isActionLoading ? "animate-spin" : ""}`} />
             <span>Lembretes WhatsApp</span>
           </Button>
         </div>
@@ -466,78 +466,78 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Card 1: Atendimentos do Dia */}
         <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5">
+            <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-normal sm:tracking-wider truncate">
               Atendimentos Hoje
             </CardTitle>
-            <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Calendar className="h-4 w-4" />
+            <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </CardHeader>
-          <CardContent className="p-4 pt-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <CardContent className="p-3 sm:p-4 pt-1">
+            <div className="flex items-baseline gap-1.5 sm:gap-2">
+              <span className="text-xl sm:text-3xl font-extrabold tracking-tight">
                 {completedToday}
-                <span className="text-muted-foreground/60 text-lg sm:text-xl font-medium">
+                <span className="text-muted-foreground/60 text-base sm:text-xl font-medium">
                   /{totalAttendancesToday}
                 </span>
               </span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <span className="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 {completionRate}%
               </span>
             </div>
 
             {/* Barra de Progresso Segmentada */}
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mt-2.5">
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mt-2 sm:mt-2.5">
               <div
                 className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
                 style={{ width: `${completionRate}%` }}
               />
             </div>
 
-            <p className="text-[11px] text-muted-foreground mt-2 flex items-center justify-between">
-              <span>{pendingToday} a realizar</span>
-              <span className="text-emerald-600 font-medium">{completedToday} presentes</span>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1">
+              <span className="truncate">{pendingToday} a realizar</span>
+              <span className="text-emerald-600 font-medium shrink-0">{completedToday} presentes</span>
             </p>
           </CardContent>
         </Card>
 
         {/* Card 2: Ocupação das Turmas & Vagas */}
         <Card className="rounded-2xl border-border/80 shadow-2xs hover:shadow-sm transition-all">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <CardHeader className="p-3 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1.5">
+            <CardTitle className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-normal sm:tracking-wider truncate">
               Ocupação da Grade
             </CardTitle>
-            <div className="h-8 w-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Layers className="h-4 w-4" />
+            <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <Layers className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
           </CardHeader>
-          <CardContent className="p-4 pt-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <CardContent className="p-3 sm:p-4 pt-1">
+            <div className="flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
+              <span className="text-xl sm:text-3xl font-extrabold tracking-tight">
                 {occupancyRate}%
               </span>
-              <span className="text-[11px] font-semibold text-muted-foreground">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground truncate">
                 ({occupiedCapacityToday}/{totalCapacityToday} vagas)
               </span>
             </div>
 
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mt-2.5">
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden mt-2 sm:mt-2.5">
               <div
                 className="h-full bg-indigo-500 transition-all duration-500 rounded-full"
                 style={{ width: `${occupancyRate}%` }}
               />
             </div>
 
-            <p className="text-[11px] text-muted-foreground mt-2 flex items-center justify-between">
-              <span>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-1">
+              <span className="truncate">
                 {vacanciesToday > 0 ? (
-                  <span className="text-emerald-600 font-bold">{vacanciesToday} vaga(s) livre(s)</span>
+                  <span className="text-emerald-600 font-bold">{vacanciesToday} vaga(s)</span>
                 ) : (
                   <span className="text-indigo-600 font-medium">Turmas lotadas</span>
                 )}
               </span>
-              <span className="text-[10px] text-muted-foreground/80">Pilates & RPG</span>
+              <span className="text-[9px] sm:text-[10px] text-muted-foreground/80 shrink-0">Pilates & RPG</span>
             </p>
           </CardContent>
         </Card>
@@ -563,11 +563,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 {roomsInUseCount > 0 ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {roomsInUseCount} de {rooms.length} sala(s) em atendimento agora
+                    {roomsInUseCount} de {rooms.length} sala(s) agora
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
-                    Salas disponíveis no momento
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground whitespace-nowrap">
+                    <span className="sm:hidden">Salas disponíveis</span>
+                    <span className="hidden sm:inline">Salas disponíveis no momento</span>
                   </span>
                 )}
               </div>
@@ -603,11 +604,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   style={{ backgroundColor: roomBorderColor }}
                 />
 
-                <CardContent className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                <CardContent className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-3">
                   {/* Cabeçalho do Card da Sala */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className="h-2.5 w-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: roomBorderColor }}
@@ -617,7 +618,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         </h3>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Capacidade física:{" "}
+                        Capacidade:{" "}
                         <strong className="font-semibold text-foreground">{room.capacity} alunos</strong>
                       </p>
                     </div>
@@ -639,8 +640,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           Disponível
                         </span>
                       ) : (
-                        <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                          Sem turmas hoje
+                        <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+                          <span className="sm:hidden">Sem turmas</span>
+                          <span className="hidden sm:inline">Sem turmas hoje</span>
                         </span>
                       )}
                     </div>
@@ -690,11 +692,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                       />
                     </div>
 
-                    <div className="flex items-center justify-between text-[10px] pt-0.5">
-                      <span className="text-muted-foreground">
+                    <div className="flex items-center justify-between text-[10px] pt-0.5 gap-2">
+                      <span className="text-muted-foreground truncate">
                         {room.vacanciesNow > 0 ? (
                           <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                            {room.vacanciesNow} vaga(s) livre(s) agora
+                            {room.vacanciesNow} vaga(s) livre(s)
                           </span>
                         ) : (
                           <span className="text-rose-600 dark:text-rose-400 font-semibold">
@@ -702,8 +704,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                           </span>
                         )}
                       </span>
-                      <span className="text-muted-foreground/80">
-                        Lotação instantânea
+                      <span className="text-muted-foreground/80 shrink-0 text-[9px] sm:text-[10px]">
+                        Tempo real
                       </span>
                     </div>
                   </div>
@@ -712,11 +714,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   <div className="text-xs rounded-xl bg-muted/20 p-2.5 border border-border/40 space-y-1">
                     {room.currentActive ? (
                       <div className="space-y-0.5">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-semibold text-foreground truncate max-w-[170px]" title={room.currentActive.title}>
+                        <div className="flex items-center justify-between text-[11px] gap-2">
+                          <span className="font-semibold text-foreground truncate flex-1 min-w-0" title={room.currentActive.title}>
                             {room.currentActive.title}
                           </span>
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-background border border-border/60">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-background border border-border/60 shrink-0">
                             {room.currentActive.startTime} - {room.currentActive.endTime}
                           </span>
                         </div>
@@ -727,22 +729,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                       </div>
                     ) : room.nextActive ? (
                       <div className="flex items-center justify-between gap-2 text-[11px]">
-                        <div className="truncate">
+                        <div className="truncate flex-1 min-w-0">
                           <span className="text-muted-foreground text-[10px]">A seguir: </span>
-                          <span className="font-semibold text-foreground truncate" title={room.nextActive.title}>
-                            {room.nextActive.title}
-                          </span>
+                          <strong className="text-foreground truncate">{room.nextActive.title}</strong>
                         </div>
-                        <span className="font-mono text-[10px] font-bold text-primary shrink-0">
+                        <span className="font-mono text-[10px] font-bold text-primary shrink-0 bg-background px-1.5 py-0.2 rounded border border-border/60">
                           {room.nextActive.startTime}
                         </span>
                       </div>
                     ) : (
                       <div className="text-[11px] text-muted-foreground flex items-center justify-between">
                         <span>Livre no momento</span>
-                        <span className="text-[10px] text-muted-foreground/80">
-                          {room.schedulesCount > 0 ? "Sem mais turmas hoje" : "Sem turmas hoje"}
-                        </span>
+                        <span className="text-[10px] text-muted-foreground/80">Sem turmas</span>
                       </div>
                     )}
                   </div>

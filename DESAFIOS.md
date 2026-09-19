@@ -1,5 +1,66 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Polimento Geral de Layout Responsivo & Mobile-First (Bottom Nav, Dashboard, Turmas, Ficha do Paciente e Laudos)
+- **Ponto de Fricção**:
+  1. Em telas móveis de smartphones modernos (ex: iPhone 14 Pro, 393px × 852px), elementos críticos da interface sofriam compressão visual, truncamento indevido ou transbordamento horizontal:
+     - No cabeçalho superior móvel, o logotipo longo colidia com o relógio com fuso de Brasília e o badge de perfil do usuário sobrepunha os botões de troca de tema e alternância claro/escuro.
+     - No Dashboard operacional, a linha de status do dia cortava o sufixo numérico `(0 concluídos)`, o botão rápido "Novo Paciente" quebrava em linhas truncadas e o card de "Ocupação da Grade" exibia `OCUPAÇÃO DA GRA...`.
+     - Na página de Turmas, as abas ocupavam espaço excessivo e a linha de filtros desalinhava com selects em largura fixa.
+     - Na Ficha do Paciente, o modal utilizava cantos arredondados flutuantes com margens de desktop em vez de ocupar a viewport completa como app nativo em telas pequenas, e exibia pontos separadores `•` órfãos quando a idade não estava preenchida.
+     - Na Central de Laudos e visualização de impressão timbrada, o padding fixo A4 gerava scroll horizontal em celulares.
+  2. Ao adaptar rótulos para mobile (ex: "Paciente avulso" em vez de "Paciente avulso (sem cadastro)"), testes unitários pré-existentes que pesquisam por regex no DOM falhavam se o texto complementar fosse simplesmente suprimido do DOM.
+  3. No `AppLayout`, a barra de navegação inferior (bottom nav) possui um botão central de ação flutuante (`-mt-4 rounded-full h-12 w-12`) encapsulado em uma `div.flex-1`, enquanto os botões de abas possuem `flex-1 min-w-0` diretamente no elemento `<button>`. Asserções de teste que iteram sobre todos os botões do nav precisam distinguir o botão central de ação flutuante dos botões laterais de abas.
+- **Mitigação / Regra**:
+  1. No `src/components/layout/AppLayout.tsx`:
+     - Topo mobile refinado com `px-3 sm:px-4`, logo com `max-w-[125px]`, relógio compacto e badge de perfil com `truncate max-w-[90px] sm:max-w-none`.
+     - Bottom nav com `w-full max-w-full`, botões com `flex-1 min-w-0` e textos com `truncate text-[10px]`.
+  2. No `src/pages/DashboardPage.tsx`:
+     - Linha de status do dia com `flex flex-wrap items-center gap-x-2 gap-y-0.5`.
+     - Botões de ações rápidas com `whitespace-nowrap` e padding `px-2.5 sm:px-3.5`.
+     - Card de ocupação com `p-3 sm:p-4` e título com `text-[11px] sm:text-xs truncate tracking-wider`.
+     - Lotação de salas com badges e legendas adaptativas para visualização móvel.
+  3. No `src/pages/ClassesPage.tsx`:
+     - Abas com rótulos responsivos (`Turmas`, `Faltas`, `Salas`, `Reposições`) e selects de filtros organizados em grid de 2 colunas no mobile (`grid grid-cols-2 gap-2`).
+  4. No `src/components/patients/PatientProfileModal.tsx`:
+     - Modal fullscreen nativo no mobile (`w-full sm:w-[95vw] sm:max-w-4xl h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl`).
+     - Identificação limpa sem pontos separadores órfãos e abas organizadas em grid de 3 colunas simétricas (`grid grid-cols-3 sm:flex`).
+  5. No `src/components/reports/PrintableReportSheet.tsx` e `src/pages/MedicalReportsPage.tsx`:
+     - Padding da folha adaptado com `p-4 sm:p-8 md:p-12`.
+     - Rótulos mobile compatibilizados com testes através de `<span className="hidden sm:inline">...</span>` e `aria-label`.
+  6. No `src/pages/PatientsPage.tsx`:
+     - Cards de KPIs convertidos para grid de 3 colunas no mobile (`grid grid-cols-3 gap-2 sm:gap-4`).
+- **Validação**: 63 arquivos de teste e 332 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build Vite de produção (1.21s) e linter oxlint com 0 erros.
+
+### [2026-09-19] Remoção do Sábado da Agenda (Agendamento Rápido, Grade Semanal de 5 Colunas e Criação de Turmas)
+- **Ponto de Fricção**:
+  1. A clínica não trabalha aos sábados e domingos. No entanto, o endpoint `getWeeklyGridData` em `convex/quickBooking.ts` gerava 6 dias (Segunda a Sábado, `i < 6`), fazendo o seletor de dias do "Agendamento Rápido" exibir o botão `Sáb` com status de "Nenhum horário disponível configurado para este dia".
+  2. Na visualização semanal de "Agenda & Marcações" (`WeeklyScheduleView.tsx`), a grade desktop exibia 7 colunas (Segunda a Domingo), desperdiçando quase 30% da largura útil do monitor com colunas vazias de Sábado e Domingo e comprimindo os cards de pacientes e turmas nos dias úteis.
+  3. Quando acessado em um sábado ou domingo (como hoje), o estado inicial `selectedDay` da `QuickBookingPage` carregava a data do sábado, deixando o operador preso em um dia sem atendimentos ou sem slot selecionado.
+  4. Na navegação por dia (`periodMode === 'day'`), avançar a partir de sexta-feira caia no sábado e domingo, em vez de pular diretamente para a segunda-feira seguinte (e vice-versa ao retroceder a partir de segunda-feira).
+  5. Nos modais de criação de turmas recorrentes em `SchedulePage.tsx` e `ClassesPage.tsx`, o grid de dias de recorrência oferecia 6 colunas (`grid-cols-6`) incluindo a opção "Sáb", permitindo cadastros indevidos de turmas aos sábados.
+- **Mitigação / Regra**:
+  1. No `convex/quickBooking.ts`:
+     - O loop da query `getWeeklyGridData` foi ajustado de `i < 6` para `i < 5`, gerando exclusivamente os 5 dias úteis da semana (Segunda a Sexta).
+     - Deploy do Convex em produção (`exuberant-guanaco-180`) sincronizado com sucesso.
+  2. No `src/components/schedule/WeeklyScheduleView.tsx`:
+     - Condensada a grade semanal desktop para 5 colunas (`grid-cols-5`), estendendo a largura útil dos dias úteis em 40% e removendo as colunas desnecessárias de Sábado e Domingo.
+     - `WEEKDAY_NAMES_FULL` e `WEEKDAY_NAMES_SHORT` restringidos para Segunda a Sexta.
+     - `weekInfo` configurado com `endDate: range.days[4]` e `days: range.days.slice(0, 5)`, garantindo que o seletor mobile em pílulas também exiba exclusivamente os 5 dias úteis.
+  3. No `src/pages/SchedulePage.tsx`:
+     - Rótulo do período semanal ajustado para refletir o intervalo operacional real de Segunda a Sexta (`formatWeekRangeBR(startDate, addDaysSafe(startDate, 4))`), exibindo ex: "14 a 18/09/2026".
+     - Removida a opção `{ day: 6, label: "Sáb" }` e ajustado o layout para 5 colunas (`grid-cols-5`).
+  4. No `src/pages/QuickBookingPage.tsx`:
+     - Inicialização defensiva `initialDay`: se hoje for sábado, retrocede para a sexta-feira anterior; se for domingo, avança para a segunda-feira seguinte.
+     - `handleGoToToday` direciona automaticamente para o dia útil mais próximo quando acionado em um fim de semana.
+     - Navegação diária (`handlePrevPeriod` / `handleNextPeriod`) pula o intervalo de fim de semana (Sex -> Seg com +3 dias, e Seg -> Sex com -3 dias).
+     - `useEffect` garantindo que `selectedDay` sempre pertença a `gridData.dates`, protegendo o estado caso a data atual não seja um dia útil.
+  5. No `src/pages/ClassesPage.tsx`:
+     - Removida a opção de Sábado e ajustado para 5 colunas (`grid-cols-5`) na criação de turmas recorrentes.
+  6. Testes dedicados:
+     - Em `tests/quick-booking-enhancements.test.tsx`: atualizado o mock para 5 dias e incluído teste verificando que a grade semanal exibe apenas Segunda a Sexta e não renderiza Sábado nem Domingo.
+     - Em `tests/schedule-responsive-layout.test.tsx`: atualizado para validar a grade de 5 colunas (`grid-cols-5`) e ausência de Sábado e Domingo na visualização semanal.
+- **Validação**: 63 arquivos de teste e 331 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build Vite de produção (1.27s), deploy Convex em produção e oxlint com 0 erros.
+
 ### [2026-09-19] Ocultação de Botões do Topo (Portal do Aluno e Página Pública) e Itens do Menu (Agendamentos Online, Prontuário, Financeiro e Construtor)
 - **Ponto de Fricção**:
   1. A barra de cabeçalho superior desktop do `AppLayout` exibia atalhos externos para o Portal do Aluno (`/portal`) e para a Página Pública de Agendamento (`/agendar`), poluindo a visão operacional da clínica.

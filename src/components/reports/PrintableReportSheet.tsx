@@ -66,8 +66,8 @@ export const PrintableReportSheet: React.FC<PrintableReportSheetProps> = ({
       id={id}
       className={`relative mx-auto bg-white text-gray-900 overflow-hidden shadow-md print:shadow-none print:m-0 print:border-none transition-all duration-200 box-border ${
         isA5
-          ? "w-full max-w-[148mm] min-h-[200mm] sm:min-h-[210mm] p-6 sm:p-8 text-[12px] leading-relaxed"
-          : "w-full max-w-[210mm] min-h-[280mm] sm:min-h-[297mm] p-8 sm:p-12 text-[14px] sm:text-[15px] leading-loose"
+          ? "w-full max-w-[148mm] min-h-[180mm] sm:min-h-[210mm] p-4 sm:p-6 md:p-8 text-[11px] sm:text-[12px] leading-relaxed"
+          : "w-full max-w-[210mm] min-h-[240mm] sm:min-h-[297mm] p-4 sm:p-8 md:p-12 text-[12px] sm:text-[14px] md:text-[15px] leading-normal sm:leading-loose"
       }`}
       style={{
         fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",

@@ -25,10 +25,10 @@ export const getWeeklyGridData = query({
     const { sessionToken, ...args } = input
     await requireStaff(ctx, sessionToken, ['admin', 'reception'])
 
-    // Calcula os 6 dias (seg-sáb) a partir do weekStart (YYYY-MM-DD)
+    // Calcula os 5 dias úteis (seg-sex) a partir do weekStart (YYYY-MM-DD)
     const [year, month, day] = args.weekStart.split('-').map(Number)
     const dates: string[] = []
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       const d = new Date(Date.UTC(year, month - 1, day + i, 12, 0, 0))
       dates.push(d.toISOString().split('T')[0])
     }

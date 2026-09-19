@@ -536,21 +536,21 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
       </div>
 
       {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
+          <CardHeader className="p-2.5 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1">
+            <CardTitle className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
               {isFilteringMyPatients
-                ? "Meus Pacientes"
+                ? "Meus"
                 : isFilteringProfessional
-                ? `Pacientes (${activeProfName || "Profissional"})`
-                : "Total de Cadastros"}
+                ? `Pacientes (${activeProfName?.split(" ")[0] || "Prof."})`
+                : "Total"}
             </CardTitle>
-            <Users className="h-4 w-4 text-primary" />
+            <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-foreground">{totalCount}</div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+          <CardContent className="p-2.5 sm:p-4 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-foreground">{totalCount}</div>
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
               {isFilteringProfessional
                 ? "Vinculados aos atendimentos"
                 : "Pacientes e alunos registrados"}
@@ -559,35 +559,35 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
         </Card>
 
         <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Pacientes Ativos
+          <CardHeader className="p-2.5 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1">
+            <CardTitle className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
+              Ativos
             </CardTitle>
-            <UserCheck className="h-4 w-4 text-emerald-600" />
+            <UserCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+          <CardContent className="p-2.5 sm:p-4 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               {activeCount}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
               Em tratamento ou aulas regulares
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-border shadow-xs">
-          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Com Prontuário Ativo
+          <CardHeader className="p-2.5 sm:p-4 pb-1 sm:pb-2 flex flex-row items-center justify-between space-y-0 gap-1">
+            <CardTitle className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
+              Prontuário
             </CardTitle>
-            <HeartPulse className="h-4 w-4 text-indigo-500" />
+            <HeartPulse className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-500 shrink-0" />
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+          <CardContent className="p-2.5 sm:p-4 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {withRecordCount}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Ficha clínica e anamnese registradas
+            <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">
+              Ficha clínica registrada
             </p>
           </CardContent>
         </Card>

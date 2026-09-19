@@ -68,7 +68,7 @@ describe('Schedule Responsiveness & Adaptive Layout', () => {
     expect(sidebar?.className).toContain('2xl:w-96')
   })
 
-  it('WeeklyScheduleView renders fluid 7-column desktop grid with min-w-[680px] xl:min-w-0 and mobile pills on < md', () => {
+  it('WeeklyScheduleView renders fluid 5-column desktop grid with min-w-[680px] xl:min-w-0 and mobile pills on < md', () => {
     const { container } = render(
       <WeeklyScheduleView
         currentDate="2026-09-15"
@@ -84,6 +84,13 @@ describe('Schedule Responsiveness & Adaptive Layout', () => {
     expect(desktopGrid).toBeTruthy()
     expect(desktopGrid?.className).toContain('xl:min-w-0')
     expect(desktopGrid?.className).toContain('w-full')
+    expect(desktopGrid?.className).toContain('grid-cols-5')
+
+    // Confirma que não possui coluna de Sábado ou Domingo na visualização semanal
+    expect(container.textContent).toContain('Seg')
+    expect(container.textContent).toContain('Sex')
+    expect(container.textContent).not.toContain('Sáb')
+    expect(container.textContent).not.toContain('Dom')
 
     // Mobile pills selector is set to md:hidden
     const mobilePills = container.querySelector('.md\\:hidden')

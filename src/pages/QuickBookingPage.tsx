@@ -109,8 +109,15 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
 
   // State: Navegação da grade (alinhada rigorosamente com America/Sao_Paulo)
   const today = useMemo(() => getTodayDateString(), [])
-  const [weekStart, setWeekStart] = useState(() => getMonday(today))
-  const [selectedDay, setSelectedDay] = useState(today)
+  const initialDay = useMemo(() => {
+    const [y, m, d] = today.split('-').map(Number)
+    const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+    if (dayOfWeek === 6) return addDaysSafe(today, -1) // Sexta-feira
+    if (dayOfWeek === 0) return addDaysSafe(today, 1)  // Segunda-feira
+    return today
+  }, [today])
+  const [weekStart, setWeekStart] = useState(() => getMonday(initialDay))
+  const [selectedDay, setSelectedDay] = useState(initialDay)
   const month = getCurrentMonth(weekStart)
 
   // State: Slots selecionados
@@ -480,9 +487,20 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
 
   // ─── Navegação Temporal ───────────────────────────────────────────────
 
+  // Garante que o dia selecionado sempre pertença aos dias úteis retornados pela grade
+  useEffect(() => {
+    if (gridData?.dates && gridData.dates.length > 0 && !gridData.dates.includes(selectedDay)) {
+      setSelectedDay(gridData.dates[0])
+    }
+  }, [gridData?.dates, selectedDay])
+
   const handlePrevPeriod = useCallback(() => {
     if (periodMode === 'day') {
-      const prev = addDaysSafe(selectedDay, -1)
+      const [y, m, d] = selectedDay.split('-').map(Number)
+      const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+      // Se segunda (1), pula fim de semana e volta para sexta (-3 dias). Se domingo (0), -2 dias. Se sábado (6), -1 dia.
+      const step = dayOfWeek === 1 ? -3 : dayOfWeek === 0 ? -2 : dayOfWeek === 6 ? -1 : -1
+      const prev = addDaysSafe(selectedDay, step)
       setSelectedDay(prev)
       setWeekStart(getMonday(prev))
     } else if (periodMode === 'week') {
@@ -498,7 +516,11 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
 
   const handleNextPeriod = useCallback(() => {
     if (periodMode === 'day') {
-      const next = addDaysSafe(selectedDay, 1)
+      const [y, m, d] = selectedDay.split('-').map(Number)
+      const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+      // Se sexta (5), pula fim de semana e avança para segunda (+3 dias). Se sábado (6), +2 dias. Se domingo (0), +1 dia.
+      const step = dayOfWeek === 5 ? 3 : dayOfWeek === 6 ? 2 : dayOfWeek === 0 ? 1 : 1
+      const next = addDaysSafe(selectedDay, step)
       setSelectedDay(next)
       setWeekStart(getMonday(next))
     } else if (periodMode === 'week') {
@@ -513,8 +535,11 @@ export function QuickBookingPage({ onNavigate }: QuickBookingPageProps = {}) {
   }, [periodMode, selectedDay, weekStart])
 
   const handleGoToToday = useCallback(() => {
-    setSelectedDay(today)
-    setWeekStart(getMonday(today))
+    const [y, m, d] = today.split('-').map(Number)
+    const dayOfWeek = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+    const targetDay = dayOfWeek === 6 ? addDaysSafe(today, -1) : dayOfWeek === 0 ? addDaysSafe(today, 1) : today
+    setSelectedDay(targetDay)
+    setWeekStart(getMonday(targetDay))
   }, [today])
 
   const periodLabel = useMemo(() => {

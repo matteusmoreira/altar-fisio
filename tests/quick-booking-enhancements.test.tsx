@@ -66,7 +66,7 @@ const mocks = vi.hoisted(() => ({
     { id: 'fisioterapia', name: 'Fisioterapia' },
   ],
   gridData: {
-    dates: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19'],
+    dates: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'],
     rooms: [
       { id: 'r1', name: 'Studio Pilates', color: '#10B981', capacity: 8, type: 'pilates' },
     ],
@@ -256,6 +256,34 @@ test('WeeklyScheduleGrid renderiza pílulas semanais em modo week e calendário 
 
   // Em modo month, cabeçalhos dos dias da semana (Dom, Seg, etc.) aparecem no mini-calendário
   expect(screen.getAllByText('Seg').length).toBeGreaterThan(0)
+})
+
+test('WeeklyScheduleGrid não exibe Sábado na visualização semanal (apenas Segunda a Sexta)', () => {
+  render(
+    <WeeklyScheduleGrid
+      dates={mocks.gridData.dates}
+      rooms={mocks.gridData.rooms}
+      slots={mocks.gridData.slots as any}
+      selectedSlots={[]}
+      selectedDay="2026-09-17"
+      periodMode="week"
+      onDayChange={vi.fn()}
+      onSlotClick={vi.fn()}
+      hasPatientSelected={true}
+    />
+  )
+
+  // Verifica que os dias úteis (Seg a Sex) estão presentes
+  expect(screen.getByText('Seg')).toBeTruthy()
+  expect(screen.getByText('Ter')).toBeTruthy()
+  expect(screen.getByText('Qua')).toBeTruthy()
+  expect(screen.getByText('Qui')).toBeTruthy()
+  expect(screen.getByText('Sex')).toBeTruthy()
+
+  // Confirma que Sábado e Domingo NÃO são renderizados na grade semanal
+  expect(screen.queryByText('Sáb')).toBeNull()
+  expect(screen.queryByText('Dom')).toBeNull()
+  expect(screen.queryByText('19/09')).toBeNull()
 })
 
 // ─── Testes de QuickBookingPage (Layout 1 Coluna e Recorrência sem quebra) ───

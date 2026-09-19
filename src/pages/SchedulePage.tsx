@@ -579,7 +579,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate, onNaviga
                     <span className="text-primary font-bold">
                       {formatWeekRangeBR(
                         getWeekRange(selectedDate).startDate,
-                        getWeekRange(selectedDate).endDate
+                        addDaysSafe(getWeekRange(selectedDate).startDate, 4)
                       )}
                     </span>
                   </>
@@ -1432,14 +1432,13 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate, onNaviga
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-5 gap-1.5">
                     {[
                       { day: 1, label: "Seg" },
                       { day: 2, label: "Ter" },
                       { day: 3, label: "Qua" },
                       { day: 4, label: "Qui" },
                       { day: 5, label: "Sex" },
-                      { day: 6, label: "Sáb" },
                     ].map(({ day, label }) => {
                       const isSelected = daysOfWeek.includes(day)
                       return (

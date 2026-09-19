@@ -326,28 +326,30 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
         </div>
 
         {/* Abas de Ação */}
-        <div className="flex items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-1 sm:gap-1.5 bg-muted/40 p-1 rounded-xl border border-border shrink-0 w-full sm:w-auto overflow-x-auto scrollbar-none touch-pan-x">
           <Button
             type="button"
             variant={activeTab === "emission" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("emission")}
-            className="text-xs h-8 gap-1.5 font-medium"
+            className="text-xs h-8 gap-1.5 font-medium flex-1 sm:flex-initial"
           >
-            <Printer className="h-3.5 w-3.5" />
-            <span>Emissão Rápida</span>
+            <Printer className="h-3.5 w-3.5 shrink-0" />
+            <span className="sm:hidden">Emissão</span>
+            <span className="hidden sm:inline">Emissão Rápida</span>
           </Button>
           <Button
             type="button"
             variant={activeTab === "history" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("history")}
-            className="text-xs h-8 gap-1.5 font-medium"
+            className="text-xs h-8 gap-1.5 font-medium flex-1 sm:flex-initial"
           >
-            <History className="h-3.5 w-3.5" />
-            <span>Histórico Salvo</span>
+            <History className="h-3.5 w-3.5 shrink-0" />
+            <span className="sm:hidden">Histórico</span>
+            <span className="hidden sm:inline">Histórico Salvo</span>
             {clinicalReports && clinicalReports.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-background/80 text-[10px] font-bold">
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-background/80 text-[10px] font-bold shrink-0">
                 {clinicalReports.length}
               </span>
             )}
@@ -357,10 +359,11 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
             variant={activeTab === "templates" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("templates")}
-            className="text-xs h-8 gap-1.5 font-medium"
+            className="text-xs h-8 gap-1.5 font-medium flex-1 sm:flex-initial"
           >
-            <Layers className="h-3.5 w-3.5" />
-            <span>Modelos & Templates</span>
+            <Layers className="h-3.5 w-3.5 shrink-0" />
+            <span className="sm:hidden">Modelos</span>
+            <span className="hidden sm:inline">Modelos & Templates</span>
           </Button>
         </div>
       </div>
@@ -391,12 +394,12 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
             {/* 1. SELEÇÃO DE MODELO DOS PAPÉIS FÍSICOS */}
             <Card className="border-border shadow-xs">
               <CardHeader className="p-4 pb-2.5">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
+                <CardTitle className="text-xs sm:text-sm font-bold flex items-center justify-between gap-1.5 flex-wrap">
                   <span className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-primary" />
+                    <Sparkles className="h-4 w-4 text-primary shrink-0" />
                     <span>1. Escolha o Modelo Físico da Clínica</span>
                   </span>
-                  <Badge variant="outline" className="text-[10px] uppercase font-bold">
+                  <Badge variant="outline" className="text-[10px] uppercase font-bold shrink-0">
                     {activeTemplate.badgeLabel}
                   </Badge>
                 </CardTitle>
@@ -413,21 +416,21 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
                         key={tpl.key}
                         type="button"
                         onClick={() => handleSelectTemplate(tpl.key)}
-                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-1.5 ${
+                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-1 min-h-[72px] sm:min-h-[80px] ${
                           isSelected
                             ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary shadow-xs"
                             : "border-border bg-card/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          <span className="text-[11px] font-bold leading-tight line-clamp-1">
+                        <div className="flex items-start justify-between gap-1 w-full">
+                          <span className="text-[11px] font-bold leading-tight">
                             {tpl.badgeLabel}
                           </span>
                           {isSelected && (
-                            <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
+                            <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
                           )}
                         </div>
-                        <p className="text-[10px] leading-tight line-clamp-2 opacity-80">
+                        <p className="text-[10px] leading-tight opacity-75 line-clamp-2">
                           {tpl.shortDesc}
                         </p>
                       </button>
@@ -465,15 +468,16 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
             {/* 2. SELEÇÃO DO PACIENTE */}
             <Card className="border-border shadow-xs">
               <CardHeader className="p-4 pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                    <User className="h-4 w-4 text-primary" />
+                    <User className="h-4 w-4 text-primary shrink-0" />
                     <span>2. Paciente / Destinatário</span>
                   </CardTitle>
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
                     <input
                       type="checkbox"
                       checked={isWalkInPatient}
+                      aria-label="Paciente avulso (sem cadastro)"
                       onChange={(e) => {
                         setIsWalkInPatient(e.target.checked)
                         if (e.target.checked) {
@@ -482,7 +486,7 @@ export const MedicalReportsPage: React.FC<MedicalReportsPageProps> = ({ initialP
                       }}
                       className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
                     />
-                    <span>Paciente avulso (sem cadastro)</span>
+                    <span>Paciente avulso <span className="hidden sm:inline">(sem cadastro)</span></span>
                   </label>
                 </div>
               </CardHeader>

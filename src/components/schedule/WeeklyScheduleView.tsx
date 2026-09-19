@@ -42,11 +42,9 @@ const WEEKDAY_NAMES_FULL = [
   "Quarta-feira",
   "Quinta-feira",
   "Sexta-feira",
-  "Sábado",
-  "Domingo",
 ]
 
-const WEEKDAY_NAMES_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+const WEEKDAY_NAMES_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex"]
 
 export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   currentDate,
@@ -59,7 +57,15 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   onOpenEnroll,
   patientSearchQuery = "",
 }) => {
-  const weekInfo = useMemo(() => getWeekRange(currentDate), [currentDate])
+  // Obtém os 5 dias úteis (Segunda a Sexta) da semana ativa
+  const weekInfo = useMemo(() => {
+    const range = getWeekRange(currentDate)
+    return {
+      startDate: range.startDate,
+      endDate: range.days[4],
+      days: range.days.slice(0, 5),
+    }
+  }, [currentDate])
 
   // Estado para dia selecionado em visualização mobile
   const [mobileSelectedDay, setMobileSelectedDay] = useState<string>(() => {
@@ -330,14 +336,13 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
         )}
       </div>
 
-      {/* DESKTOP & TABLET: GRADE DE 7 COLUNAS (SEGUNDA A DOMINGO) */}
+      {/* DESKTOP & TABLET: GRADE DE 5 COLUNAS (SEGUNDA A SEXTA) */}
       <div className="hidden md:block w-full min-w-0 overflow-x-auto pb-2 touch-pan-x">
-        <div className="grid grid-cols-7 gap-1.5 lg:gap-2 xl:gap-2.5 min-w-[680px] xl:min-w-0 w-full">
+        <div className="grid grid-cols-5 gap-1.5 lg:gap-2 xl:gap-2.5 min-w-[680px] xl:min-w-0 w-full">
           {weekInfo.days.map((dayStr, idx) => {
             const daySchedules = schedulesByDate[dayStr] || []
             const dayParticipants = participantsByDate[dayStr] || []
             const dayIsToday = isToday(dayStr)
-            const isWeekend = idx === 5 || idx === 6
             const [, , dayNumber] = dayStr.split("-")
 
             const hasSearchMatch =
@@ -364,8 +369,6 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                     ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/40"
                     : dayIsToday
                     ? "bg-primary/5 border-primary/40 ring-1 ring-primary/30"
-                    : isWeekend
-                    ? "bg-muted/30 border-border/60"
                     : "bg-card border-border shadow-2xs"
                 }`}
               >

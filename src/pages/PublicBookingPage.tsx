@@ -794,7 +794,7 @@ export const PublicBookingPage: React.FC = () => {
               </div>
               <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                 <MapPin className="h-3.5 w-3.5 text-primary/80 shrink-0" />
-                <span className="truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none">
+                <span className="truncate max-w-[150px] sm:max-w-none">
                   {clinicSettings?.address || "Av. Paulista, 1000 - Bela Vista, São Paulo - SP"}
                 </span>
               </div>

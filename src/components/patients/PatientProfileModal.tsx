@@ -503,23 +503,23 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden border-border rounded-2xl shadow-2xl">
+        <DialogContent className="w-full sm:w-[95vw] sm:max-w-4xl h-full sm:h-auto sm:max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden border-border rounded-none sm:rounded-2xl shadow-2xl">
           {/* Header Superior Estilizado */}
-          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/70 p-5 sm:p-6 pb-4 shrink-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start sm:items-center gap-3.5">
-                <div className="h-14 w-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+          <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/70 p-4 sm:p-6 pb-3 sm:pb-4 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center font-bold text-lg sm:text-xl shadow-xs shrink-0">
                   {patient.name.charAt(0).toUpperCase()}
                 </div>
 
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <DialogTitle className="text-xl sm:text-2xl font-bold text-foreground">
+                    <DialogTitle className="text-lg sm:text-2xl font-bold text-foreground truncate">
                       {patient.name}
                     </DialogTitle>
                     <Badge
                       variant={patient.active ? "default" : "outline"}
-                      className={`text-xs font-semibold ${
+                      className={`text-xs font-semibold shrink-0 ${
                         patient.active
                           ? "bg-emerald-600/15 text-emerald-600 border-emerald-600/30"
                           : "text-muted-foreground"
@@ -529,24 +529,21 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     </Badge>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                    <span className="font-mono">{formatPhoneBR(patient.phone)}</span>
-                    {age !== null && (
-                      <>
-                        <span>•</span>
-                        <span className="font-medium text-foreground/80">
-                          {age} anos ({formatDateBR(patient.birthDate)})
-                        </span>
-                      </>
-                    )}
+                  <div className="flex flex-col gap-0.5 text-xs text-muted-foreground mt-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-medium text-foreground">{formatPhoneBR(patient.phone)}</span>
+                      {age !== null && (
+                        <>
+                          <span className="text-muted-foreground/40">•</span>
+                          <span>{age} anos ({formatDateBR(patient.birthDate)})</span>
+                        </>
+                      )}
+                    </div>
                     {patient.createdAt && (
-                      <>
-                        <span>•</span>
-                        <span className="inline-flex items-center gap-1 text-primary font-medium">
-                          <Clock className="h-3 w-3" />
-                          <span>Cadastrado em: {formatDateTimeBR(patient.createdAt)}</span>
-                        </span>
-                      </>
+                      <div className="inline-flex items-center gap-1 text-primary text-[11px] font-medium pt-0.5">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>Cadastrado em: {formatDateTimeBR(patient.createdAt)}</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -714,24 +711,27 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             onValueChange={(val) => setActiveTab(val as any)}
             className="flex-1 flex flex-col overflow-hidden min-h-0"
           >
-            <div className="px-4 sm:px-6 py-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none shrink-0 touch-pan-x">
-              <TabsList className="bg-transparent h-9 p-0 flex gap-2 sm:gap-4 border-b-0 w-max shrink-0">
+            <div className="px-3 sm:px-6 py-2 border-b border-border bg-muted/20 overflow-x-auto scrollbar-none shrink-0 touch-pan-x">
+              <TabsList className="bg-transparent h-9 p-0 grid grid-cols-3 sm:flex sm:gap-4 border-b-0 w-full sm:w-max shrink-0 gap-1">
                 <TabsTrigger
                   value="overview"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap justify-center"
+                  aria-label="Visão Geral"
                 >
-                  <User className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                  <span>Visão Geral</span>
+                  <User className="h-3.5 w-3.5 sm:mr-1.5 text-primary shrink-0" />
+                  <span className="truncate">Visão Geral</span>
                 </TabsTrigger>
 
                 <TabsTrigger
                   value="classes"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap justify-center"
+                  aria-label="Turmas & Presenças"
                 >
-                  <Layers className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                  <span>Turmas & Presenças</span>
+                  <Layers className="h-3.5 w-3.5 sm:mr-1.5 text-primary shrink-0" />
+                  <span className="sm:hidden truncate">Turmas</span>
+                  <span className="hidden sm:inline">Turmas & Presenças</span>
                   {activeTurmas.length > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0 h-4">
+                    <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0 h-4 shrink-0 hidden sm:inline-flex">
                       {activeTurmas.length}
                     </Badge>
                   )}
@@ -739,10 +739,12 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
 
                 <TabsTrigger
                   value="complaint"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
+                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap justify-center"
+                  aria-label="Queixa principal"
                 >
-                  <FileText className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                  <span>Queixa principal</span>
+                  <FileText className="h-3.5 w-3.5 sm:mr-1.5 text-primary shrink-0" />
+                  <span className="sm:hidden truncate">Queixa</span>
+                  <span className="hidden sm:inline">Queixa principal</span>
                 </TabsTrigger>
               </TabsList>
             </div>

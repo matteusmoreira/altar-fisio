@@ -574,19 +574,21 @@ export const ClassesPage: React.FC = () => {
       {/* Tabs Principais */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
         <TabsList className="flex items-center overflow-x-auto scrollbar-none whitespace-nowrap w-full max-w-full justify-start p-1 h-auto gap-1 bg-muted/60 rounded-xl touch-pan-x">
-          <TabsTrigger value="turmas" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
+          <TabsTrigger value="turmas" className="text-xs gap-1.5 shrink-0 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg">
             <Layers className="h-3.5 w-3.5" />
             <span>Turmas ({classSchedules.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="relatorio" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
+          <TabsTrigger value="relatorio" className="text-xs gap-1.5 shrink-0 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg">
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Relatório & Faltas</span>
+            <span className="sm:hidden">Faltas</span>
+            <span className="hidden sm:inline">Relatório & Faltas</span>
           </TabsTrigger>
-          <TabsTrigger value="salas" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
+          <TabsTrigger value="salas" className="text-xs gap-1.5 shrink-0 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg">
             <DoorOpen className="h-3.5 w-3.5" />
-            <span>Salas & Ambientes ({rooms.length})</span>
+            <span className="sm:hidden">Salas ({rooms.length})</span>
+            <span className="hidden sm:inline">Salas & Ambientes ({rooms.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="reposicoes" className="text-xs gap-1.5 shrink-0 px-3 py-2 rounded-lg">
+          <TabsTrigger value="reposicoes" className="text-xs gap-1.5 shrink-0 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg">
             <Clock className="h-3.5 w-3.5" />
             <span>Reposições ({availableCredits.length})</span>
           </TabsTrigger>
@@ -597,48 +599,54 @@ export const ClassesPage: React.FC = () => {
         {/* ========================================================================= */}
         <TabsContent value="turmas" className="space-y-6">
           {/* Barra de Filtros */}
-          <Card className="p-4 border-border shadow-xs">
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-              <div className="relative flex-1">
+          <Card className="p-3.5 sm:p-4 border-border shadow-xs">
+            <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar por turma, sala, instrutor ou aluno matriculado..."
-                  className="pl-10 h-10 text-xs sm:text-sm"
+                  placeholder="Buscar por turma, sala, instrutor ou aluno..."
+                  className="pl-10 h-9 sm:h-10 text-xs sm:text-sm"
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-                <div className="w-full sm:w-48">
-                  <Select
-                    value={selectedSpecialtyFilter}
-                    onChange={(e) => setSelectedSpecialtyFilter(e.target.value)}
-                  >
-                    <option value="all">Todas Modalidades</option>
-                    {clinicalSpecialties.map((spec) => (
-                      <option key={spec.id} value={spec.id}>
-                        {spec.name}
-                      </option>
-                    ))}
-                  </Select>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                  <div className="w-full sm:w-44 lg:w-48">
+                    <Select
+                      value={selectedSpecialtyFilter}
+                      onChange={(e) => setSelectedSpecialtyFilter(e.target.value)}
+                      className="h-9 text-xs"
+                    >
+                      <option value="all">Todas Modalidades</option>
+                      {clinicalSpecialties.map((spec) => (
+                        <option key={spec.id} value={spec.id}>
+                          {spec.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="w-full sm:w-44 lg:w-48">
+                    <Select
+                      value={selectedRoomFilter}
+                      onChange={(e) => setSelectedRoomFilter(e.target.value)}
+                      className="h-9 text-xs"
+                    >
+                      <option value="all">Todas as Salas</option>
+                      {rooms.filter(r => r.isActive).map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="w-full sm:w-48">
-                  <Select
-                    value={selectedRoomFilter}
-                    onChange={(e) => setSelectedRoomFilter(e.target.value)}
-                  >
-                    <option value="all">Todas as Salas</option>
-                    {rooms.filter(r => r.isActive).map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </Select>
+                <div className="flex justify-end sm:justify-start">
+                  <ViewModeToggle viewMode={turmasViewMode} onChange={handleTurmasViewModeChange} />
                 </div>
-
-                <ViewModeToggle viewMode={turmasViewMode} onChange={handleTurmasViewModeChange} />
               </div>
             </div>
           </Card>
@@ -682,39 +690,39 @@ export const ClassesPage: React.FC = () => {
                         style={{ backgroundColor: schedule.roomColor || "#10b981" }}
                       />
 
-                      <CardHeader className="p-4 pb-2">
+                      <CardHeader className="p-3.5 sm:p-4 pb-2">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-bold text-sm text-foreground">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <h3 className="font-bold text-sm text-foreground truncate" title={schedule.title}>
                                 {schedule.title}
                               </h3>
                               <Badge
                                 variant={isFull ? "destructive" : "outline"}
-                                className={`text-[10px] ${!isFull ? "text-emerald-600 border-emerald-600/30 bg-emerald-500/10" : ""}`}
+                                className={`text-[10px] shrink-0 ${!isFull ? "text-emerald-600 border-emerald-600/30 bg-emerald-500/10" : ""}`}
                               >
                                 {isFull ? "Turma Lotada" : `${vacancies} vaga${vacancies > 1 ? "s" : ""} livre${vacancies > 1 ? "s" : ""}`}
                               </Badge>
                               {schedule.isRecurring && (
-                                <Badge variant="secondary" className="text-[9px] gap-1">
+                                <Badge variant="secondary" className="text-[9px] gap-1 shrink-0">
                                   <Repeat className="h-2.5 w-2.5" />
                                   <span>Recorrente</span>
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
                               <span>📅 {formatDateBR(schedule.date)}</span>
                               <span>⏰ {schedule.startTime} - {schedule.endTime}</span>
                             </p>
                           </div>
 
                           {/* Ações de Edição e Exclusão da Turma */}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5 shrink-0">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => handleOpenEditSchedule(schedule)}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                              className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted"
                               title="Editar turma"
                             >
                               <Edit2 className="h-3.5 w-3.5" />
@@ -726,7 +734,7 @@ export const ClassesPage: React.FC = () => {
                                 setDeletingSchedule(schedule)
                                 setDeleteSeriesOption(false)
                               }}
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                               title="Excluir turma"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -749,7 +757,7 @@ export const ClassesPage: React.FC = () => {
 
                       {/* Lista de Alunos Matriculados */}
                       <CardContent className="p-4 pt-1 space-y-2">
-                        <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 text-[11px] font-semibold text-muted-foreground pt-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px] font-semibold text-muted-foreground pt-1">
                           <span>Alunos Matriculados ({activeParticipants.length}/{schedule.maxCapacity}):</span>
                           <div className="flex items-center gap-2 flex-wrap">
                             {activeParticipants.length > 0 && (
@@ -1276,14 +1284,13 @@ export const ClassesPage: React.FC = () => {
                 <span className="font-semibold text-foreground block text-xs">
                   Dias da Semana da Recorrência
                 </span>
-                <div className="grid grid-cols-6 gap-2">
+                <div className="grid grid-cols-5 gap-2">
                   {[
                     { day: 1, label: "Seg" },
                     { day: 2, label: "Ter" },
                     { day: 3, label: "Qua" },
                     { day: 4, label: "Qui" },
                     { day: 5, label: "Sex" },
-                    { day: 6, label: "Sáb" },
                   ].map(({ day, label }) => {
                     const isSelected = recDaysOfWeek.includes(day)
                     return (

@@ -482,12 +482,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MOBILE TOP HEADER BAR (visible <= 768px)                                  */}
       {/* ========================================================================= */}
-      <header className="md:hidden sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <header className="md:hidden sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 -ml-1.5 rounded-lg text-foreground hover:bg-muted transition-colors"
+            className="p-1.5 -ml-1 rounded-lg text-foreground hover:bg-muted transition-colors shrink-0"
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
@@ -495,14 +495,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {hasValidLogo ? (
             <div
               onClick={() => handleNavClick("dashboard")}
-              className="flex items-center min-w-0 cursor-pointer"
+              className="flex items-center min-w-0 cursor-pointer overflow-hidden"
               title={theme.clinicName}
             >
               <img
                 src={theme.logoUrl}
                 alt={theme.clinicName}
                 onError={() => setLogoError(true)}
-                className="max-h-8 w-auto max-w-[140px] sm:max-w-[200px] object-contain object-left"
+                className="max-h-7 sm:max-h-8 w-auto max-w-[125px] sm:max-w-[200px] object-contain object-left"
               />
             </div>
           ) : (
@@ -522,10 +522,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Indicador de Hora Mobile */}
-          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-muted/60 border border-border text-[11px]">
-            <Clock className="h-3 w-3 text-primary" />
+          <div className="flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg bg-muted/60 border border-border text-[11px]">
+            <Clock className="h-3 w-3 text-primary shrink-0" />
             <span className="font-mono font-bold text-foreground">{currentTimeInfo.timeBR}</span>
           </div>
 
@@ -534,10 +534,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <button
               type="button"
               onClick={() => setProfileModalOpen(true)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-border bg-card text-xs font-semibold"
+              className="flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border border-border bg-card text-xs font-semibold hover:bg-muted/60 transition-colors"
+              title={`Perfil: ${user.name}`}
             >
-              <RoleIcon className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px]">{user.name.split(" ")[0]}</span>
+              <RoleIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-[11px] truncate max-w-[55px] sm:max-w-[80px]">{user.name.split(" ")[0]}</span>
             </button>
           )}
 
@@ -545,7 +546,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <button
             type="button"
             onClick={() => setThemeModalOpen(true)}
-            className="p-2 rounded-lg text-primary hover:bg-muted transition-colors"
+            className="p-1.5 rounded-lg text-primary hover:bg-muted transition-colors"
             title="Mudar cores"
           >
             <Palette className="h-4 w-4" />
@@ -555,7 +556,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <button
             type="button"
             onClick={toggleMode}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="Modo Claro/Escuro"
           >
             {theme.mode === "dark" ? (
@@ -752,65 +753,67 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* ========================================================================= */}
       {/* MOBILE BOTTOM NAVIGATION BAR (Fixed at bottom <= 768px)                   */}
       {/* ========================================================================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 pt-1 pb-[calc(0.375rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-1.5 pt-1 pb-[calc(0.375rem+env(safe-area-inset-bottom,0px))] flex items-center justify-between shadow-lg w-full max-w-full">
         <button
           onClick={() => onNavigate("schedule")}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center min-h-[44px] gap-0.5 px-1 py-1 rounded-xl transition-colors ${
             currentSection === "schedule" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Calendar className="h-5 w-5" />
-          <span className="text-[10px] leading-tight">Agenda</span>
+          <Calendar className="h-5 w-5 shrink-0" />
+          <span className="text-[10px] leading-tight truncate">Agenda</span>
         </button>
 
         <button
           onClick={() => onNavigate("classes")}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center min-h-[44px] gap-0.5 px-1 py-1 rounded-xl transition-colors ${
             currentSection === "classes" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Layers className="h-5 w-5" />
-          <span className="text-[10px] leading-tight">Turmas</span>
+          <Layers className="h-5 w-5 shrink-0" />
+          <span className="text-[10px] leading-tight truncate">Turmas</span>
         </button>
 
-        <button
-          onClick={() => onNavigate("dashboard")}
-          className="flex flex-col items-center justify-center -mt-4 bg-primary text-primary-foreground h-12 w-12 rounded-full shadow-lg border-2 border-background active:scale-95 transition-transform"
-          title="Início"
-        >
-          <Activity className="h-6 w-6" />
-        </button>
+        <div className="flex-1 min-w-0 flex items-center justify-center">
+          <button
+            onClick={() => onNavigate("dashboard")}
+            className="flex flex-col items-center justify-center -mt-4 bg-primary text-primary-foreground h-12 w-12 rounded-full shadow-lg border-2 border-background active:scale-95 transition-transform shrink-0"
+            title="Início"
+          >
+            <Activity className="h-6 w-6" />
+          </button>
+        </div>
 
         <button
           onClick={() => onNavigate("patients")}
-          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center min-h-[44px] gap-0.5 px-1 py-1 rounded-xl transition-colors ${
             currentSection === "patients" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Users className="h-5 w-5" />
-          <span className="text-[10px] leading-tight">Pacientes</span>
+          <Users className="h-5 w-5 shrink-0" />
+          <span className="text-[10px] leading-tight truncate">Pacientes</span>
         </button>
 
         {/* 5º Botão Contextual por Perfil */}
         {role === "admin" || role === "professional" ? (
           <button
             onClick={() => onNavigate("medical_reports")}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center min-h-[44px] gap-0.5 px-1 py-1 rounded-xl transition-colors ${
               currentSection === "medical_reports" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <FileCheck2 className="h-5 w-5" />
-            <span className="text-[10px] leading-tight">Laudos</span>
+            <FileCheck2 className="h-5 w-5 shrink-0" />
+            <span className="text-[10px] leading-tight truncate">Laudos</span>
           </button>
         ) : (
           <button
             onClick={() => onNavigate("packages")}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center min-h-[44px] gap-0.5 px-1 py-1 rounded-xl transition-colors ${
               currentSection === "packages" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <BookmarkCheck className="h-5 w-5" />
-            <span className="text-[10px] leading-tight">Pacotes</span>
+            <BookmarkCheck className="h-5 w-5 shrink-0" />
+            <span className="text-[10px] leading-tight truncate">Pacotes</span>
           </button>
         )}
       </nav>
