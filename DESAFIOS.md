@@ -1,5 +1,15 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Sincronização e Deploy do Backend Convex em Produção para Mutação saveChiefComplaint
+- **Ponto de Fricção**:
+  1. Ao introduzir a mutação `clinical:saveChiefComplaint` em `convex/clinical.ts` para persistência exclusiva da Queixa Principal, o código do frontend foi integrado e enviado, porém o deploy do Convex na nuvem de produção (`exuberant-guanaco-180`) não havia sido acionado (`npx convex deploy`).
+  2. Quando o usuário tentava digitar ou clicar em "Salvar Queixa" no modal do paciente, a chamada à API do Convex falhava com o erro `Could not find public function for 'clinical:saveChiefComplaint'`, disparando o estado de erro visual no botão (`[!] Erro ao salvar`).
+- **Mitigação / Regra**:
+  1. No Convex de Produção:
+     - Executado o deploy do Convex com alvo explícito na nuvem (`$env:CONVEX_DEPLOYMENT="exuberant-guanaco-180"; npx convex deploy`), registrando com sucesso a mutação `clinical:saveChiefComplaint` e atualizando os esquemas e vinculações de tipos.
+     - Validada a persistência da Queixa Principal em produção através de teste pontual na paciente Leticia Vitória R Alves com autenticação oficial de equipe, confirmando retorno e escrita bem-sucedidos em `clinicalRecords`.
+- **Validação**: 60 arquivos de teste e 319 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Build Vite de produção executado em 1.22s, linter sem erros e mutação verificada ativa e funcional no backend de produção `exuberant-guanaco-180`.
+
 ### [2026-09-19] Ficha do Paciente: Queixa Principal com Editor Rico, Impressão/PDF Timbrado Oficial e Fallback Defensivo do useTheme
 - **Ponto de Fricção**:
   1. Na Ficha do Paciente (`PatientProfileModal.tsx`), as abas "Prontuário & SOAP" e "Pacotes & Financeiro" poluiam a visualização clínica com recursos não prioritários para o atendimento do médico, e a aba "Documentos & Laudos" não atendia à necessidade de redação direta da Queixa Principal contínua com formatação rica.
