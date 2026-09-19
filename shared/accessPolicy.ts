@@ -119,6 +119,10 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "admin",
     "professional"
   ],
+  "clinical:saveChiefComplaint": [
+    "admin",
+    "professional"
+  ],
   "clinical:listEvolutions": [
     "admin",
     "professional"

@@ -544,3 +544,41 @@ export const deleteClinicalReport = mutation({
   },
 })
 
+// Salvar ou atualizar exclusivamente a Queixa Principal do paciente
+export const saveChiefComplaint = mutation({
+  args: {
+    sessionToken: v.string(),
+    patientId: v.id("patients"),
+    chiefComplaint: v.string(),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, patientId, chiefComplaint } = input
+    await requireStaff(ctx, sessionToken, ["admin", "professional"])
+
+    const existing = await ctx.db
+      .query("clinicalRecords")
+      .withIndex("by_patient", (q) => q.eq("patientId", patientId))
+      .first()
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        chiefComplaint,
+        updatedAt: Date.now(),
+      })
+      return existing._id
+    } else {
+      return await ctx.db.insert("clinicalRecords", {
+        patientId,
+        chiefComplaint,
+        hpi: "",
+        medicalHistory: "",
+        medications: "",
+        painScaleEva: 0,
+        painLocation: "",
+        clinicalGoals: "",
+        updatedAt: Date.now(),
+      })
+    }
+  },
+})
+

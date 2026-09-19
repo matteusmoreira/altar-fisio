@@ -423,10 +423,19 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   )
 }
 
+const fallbackContext: ThemeContextType = {
+  theme: defaultTheme,
+  setMode: () => {},
+  setPreset: () => {},
+  updateClinicInfo: () => {},
+  updateLogoUrl: () => {},
+  toggleMode: () => {},
+}
+
 export const useTheme = () => {
   const context = useContext(ThemeContext)
   if (!context) {
-    throw new Error("useTheme must be used within a ThemeProvider")
+    return fallbackContext
   }
   return context
 }

@@ -1,10 +1,13 @@
 import { useAuth } from '@/contexts/AuthContext'
+import { useTheme } from '@/contexts/ThemeContext'
 import { PortalAccessSettings } from './PortalAccessSettings'
-import { useQuery } from '@/lib/staffConvex'
+import { useQuery, useMutation } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
-import type { Patient, AttendanceStatus, Specialty } from "@/types"
+import type { Patient, Specialty } from "@/types"
+import { RichTextEditor } from "./RichTextEditor"
+import { downloadElementAsPdf } from "@/lib/pdfDownloader"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { formatDateBR, formatDateTimeBR, getTodayDateString } from "@/lib/dateUtils"
+import { formatDateBR, formatDateTimeBR, formatDateExtendedBR, getTodayDateString } from "@/lib/dateUtils"
 import { formatPhoneBR, cleanPhoneDigits } from "@/lib/utils"
 import { formatCep } from "../../../shared/patientIdentity"
 import { formatSpecialtyName, formatScheduleTitle, DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
@@ -24,33 +27,27 @@ import {
   User,
   Phone,
   Calendar,
-  MapPin,
   HeartPulse,
   Shield,
   FileText,
-  DollarSign,
   Layers,
   Clock,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Printer,
-  ExternalLink,
   Edit2,
-  ArrowRight,
-  Sparkles,
-  Activity,
-  Award,
-  CalendarDays,
-  ShieldAlert,
   ChevronRight,
   TrendingUp,
-  Image as ImageIcon,
-  CheckCheck,
-  Building,
   CalendarX,
   AlertTriangle,
   Loader2,
+  Download,
+  Save,
+  MapPin,
+  CalendarDays,
+  ArrowRight,
+  Building,
+  XCircle,
 } from "lucide-react"
 
 interface PatientProfileModalProps {
@@ -91,10 +88,19 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     removeParticipantFromSchedule,
   } = useClinicData()
 
-  const { role } = useAuth()
+  const { role, user } = useAuth()
+  const { theme } = useTheme()
+  const clinicSettings = useQuery(api.clinic.getSettings)
+  const clinicDisplayName = theme.clinicName || clinicSettings?.clinicName || "Clinica Dr Marcelo"
+  const clinicSubtitle = theme.clinicSubtitle || clinicSettings?.clinicSubtitle || "Clínica de Fisioterapia, Studio de Pilates & RPG"
+  const clinicLogoUrl = theme.logoUrl || clinicSettings?.logoUrl
+  const clinicPhone = theme.phone || clinicSettings?.phone || ""
+  const clinicAddress = theme.address || clinicSettings?.address || ""
+  const clinicCnpj = theme.cnpj || clinicSettings?.cnpj || ""
+
   const canEditPatient = role === 'admin'
   const [activeTab, setActiveTab] = useState<
-    "overview" | "classes" | "clinical" | "financial" | "reports"
+    "overview" | "classes" | "complaint"
   >("overview")
   const [attendanceFilter, setAttendanceFilter] = useState<
     "all" | "present" | "absence" | "replacement" | "scheduled"
@@ -103,6 +109,15 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     url: string
     title: string
   } | null>(null)
+
+  // Estado da Queixa Principal com Editor Rico
+  const [chiefComplaintText, setChiefComplaintText] = useState("")
+  const [isSavingComplaint, setIsSavingComplaint] = useState(false)
+  const [complaintSaveStatus, setComplaintSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved")
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [printTarget, setPrintTarget] = useState<"patient-sheet" | "chief-complaint">("patient-sheet")
+  const complaintDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const saveChiefComplaintMutation = useMutation(api.clinical.saveChiefComplaint)
 
   // Estado para desmarcação de agendamento do paciente
   const [cancelTarget, setCancelTarget] = useState<{
@@ -183,8 +198,9 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   // Agendamentos e Presenças do Paciente (com títulos e modalidades higienizados sem underscores)
   const patientSchedules = useMemo(() => {
     if (!patient) return []
-    return (storedPatientSchedules || [])
-      .filter((s) => s.participants.some((p) => p.patientId === patient.id))
+    const schedulesList = Array.isArray(storedPatientSchedules) ? storedPatientSchedules : []
+    return schedulesList
+      .filter((s) => s && Array.isArray(s.participants) && s.participants.some((p) => p.patientId === patient.id))
       .map((s) => {
         const participant = s.participants.find((p) => p.patientId === patient.id)!
         const cleanTitle = formatScheduleTitle(s.title, {
@@ -372,7 +388,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   const clinicalRecord = useQuery(api.clinical.getClinicalRecord, patient && isOpen ? { patientId: patient.id as any } : 'skip')
 
   const storedEvolutions = useQuery(api.clinical.listEvolutions, patient && isOpen ? { patientId: patient.id as any } : 'skip')
-  const evolutions = (storedEvolutions || []).map(e => ({ ...e, id: e._id, professionalName: e.signedProfessionalName, patientName: patient?.name || '' }))
+  const evolutions = (Array.isArray(storedEvolutions) ? storedEvolutions : []).map(e => ({ ...e, id: e._id, professionalName: e.signedProfessionalName, patientName: patient?.name || '' }))
 
   // Último nível de dor registrado
   const currentPainEva = useMemo(() => {
@@ -385,21 +401,95 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     return null
   }, [evolutions, clinicalRecord])
 
-  // Transações Financeiras do Paciente
-  const patientTransactions = useMemo(() => {
-    if (!patient) return []
-    return transactions
-      .filter((t) => t.patientId === patient.id)
-      .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
-  }, [transactions, patient])
+  const lastLoadedPatientIdRef = useRef<string | null>(null)
 
-  // Documentos & Laudos
-  const patientReports = useMemo(() => {
-    if (!patient) return []
-    return clinicalReports
-      .filter((cr) => cr.patientId === patient.id)
-      .sort((a, b) => b.date.localeCompare(a.date))
-  }, [clinicalReports, patient])
+  // Sincronização e Gerenciamento da Queixa Principal
+  useEffect(() => {
+    if (!patient) return
+    const isNewPatient = lastLoadedPatientIdRef.current !== patient.id
+    if (isNewPatient) {
+      lastLoadedPatientIdRef.current = patient.id
+      setChiefComplaintText(clinicalRecord?.chiefComplaint || "")
+      setComplaintSaveStatus("saved")
+      return
+    }
+
+    // Se é o mesmo paciente e não há alterações locais pendentes, sincroniza com o servidor
+    if (complaintSaveStatus !== "unsaved" && clinicalRecord?.chiefComplaint !== undefined) {
+      if (chiefComplaintText !== clinicalRecord.chiefComplaint) {
+        setChiefComplaintText(clinicalRecord.chiefComplaint || "")
+      }
+    }
+  }, [patient?.id, clinicalRecord?.chiefComplaint, complaintSaveStatus, chiefComplaintText])
+
+  useEffect(() => {
+    return () => {
+      if (complaintDebounceRef.current) {
+        clearTimeout(complaintDebounceRef.current)
+      }
+    }
+  }, [])
+
+  const handleSaveComplaint = async (textToSave?: string) => {
+    if (!patient) return
+    if (complaintDebounceRef.current) {
+      clearTimeout(complaintDebounceRef.current)
+      complaintDebounceRef.current = null
+    }
+    const content = textToSave !== undefined ? textToSave : chiefComplaintText
+    setIsSavingComplaint(true)
+    setComplaintSaveStatus("saving")
+    try {
+      await saveChiefComplaintMutation({
+        patientId: patient.id as any,
+        chiefComplaint: content,
+      })
+      setComplaintSaveStatus("saved")
+    } catch (err) {
+      console.error("Erro ao salvar queixa principal:", err)
+      setComplaintSaveStatus("error")
+    } finally {
+      setIsSavingComplaint(false)
+    }
+  }
+
+  const handleComplaintChange = (html: string) => {
+    setChiefComplaintText(html)
+    setComplaintSaveStatus("unsaved")
+    if (complaintDebounceRef.current) clearTimeout(complaintDebounceRef.current)
+    complaintDebounceRef.current = setTimeout(() => {
+      handleSaveComplaint(html)
+    }, 1500)
+  }
+
+  const handlePrint = () => {
+    setPrintTarget("patient-sheet")
+    setTimeout(() => window.print(), 50)
+  }
+
+  const handlePrintComplaint = async () => {
+    await handleSaveComplaint()
+    setPrintTarget("chief-complaint")
+    setTimeout(() => window.print(), 50)
+  }
+
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById("printable-chief-complaint")
+    if (!el || !patient) return
+    setIsDownloadingPdf(true)
+    try {
+      await handleSaveComplaint()
+      const cleanName = patient.name.replace(/\s+/g, "_")
+      await downloadElementAsPdf(el, {
+        fileName: `Queixa_Principal_${cleanName}.pdf`,
+      })
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err)
+      alert("Não foi possível gerar o arquivo PDF. Tente novamente.")
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   // Agendamentos filtrados
   const filteredSchedules = useMemo(() => {
@@ -428,10 +518,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     `Olá, ${patient.name}! Entramos em contato da Clinica Dr Marcelo.`
   )}`
 
-  const handlePrint = () => {
-    window.print()
-  }
-
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -459,18 +545,6 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     >
                       {patient.active ? "Ativo" : "Inativo"}
                     </Badge>
-                    {clinicalRecord ? (
-                      <Badge
-                        variant="outline"
-                        className="text-[11px] text-indigo-500 border-indigo-500/30 bg-indigo-500/10"
-                      >
-                        Prontuário Ativo
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                        Sem Prontuário
-                      </Badge>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
@@ -666,37 +740,11 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                 </TabsTrigger>
 
                 <TabsTrigger
-                  value="clinical"
+                  value="complaint"
                   className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                 >
-                  <HeartPulse className="h-3.5 w-3.5 mr-1.5 text-rose-500" />
-                  <span>Prontuário & SOAP</span>
-                  {evolutions.length > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0 h-4">
-                      {evolutions.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-
-                <TabsTrigger
-                  value="financial"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
-                >
-                  <DollarSign className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
-                  <span>Pacotes & Financeiro</span>
-                </TabsTrigger>
-
-                <TabsTrigger
-                  value="reports"
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-2xs rounded-lg px-3 py-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
-                >
-                  <FileText className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
-                  <span>Documentos & Laudos</span>
-                  {patientReports.length > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0 h-4">
-                      {patientReports.length}
-                    </Badge>
-                  )}
+                  <FileText className="h-3.5 w-3.5 mr-1.5 text-primary" />
+                  <span>Queixa principal</span>
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -1259,505 +1307,105 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
               </TabsContent>
 
               {/* ========================================================= */}
-              {/* ABA 3: PRONTUÁRIO CLÍNICO & EVOLUÇÕES SOAP                */}
+              {/* ABA 3: QUEIXA PRINCIPAL COM EDITOR RICO & EMISSÃO PDF     */}
               {/* ========================================================= */}
-              <TabsContent value="clinical" className="m-0 space-y-6">
-                {/* Card de Anamnese e Queixa Principal */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <HeartPulse className="h-4 w-4 text-rose-500" />
-                      <span>Anamnese & Avaliação Biomecânica</span>
-                    </h3>
-                    {onNavigateToClinical && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          onClose()
-                          onNavigateToClinical(patient.id)
-                        }}
-                        className="text-xs gap-1.5 h-7 shadow-2xs"
-                      >
-                        <ExternalLink className="h-3 w-3 text-primary" />
-                        <span>Abrir no Módulo de Prontuário</span>
-                      </Button>
-                    )}
+              <TabsContent value="complaint" className="m-0 space-y-4">
+                {/* Barra de Ações Rápidas, Status e Emissão */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-muted/30 rounded-xl border border-border/70 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">Queixa Principal & Registro Clínico</h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Texto 100% livre com editor rico, sincronização instantânea e emissão timbrada.
+                      </p>
+                    </div>
                   </div>
 
-                  {!clinicalRecord ? (
-                    <Card className="p-6 text-center border-dashed border-border bg-muted/10">
-                      <HeartPulse className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-foreground">
-                        Nenhum prontuário registrado para este paciente
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Acesse a aba Prontuários para cadastrar a anamnese inicial e metas terapêuticas.
-                      </p>
-                    </Card>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Queixa Principal & HMA */}
-                      <Card className="border-border shadow-xs">
-                        <CardHeader className="p-4 pb-2 border-b border-border/60">
-                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            Queixa Principal & História da Moléstia
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-3 text-xs">
-                          <div>
-                            <span className="text-muted-foreground text-[11px] block">Queixa Principal</span>
-                            <p className="font-semibold text-foreground mt-0.5 bg-rose-500/5 p-2 rounded-lg border border-rose-500/20 text-sm">
-                              {clinicalRecord.chiefComplaint || "Não informada"}
-                            </p>
-                          </div>
-
-                          <div>
-                            <span className="text-muted-foreground text-[11px] block">História da Moléstia Atual (HMA)</span>
-                            <p className="text-foreground/90 mt-0.5 whitespace-pre-wrap bg-muted/30 p-2.5 rounded-lg border border-border/50">
-                              {clinicalRecord.hpi || "Sem histórico detalhado informado."}
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                            <div>
-                              <span className="text-muted-foreground text-[11px] block">Local da Dor</span>
-                              <span className="font-medium text-foreground">
-                                {clinicalRecord.painLocation || "Não especificado"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground text-[11px] block">Escala EVA Inicial</span>
-                              <Badge variant="outline" className="font-bold text-rose-600 border-rose-600/30">
-                                {clinicalRecord.painScaleEva}/10
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Histórico Pregresso & Metas */}
-                      <Card className="border-border shadow-xs">
-                        <CardHeader className="p-4 pb-2 border-b border-border/60">
-                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            Metas, Medicações & Antecedentes
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-3 text-xs">
-                          <div>
-                            <span className="text-muted-foreground text-[11px] block">Metas Terapêuticas</span>
-                            <p className="text-foreground/90 font-medium mt-0.5 bg-emerald-600/5 p-2.5 rounded-lg border border-emerald-600/20">
-                              {clinicalRecord.clinicalGoals || "Nenhuma meta definida"}
-                            </p>
-                          </div>
-
-                          <div>
-                            <span className="text-muted-foreground text-[11px] block">Medicações em Uso</span>
-                            <p className="text-foreground mt-0.5">
-                              {clinicalRecord.medications || "Nenhuma medicação relatada"}
-                            </p>
-                          </div>
-
-                          <div>
-                            <span className="text-muted-foreground text-[11px] block">Histórico Patológico Pregresso</span>
-                            <p className="text-foreground mt-0.5">
-                              {clinicalRecord.medicalHistory || "Nenhuma comorbidade relatada"}
-                            </p>
-                          </div>
-
-                          {clinicalRecord.posturalNotes && (
-                            <div className="pt-2 border-t border-border/50">
-                              <span className="text-muted-foreground text-[11px] block">Notas Posturais</span>
-                              <p className="text-foreground/85 text-[11px] mt-0.5">
-                                {clinicalRecord.posturalNotes}
-                              </p>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
+                  <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
+                    {/* Indicador de Status do Salvamento */}
+                    <div className="text-[11px] font-medium mr-1 flex items-center gap-1.5">
+                      {complaintSaveStatus === "saving" ? (
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                          <span>Salvando...</span>
+                        </span>
+                      ) : complaintSaveStatus === "saved" ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span>Salvo</span>
+                        </span>
+                      ) : complaintSaveStatus === "unsaved" ? (
+                        <span className="text-amber-500 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>Alterações pendentes</span>
+                        </span>
+                      ) : (
+                        <span className="text-rose-500 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Erro ao salvar</span>
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Fotos Posturais Padronizadas (4 Vistas) */}
-                {clinicalRecord &&
-                  (clinicalRecord.anteriorPhotoUrl ||
-                    clinicalRecord.posteriorPhotoUrl ||
-                    clinicalRecord.lateralRightPhotoUrl ||
-                    clinicalRecord.lateralLeftPhotoUrl ||
-                    clinicalRecord.lateralPhotoUrl) && (
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <ImageIcon className="h-4 w-4 text-indigo-500" />
-                        <span>Avaliação Postural Padronizada</span>
-                      </h3>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSaveComplaint()}
+                      disabled={isSavingComplaint}
+                      className="h-8 text-xs gap-1.5 shadow-2xs font-medium"
+                      title="Salvar alterações no prontuário agora"
+                    >
+                      <Save className="h-3.5 w-3.5 text-primary" />
+                      <span>Salvar Queixa</span>
+                    </Button>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {[
-                          {
-                            url: clinicalRecord.anteriorPhotoUrl,
-                            title: "Vista Anterior",
-                          },
-                          {
-                            url: clinicalRecord.posteriorPhotoUrl,
-                            title: "Vista Posterior",
-                          },
-                          {
-                            url:
-                              clinicalRecord.lateralRightPhotoUrl ||
-                              clinicalRecord.lateralPhotoUrl,
-                            title: "Lateral Direita",
-                          },
-                          {
-                            url: clinicalRecord.lateralLeftPhotoUrl,
-                            title: "Lateral Esquerda",
-                          },
-                        ].map((photo, idx) =>
-                          photo.url ? (
-                            <div
-                              key={idx}
-                              onClick={() => setSelectedPhotoZoom({ url: photo.url!, title: photo.title })}
-                              className="group cursor-pointer rounded-xl overflow-hidden border border-border bg-muted/20 relative shadow-2xs hover:border-primary/50 transition-all"
-                            >
-                              <div className="aspect-[3/4] overflow-hidden bg-black/5">
-                                <img
-                                  src={photo.url}
-                                  alt={photo.title}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              </div>
-                              <div className="p-2 text-center bg-background/90 text-xs font-semibold text-foreground border-t border-border">
-                                {photo.title}
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              key={idx}
-                              className="rounded-xl border border-dashed border-border/70 aspect-[3/4] flex flex-col items-center justify-center p-3 text-center bg-muted/5 text-muted-foreground"
-                            >
-                              <ImageIcon className="h-6 w-6 opacity-30 mb-1" />
-                              <span className="text-[11px] font-medium">{photo.title}</span>
-                              <span className="text-[9px] opacity-70">Não anexada</span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handlePrintComplaint}
+                      className="h-8 text-xs gap-1.5 shadow-2xs font-medium"
+                      title="Imprimir Queixa Principal em folha A4 oficial"
+                    >
+                      <Printer className="h-3.5 w-3.5 text-primary" />
+                      <span>Imprimir</span>
+                    </Button>
 
-                {/* Linha do Tempo de Evoluções SOAP do CREFITO */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-emerald-600" />
-                      <span>Evoluções Clínicas Diárias (SOAP — CREFITO)</span>
-                    </h3>
-                    <Badge variant="outline" className="text-xs">
-                      {evolutions.length} evolução(ões)
-                    </Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      onClick={handleDownloadPdf}
+                      disabled={isDownloadingPdf}
+                      className="h-8 text-xs gap-1.5 shadow-2xs font-semibold px-3"
+                      title="Baixar arquivo PDF montado com cabeçalho e rodapé da clínica"
+                    >
+                      {isDownloadingPdf ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Gerando PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Baixar PDF</span>
+                        </>
+                      )}
+                    </Button>
                   </div>
-
-                  {evolutions.length === 0 ? (
-                    <Card className="p-6 text-center border-dashed border-border bg-muted/10">
-                      <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-foreground">
-                        Nenhuma evolução registrada para este paciente
-                      </p>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {evolutions.map((evo) => (
-                        <Card key={evo.id} className="border-border shadow-xs p-4 space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="default" className="text-xs font-bold">
-                                {formatDateBR(evo.date)}
-                              </Badge>
-                              {evo.techniqueCategory && (
-                                <Badge variant="outline" className="text-xs font-medium">
-                                  {evo.techniqueCategory}
-                                </Badge>
-                              )}
-                              {evo.painScaleAfter !== undefined && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[11px] font-bold text-rose-500 border-rose-500/30"
-                                >
-                                  Dor pós: {evo.painScaleAfter}/10
-                                </Badge>
-                              )}
-                            </div>
-
-                            <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-                              <span>
-                                Fisioterapeuta: <strong>{evo.professionalName}</strong> ({evo.crefito})
-                              </span>
-                              {evo.isLocked && (
-                                <span className="text-emerald-600 flex items-center gap-1 font-semibold" title="Assinatura auditável inalterável">
-                                  <CheckCheck className="h-3.5 w-3.5" />
-                                  <span>Assinado</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Grid do SOAP */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                            <div className="bg-muted/20 p-2.5 rounded-xl border border-border/50">
-                              <span className="font-bold text-primary block mb-1">
-                                [S] Subjetivo:
-                              </span>
-                              <p className="text-foreground/90 whitespace-pre-wrap">
-                                {evo.subjective || "Sem queixas relatadas."}
-                              </p>
-                            </div>
-
-                            <div className="bg-muted/20 p-2.5 rounded-xl border border-border/50">
-                              <span className="font-bold text-emerald-600 dark:text-emerald-400 block mb-1">
-                                [O] Objetivo:
-                              </span>
-                              <p className="text-foreground/90 whitespace-pre-wrap">
-                                {evo.objective || "Exercícios e manobras executadas."}
-                              </p>
-                            </div>
-
-                            <div className="bg-muted/20 p-2.5 rounded-xl border border-border/50">
-                              <span className="font-bold text-indigo-600 dark:text-indigo-400 block mb-1">
-                                [A] Avaliação:
-                              </span>
-                              <p className="text-foreground/90 whitespace-pre-wrap">
-                                {evo.assessment || "Resposta ao tratamento."}
-                              </p>
-                            </div>
-
-                            <div className="bg-muted/20 p-2.5 rounded-xl border border-border/50">
-                              <span className="font-bold text-amber-600 dark:text-amber-400 block mb-1">
-                                [P] Plano:
-                              </span>
-                              <p className="text-foreground/90 whitespace-pre-wrap">
-                                {evo.plan || "Planejamento para a próxima sessão."}
-                              </p>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              {/* ========================================================= */}
-              {/* ABA 4: PACOTES, PLANOS & EXTRATO FINANCEIRO               */}
-              {/* ========================================================= */}
-              <TabsContent value="financial" className="m-0 space-y-6">
-                {/* Pacotes e Planos Contratados */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Award className="h-4 w-4 text-indigo-500" />
-                    <span>Planos & Pacotes Adquiridos</span>
-                  </h3>
-
-                  {patientPackagesList.length === 0 ? (
-                    <Card className="p-6 text-center border-dashed border-border bg-muted/10">
-                      <Award className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-foreground">
-                        Nenhum pacote contratado no histórico
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        O paciente opera com sessões avulsas ou ainda não possui plano vinculado.
-                      </p>
-                    </Card>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {patientPackagesList.map((pkg) => (
-                        <Card key={pkg.id} className="border-border shadow-xs p-4 space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="font-bold text-sm text-foreground">
-                                {pkg.packageName}
-                              </h4>
-                              <span className="text-[11px] text-muted-foreground">
-                                Vigência: {formatDateBR(pkg.startDate)} até {formatDateBR(pkg.expiryDate)}
-                              </span>
-                            </div>
-                            <Badge
-                              variant={pkg.status === "active" ? "default" : "outline"}
-                              className={`text-[10px] ${
-                                pkg.status === "active"
-                                  ? "bg-emerald-600/15 text-emerald-600 border-emerald-600/30"
-                                  : pkg.status === "completed"
-                                  ? "bg-muted text-muted-foreground"
-                                  : "text-destructive border-destructive/30"
-                              }`}
-                            >
-                              {pkg.status === "active"
-                                ? "Vigente"
-                                : pkg.status === "completed"
-                                ? "Concluído"
-                                : "Expirado"}
-                            </Badge>
-                          </div>
-
-                          {/* Barra de Progresso de Sessões */}
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-xs">
-                              <span className="font-semibold text-foreground">
-                                {pkg.remainingSessions} sessões restantes
-                              </span>
-                              <span className="text-muted-foreground text-[11px]">
-                                {pkg.usedSessions} de {pkg.totalSessions} utilizadas ({pkg.progressPercent}%)
-                              </span>
-                            </div>
-
-                            <div className="w-full bg-muted/60 h-2.5 rounded-full overflow-hidden border border-border/50">
-                              <div
-                                className={`h-full transition-all rounded-full ${
-                                  pkg.remainingSessions <= 2
-                                    ? "bg-amber-500"
-                                    : "bg-emerald-600 dark:bg-emerald-500"
-                                }`}
-                                style={{ width: `${pkg.progressPercent}%` }}
-                              />
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
-                {/* Extrato Financeiro */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-emerald-600" />
-                    <span>Extrato Financeiro & Mensalidades</span>
-                  </h3>
-
-                  {patientTransactions.length === 0 ? (
-                    <Card className="p-6 text-center border-dashed border-border bg-muted/10">
-                      <DollarSign className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-foreground">
-                        Nenhum registro financeiro vinculado
-                      </p>
-                    </Card>
-                  ) : (
-                    <div className="border border-border rounded-xl overflow-hidden shadow-xs">
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <table className="w-full text-xs text-left">
-                          <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold uppercase text-[10px] sticky top-0">
-                            <tr>
-                              <th className="p-2.5 pl-3.5">Vencimento</th>
-                              <th className="p-2.5">Descrição & Categoria</th>
-                              <th className="p-2.5">Forma</th>
-                              <th className="p-2.5">Valor</th>
-                              <th className="p-2.5 text-right pr-3.5">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {patientTransactions.map((tx) => (
-                              <tr key={tx.id} className="hover:bg-muted/20 transition-colors">
-                                <td className="p-2.5 pl-3.5 font-medium text-foreground whitespace-nowrap">
-                                  {formatDateBR(tx.dueDate)}
-                                </td>
-                                <td className="p-2.5">
-                                  <div className="font-semibold text-foreground">
-                                    {tx.description}
-                                  </div>
-                                  <div className="text-[10px] text-muted-foreground">
-                                    {tx.category}
-                                  </div>
-                                </td>
-                                <td className="p-2.5 text-muted-foreground capitalize">
-                                  {tx.paymentMethod ? tx.paymentMethod.replace("_", " ") : "—"}
-                                </td>
-                                <td className="p-2.5 font-bold text-foreground whitespace-nowrap">
-                                  R$ {tx.amount.toFixed(2)}
-                                </td>
-                                <td className="p-2.5 text-right pr-3.5 whitespace-nowrap">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[10px] ${
-                                      tx.status === "paid"
-                                        ? "bg-emerald-600/10 text-emerald-600 border-emerald-600/30 font-semibold"
-                                        : tx.status === "pending"
-                                        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {tx.status === "paid"
-                                      ? "Pago"
-                                      : tx.status === "pending"
-                                      ? "Pendente"
-                                      : "Cancelado"}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              {/* ========================================================= */}
-              {/* ABA 5: LAUDOS, DOCUMENTOS & TERMOS                       */}
-              {/* ========================================================= */}
-              <TabsContent value="reports" className="m-0 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-indigo-500" />
-                    <span>Laudos Clínicos, Atestados & Recibos Emitidos</span>
-                  </h3>
-                </div>
-
-                {patientReports.length === 0 ? (
-                  <Card className="p-8 text-center border-dashed border-border bg-muted/10">
-                    <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-foreground">
-                      Nenhum laudo ou atestado emitido para este paciente
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Os documentos oficiais emitidos com assinatura e rastreabilidade COFFITO aparecerão aqui.
-                    </p>
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {patientReports.map((report) => (
-                      <Card key={report.id} className="border-border shadow-xs p-4 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="font-bold text-xs text-foreground">
-                              {report.title}
-                            </h4>
-                            <span className="text-[11px] text-muted-foreground">
-                              Data: {formatDateBR(report.date)}
-                            </span>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] capitalize">
-                            {report.type === "report"
-                              ? "Laudo"
-                              : report.type === "certificate"
-                              ? "Atestado"
-                              : report.type === "receipt"
-                              ? "Recibo"
-                              : "TCLE"}
-                          </Badge>
-                        </div>
-
-                        <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between">
-                          <span>
-                            Resp: <strong>{report.signedProfessionalName}</strong>
-                          </span>
-                          <span className="font-mono text-[10px]">
-                            Hash: {report.documentHash.slice(0, 8)}...
-                          </span>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+                {/* Editor Rico Interativo */}
+                <RichTextEditor
+                  value={chiefComplaintText}
+                  onChange={handleComplaintChange}
+                  placeholder="Descreva a queixa principal do paciente, histórico clínico, queixas álgicas, metas ou conduta terapêutica..."
+                  minHeight="380px"
+                />
               </TabsContent>
             </div>
           </Tabs>
@@ -1875,8 +1523,13 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         </div>
       )}
 
-      {/* Documento Oculto para Impressão Nativa A4 */}
-      <div id="printable-patient-sheet" className="hidden print:block font-sans text-black p-6">
+      {/* Documento Oculto para Impressão Nativa da Ficha Cadastral A4 */}
+      <div
+        id="printable-patient-sheet"
+        className={`${
+          printTarget === "patient-sheet" ? "hidden print:block" : "hidden"
+        } font-sans text-black p-6`}
+      >
         <div className="border-b-2 border-black pb-4 mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-wide">
@@ -1960,6 +1613,123 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
           </div>
           <div className="text-right">
             Fisioterapeuta Responsável Técnico • CREFITO
+          </div>
+        </div>
+      </div>
+
+      {/* Documento Timbrado Oficial para Impressão e Geração de PDF da Queixa Principal */}
+      <div
+        id="printable-chief-complaint"
+        style={{ width: "794px" }}
+        className={`${
+          printTarget === "chief-complaint" ? "print:block" : "print:hidden"
+        } fixed -left-[99999px] top-0 bg-white text-black p-10 font-sans z-[-100] print:static print:left-auto print:p-8 print:w-full`}
+      >
+        {/* Cabeçalho Oficial Timbrado da Clínica */}
+        <div className="border-b-2 border-primary/40 pb-4 mb-5 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold print:border print:border-black overflow-hidden shrink-0">
+              {clinicLogoUrl ? (
+                <img
+                  src={clinicLogoUrl}
+                  alt={clinicDisplayName}
+                  crossOrigin="anonymous"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <HeartPulse className="h-7 w-7 text-primary print:text-black" />
+              )}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold uppercase tracking-tight text-black">
+                {clinicDisplayName}
+              </h1>
+              <p className="text-[11px] text-gray-600 tracking-wider uppercase font-medium">
+                {clinicSubtitle}
+              </p>
+              <p className="text-[10px] text-gray-600 mt-0.5">
+                {user?.name || "Dr. Marcelo"} {user?.crefito ? `• ${user.crefito}` : "• CREFITO-3 / Fisioterapeuta Responsável"}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right text-[10px] text-gray-600 space-y-0.5">
+            {clinicCnpj && <p className="font-semibold text-black">CNPJ: {clinicCnpj}</p>}
+            {clinicAddress ? <p>{clinicAddress}</p> : <p>Endereço não informado</p>}
+            {clinicPhone && <p>Tel/WhatsApp: {clinicPhone}</p>}
+          </div>
+        </div>
+
+        {/* Box de Identificação do Paciente */}
+        <div className="bg-gray-50 border border-gray-300 rounded-lg p-3.5 mb-5 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <div>
+              <span className="text-gray-500 font-semibold text-[10px] block uppercase">Paciente</span>
+              <span className="font-bold text-sm text-black">{patient.name}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-semibold text-[10px] block uppercase">Telefone / WhatsApp</span>
+              <span className="font-medium text-black">{formatPhoneBR(patient.phone)}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-semibold text-[10px] block uppercase">Nascimento / Idade</span>
+              <span className="font-medium text-black">
+                {formatDateBR(patient.birthDate)} {age !== null && `(${age} anos)`}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-semibold text-[10px] block uppercase">Convênio / Modalidade</span>
+              <span className="font-medium text-black">{patient.healthInsurance || "Particular"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Título Central da Seção */}
+        <div className="text-center my-4">
+          <h2 className="text-base font-extrabold uppercase tracking-wide border-b border-gray-400 pb-1.5 inline-block px-8">
+            Queixa Principal & Avaliação Clínica
+          </h2>
+          <p className="text-[10px] text-gray-500 mt-1">
+            Emitido em {formatDateBR(getTodayDateString())} • Registro Oficial da Clínica
+          </p>
+        </div>
+
+        {/* Conteúdo Rico Formatado da Queixa Principal */}
+        <div
+          className="text-xs leading-relaxed text-gray-900 my-6 min-h-[220px]
+            [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-2 [&_h1]:mt-3
+            [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mb-2 [&_h2]:mt-2.5
+            [&_p]:mb-2.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3
+            [&_li]:mb-1 [&_strong]:font-bold [&_em]:italic [&_u]:underline
+            [&_hr]:my-3 [&_hr]:border-gray-300"
+          dangerouslySetInnerHTML={{
+            __html:
+              chiefComplaintText ||
+              "<p class='italic text-gray-500'>Nenhuma queixa principal registrada para este paciente.</p>",
+          }}
+        />
+
+        {/* Rodapé Oficial com Praça, Data e Assinatura */}
+        <div className="mt-14 pt-6 border-t border-gray-400 flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-gray-700">
+          <div>
+            <p className="font-medium">
+              São Paulo, {formatDateExtendedBR(getTodayDateString())}.
+            </p>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Documento gerado e emitido via Sistema {clinicDisplayName}.
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="border-t border-black w-60 pt-1">
+              <p className="font-bold text-black text-xs">
+                {user?.name || "Dr. Marcelo"}
+              </p>
+              <p className="text-[10px] text-gray-600">
+                {user?.crefito || "Fisioterapeuta Responsável Técnico • CREFITO"}
+              </p>
+              <p className="text-[9px] text-gray-500">{clinicDisplayName}</p>
+            </div>
           </div>
         </div>
       </div>

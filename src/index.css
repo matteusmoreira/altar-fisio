@@ -140,11 +140,17 @@
   }
 
   #printable-document,
-  #printable-document * {
+  #printable-document *,
+  #printable-patient-sheet,
+  #printable-patient-sheet *,
+  #printable-chief-complaint,
+  #printable-chief-complaint * {
     visibility: visible;
   }
 
-  #printable-document {
+  #printable-document,
+  #printable-patient-sheet,
+  #printable-chief-complaint {
     position: absolute;
     left: 0;
     top: 0;
