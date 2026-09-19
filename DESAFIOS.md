@@ -7,12 +7,13 @@
   3. No arquivo de testes `tests/medical-reports-page.test.tsx`, a remoção da anotação inicial `// @vitest-environment jsdom` causou falha de execução (`window is not defined`), e múltiplos `render()` sem `afterEach(cleanup)` geraram nós DOM duplicados acumulados no body.
   4. Para impressão física vetorial via `window.print()`, a folha `#printable-report-sheet` precisa ser explicitamente declarada nas regras globais `@media print` de `src/index.css`, garantindo que menus laterais, botões de ação e cabeçalhos do navegador fiquem invisíveis na impressão e apenas o documento limpo seja impresso ou salvo em PDF.
   5. Durante refatoração em `DrMarceloSignature.tsx`, uma substituição de ternário deixou uma tag de fechamento órfã `)}` que causou erro `TS1381`. Deve-se sempre manter a estrutura condicional estrita `showStamp ? (...) : (...)`.
-  6. Para fidelidade absoluta aos blocos físicos fotografados, os Laudos requerem moldura retangular fina perimetral (`border-[1.5px] border-gray-900 absolute inset-3 sm:inset-4`), título centralizado sublinhado `LAUDO`, marca d'água translúcida circular estilizada ("Clínica de Fisioterapia & Ortopedia RPG Dr. Marcelo") e a Declaração de Comparecimento requer moldura arredondada (`rounded-3xl`) com emblema preto circular no topo.
+  6. Para fidelidade absoluta aos blocos físicos fotografados, os Laudos requerem moldura retangular fina perimetral (`border-[1.5px] border-gray-900 absolute inset-3 sm:inset-4`), marca d'água translúcida circular estilizada ("Clínica de Fisioterapia & Ortopedia RPG Dr. Marcelo") e a Declaração de Comparecimento requer moldura arredondada (`rounded-3xl`) com emblema preto circular no topo.
+  7. No cabeçalho timbrado do Laudo, a logo da clínica posicionada com `absolute top-0 right-0` colidia com o título `LAUDO` quando a logo possuía proporção horizontal larga. A hierarquia visual correta e limpa consiste na logo da clínica centralizada no topo com respiro (`pt-3 sm:pt-5`), seguida pelo título `LAUDO` centralizado logo abaixo com traço sublinhado.
 - **Mitigação / Regra**:
   1. No `src/components/reports/`:
      - Criados os 5 modelos oficiais físicos mais modelo livre em `reportTemplates.ts`.
      - Criado `DrMarceloSignature.tsx` com rubrica vetorial em tom azul caneta realista (`#1e40af`), carimbo oficial `Dr. Marcelo S. Santos — CREFITO 2: 40008-F` e endereço institucional.
-     - Criada folha timbrada `PrintableReportSheet.tsx` com suporte a formatos A4 e A5, moldura retangular para laudos e arredondada para declaração de comparecimento, cabeçalhos fiéis aos blocos físicos e marca d'água circular suave da clínica.
+     - Criada folha timbrada `PrintableReportSheet.tsx` com suporte a formatos A4 e A5, moldura retangular para laudos e arredondada para declaração de comparecimento, logo centralizada no topo com respiro e `LAUDO` centralizado abaixo, e marca d'água circular suave da clínica.
   2. No `shared/accessPolicy.ts`:
      - Verificar sempre se o nome da função já existe no objeto antes de inseri-lo, evitando chaves duplicadas. Atualizado acesso aos laudos para `['admin', 'professional', 'reception']`.
   3. Em testes com jsdom:

@@ -164,27 +164,28 @@ export const PrintableReportSheet: React.FC<PrintableReportSheetProps> = ({
               </h2>
             </div>
           ) : (
-            /* Cabeçalho do Laudo centralizado conforme fotos originais */
-            <div className="relative pt-2 sm:pt-3">
-              <div className="flex flex-col items-center justify-center text-center">
+            /* Cabeçalho do Laudo: Logo no topo com espaçamento e LAUDO abaixo centralizado */
+            <div className="flex flex-col items-center justify-center text-center pt-3 sm:pt-5 space-y-3 sm:space-y-4">
+              {clinicLogoUrl && (
+                <div className="flex items-center justify-center pb-1">
+                  <img
+                    src={clinicLogoUrl}
+                    alt={clinicName}
+                    className="h-12 sm:h-16 w-auto max-w-[240px] sm:max-w-[300px] object-contain"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col items-center justify-center">
                 <h1 className="text-2xl sm:text-3xl font-black tracking-[0.25em] uppercase text-gray-950 underline decoration-2 underline-offset-8">
                   {template.title}
                 </h1>
-                {clinicSubtitle && (
+                {!clinicLogoUrl && clinicSubtitle && (
                   <span className="text-[11px] sm:text-xs font-medium text-gray-600 mt-2">
                     {clinicSubtitle}
                   </span>
                 )}
               </div>
-              {clinicLogoUrl && (
-                <div className="absolute top-0 right-0 h-10 sm:h-12 flex items-center justify-end">
-                  <img
-                    src={clinicLogoUrl}
-                    alt={clinicName}
-                    className="max-h-full w-auto object-contain"
-                  />
-                </div>
-              )}
             </div>
           )}
         </div>
