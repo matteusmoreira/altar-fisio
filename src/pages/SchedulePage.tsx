@@ -1,8 +1,8 @@
-import { useQuery } from '@/lib/staffConvex'
+import { useQuery, useMutation } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
 import { occupiesSeat } from '../../shared/scheduleOccupancy'
 import { DEFAULT_CLINICAL_SPECIALTIES } from '../../shared/clinicalSpecialties'
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import { useAuth } from "@/contexts/AuthContext"
 import type { Schedule, ScheduleParticipant } from "@/types"
@@ -47,6 +47,8 @@ import {
   ShieldAlert,
   Sparkles,
   AlertTriangle,
+  Search,
+  X,
 } from "lucide-react"
 import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 import { AvailabilityManagerModal } from "@/components/availability/AvailabilityManagerModal"
@@ -56,6 +58,8 @@ import { ScheduleMetricsBar } from "@/components/schedule/ScheduleMetricsBar"
 import { WeeklyScheduleView } from "@/components/schedule/WeeklyScheduleView"
 import { MonthlyScheduleView } from "@/components/schedule/MonthlyScheduleView"
 import { ScheduleDetailModal } from "@/components/schedule/ScheduleDetailModal"
+import { PatientScheduleSummaryModal } from "@/components/schedule/PatientScheduleSummaryModal"
+import { PatientProfileModal } from "@/components/patients/PatientProfileModal"
 
 function getTimeRangeMinutes(startTime: string, endTime: string) {
   const [startHour, startMinute] = startTime.split(":").map(Number)
@@ -209,6 +213,61 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
 
   // Modal de Detalhes do Agendamento (Semana / Mês)
   const [selectedDetailSchedule, setSelectedDetailSchedule] = useState<Schedule | null>(null)
+  const [selectedPatientSchedule, setSelectedPatientSchedule] = useState<{
+    schedule: Schedule
+    participant: ScheduleParticipant
+  } | null>(null)
+  const [patientProfileId, setPatientProfileId] = useState<string | null>(null)
+  const [patientSearchQuery, setPatientSearchQuery] = useState("")
+
+  // Agendamento do paciente selecionado reativo às atualizações de status/presença
+  const activePatientSchedule = useMemo(() => {
+    if (!selectedPatientSchedule) return null
+    const foundSchedule = schedules.find((s) => s.id === selectedPatientSchedule.schedule.id)
+    if (!foundSchedule) return selectedPatientSchedule
+    const foundParticipant = (foundSchedule.participants || []).find(
+      (p) => p.id === selectedPatientSchedule.participant.id
+    )
+    if (!foundParticipant) return { ...selectedPatientSchedule, schedule: foundSchedule }
+    return {
+      schedule: foundSchedule,
+      participant: foundParticipant,
+    }
+  }, [selectedPatientSchedule, schedules])
+
+  const removeParticipantMutation = useMutation(api.schedules.removeParticipantFromSchedule)
+  const removeParticipantFromSeriesMutation = useMutation(api.schedules.removeParticipantFromSeries)
+
+  const handleCancelPatientAppointment = async (
+    schedule: Schedule,
+    participant: ScheduleParticipant,
+    scope: "single" | "series" = "single",
+    reason?: string
+  ) => {
+    try {
+      if (scope === "series") {
+        const res = await removeParticipantFromSeriesMutation({
+          scheduleId: schedule.id as any,
+          participantRecordId: participant.id as any,
+        })
+        const removedCount = res && 'count' in res ? res.count : 1
+        setFeedback(
+          `Paciente ${participant.patientName} desmarcado de ${removedCount} aula(s) da série!`
+        )
+      } else {
+        await removeParticipantMutation({
+          scheduleId: schedule.id as any,
+          participantRecordId: participant.id as any,
+        })
+        setFeedback(`Paciente ${participant.patientName} desmarcado com sucesso! Vaga liberada.`)
+      }
+      setSelectedPatientSchedule(null)
+      setTimeout(() => setFeedback(null), 4000)
+    } catch (err: any) {
+      alert(err?.message || "Erro ao desmarcar paciente.")
+      throw err
+    }
+  }
 
   // Navegação de datas adaptativa ao período ativo
   const handleDateChange = (offset: number) => {
@@ -221,11 +280,17 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
     }
   }
 
-  // Filtragem por Sala e Profissional
+  // Filtragem por Sala, Profissional e Nome do Paciente
+  const normalizedSearch = patientSearchQuery.trim().toLowerCase()
   const filteredSchedules = schedules.filter((s) => {
     const matchRoom = selectedRoom === "all" || s.roomId === selectedRoom
     const matchProf = selectedProf === "all" || s.professionalId === selectedProf
-    return matchRoom && matchProf
+    const matchSearch =
+      !normalizedSearch ||
+      (s.participants || []).some((p) =>
+        p.patientName.toLowerCase().includes(normalizedSearch)
+      )
+    return matchRoom && matchProf && matchSearch
   })
 
   // Agendamentos do dia selecionado (para a Visão Diária)
@@ -530,7 +595,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               {/* Filtro por Sala */}
-              <div className="w-full sm:w-44">
+              <div className="w-full sm:w-40">
                 <Select
                   value={selectedRoom}
                   onChange={(e) => setSelectedRoom(e.target.value)}
@@ -545,7 +610,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
               </div>
 
               {/* Filtro por Profissional */}
-              <div className="w-full sm:w-48">
+              <div className="w-full sm:w-44">
                 <Select
                   value={selectedProf}
                   onChange={(e) => setSelectedProf(e.target.value)}
@@ -557,6 +622,28 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                     </option>
                   ))}
                 </Select>
+              </div>
+
+              {/* Busca Rápida por Nome do Paciente */}
+              <div className="relative w-full sm:w-52">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Buscar paciente..."
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  className="h-10 pl-8.5 pr-7 text-xs rounded-xl"
+                />
+                {patientSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPatientSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    title="Limpar busca"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -587,6 +674,11 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           currentDate={selectedDate}
           schedules={filteredSchedules}
           onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
+          onSelectPatientSchedule={(sch, part) =>
+            setSelectedPatientSchedule({ schedule: sch, participant: part })
+          }
+          onCheckIn={checkIn}
+          onSendWhatsApp={sendWhatsAppReminder}
           onCreateScheduleAtDate={(date) => {
             setSelectedDate(date)
             if (onNavigate) {
@@ -596,12 +688,18 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
             }
           }}
           onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
+          patientSearchQuery={patientSearchQuery}
         />
       ) : schedulePeriodMode === "month" ? (
         <MonthlyScheduleView
           currentDate={selectedDate}
           schedules={filteredSchedules}
           onSelectSchedule={(sch) => setSelectedDetailSchedule(sch)}
+          onSelectPatientSchedule={(sch, part) =>
+            setSelectedPatientSchedule({ schedule: sch, participant: part })
+          }
+          onCheckIn={checkIn}
+          onSendWhatsApp={sendWhatsAppReminder}
           onCreateScheduleAtDate={(date) => {
             setSelectedDate(date)
             if (onNavigate) {
@@ -615,6 +713,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
             setSchedulePeriodMode("day")
           }}
           onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
+          patientSearchQuery={patientSearchQuery}
         />
       ) : dayFilteredSchedules.length === 0 ? (
         <Card className="p-12 text-center border-border shadow-xs">
@@ -727,7 +826,11 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                             className="py-2.5 flex flex-col gap-2 first:pt-0 last:pb-0"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2.5">
+                              <div
+                                className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                onClick={() => setSelectedPatientSchedule({ schedule, participant: p })}
+                                title="Ver resumo do agendamento"
+                              >
                                 <div
                                   className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                                     isPresent
@@ -789,9 +892,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                                       size="sm"
                                       variant="ghost"
                                       onClick={() => {
-                                        setCancelTarget({ schedule, participant: p })
-                                        setCancelReason("")
-                                        setForceExemption(false)
+                                        setSelectedPatientSchedule({ schedule, participant: p })
                                       }}
                                       className="h-7 text-[11px] px-1.5 text-amber-600 hover:text-amber-700"
                                       title="Desmarcar atendimento"
@@ -925,7 +1026,11 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                           key={p.id}
                           className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0"
                         >
-                          <div className="flex items-center gap-3">
+                          <div
+                            className="flex items-center gap-3 cursor-pointer hover:opacity-85 transition-opacity"
+                            onClick={() => setSelectedPatientSchedule({ schedule, participant: p })}
+                            title="Ver resumo do agendamento"
+                          >
                             <div
                               className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                                 isPresent
@@ -996,9 +1101,7 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => {
-                                    setCancelTarget({ schedule, participant: p })
-                                    setCancelReason("")
-                                    setForceExemption(false)
+                                    setSelectedPatientSchedule({ schedule, participant: p })
                                   }}
                                   className="h-8 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                                 >
@@ -1688,13 +1791,35 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
         onSendWhatsApp={sendWhatsAppReminder}
         onOpenEnroll={(sch) => handleOpenEnrollModal(sch)}
         onOpenCancel={(sch, p) =>
-          setCancelTarget({ schedule: sch, participant: p })
+          setSelectedPatientSchedule({ schedule: sch, participant: p })
         }
         onNavigateToDay={(date) => {
           setSelectedDate(date)
           setSchedulePeriodMode("day")
         }}
       />
+
+      {/* Modal de Resumo do Paciente & Desmarcação Ágil */}
+      <PatientScheduleSummaryModal
+        isOpen={!!activePatientSchedule}
+        onClose={() => setSelectedPatientSchedule(null)}
+        schedule={activePatientSchedule?.schedule || null}
+        participant={activePatientSchedule?.participant || null}
+        onCheckIn={checkIn}
+        onCancelParticipant={handleCancelPatientAppointment}
+        onSendWhatsApp={sendWhatsAppReminder}
+        onOpenPatientProfile={(patientId) => setPatientProfileId(patientId)}
+      />
+
+      {/* Modal da Ficha Clínica do Paciente */}
+      {patientProfileId && patients.find((p) => p.id === patientProfileId) && (
+        <PatientProfileModal
+          patient={patients.find((p) => p.id === patientProfileId)!}
+          isOpen={!!patientProfileId}
+          onClose={() => setPatientProfileId(null)}
+          onEdit={() => {}}
+        />
+      )}
     </div>
   )
 }

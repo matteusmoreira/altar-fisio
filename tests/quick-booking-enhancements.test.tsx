@@ -284,15 +284,14 @@ test('QuickBookingPage renderiza em coluna única e recorrência não exibe desc
   expect(screen.getByRole('button', { name: /Mês/i })).toBeTruthy()
 })
 
-// ─── Testes de QuickPatientForm (Máscaras de Telefone e CPF) ─────────────────
+// ─── Testes de QuickPatientForm (Máscaras de Telefone e Remoção de CPF) ─────────
 
-test('QuickPatientForm aplica máscara em tempo real ao digitar telefone e CPF', () => {
+test('QuickPatientForm aplica máscara em tempo real ao digitar telefone e não renderiza campo de CPF', () => {
   render(<QuickPatientForm onPatientCreated={vi.fn()} onCancel={vi.fn()} />)
 
   const phoneInput = screen.getByPlaceholderText('(11) 99999-9999') as HTMLInputElement
-  const cpfInput = screen.getByPlaceholderText('000.000.000-00') as HTMLInputElement
 
-  // Digitando telefone sem formatação
+  // Digitando telefone celular sem formatação
   fireEvent.change(phoneInput, { target: { value: '22999021889' } })
   expect(phoneInput.value).toBe('(22) 99902-1889')
 
@@ -300,31 +299,33 @@ test('QuickPatientForm aplica máscara em tempo real ao digitar telefone e CPF',
   fireEvent.change(phoneInput, { target: { value: '2233334444' } })
   expect(phoneInput.value).toBe('(22) 3333-4444')
 
-  // Digitando CPF sem formatação
-  fireEvent.change(cpfInput, { target: { value: '14322094775' } })
-  expect(cpfInput.value).toBe('143.220.947-75')
+  // Confirma ausência definitiva do campo de CPF
+  expect(screen.queryByPlaceholderText('000.000.000-00')).toBeNull()
+  expect(screen.queryByText(/^CPF$/i)).toBeNull()
 })
 
-test('QuickPatientForm exibe erro ao tentar submeter CPF inválido', async () => {
+test('QuickPatientForm exibe erro ao tentar submeter telefone inválido ou campos vazios', async () => {
   render(<QuickPatientForm onPatientCreated={vi.fn()} onCancel={vi.fn()} />)
 
   const nameInput = screen.getByPlaceholderText('Ex: João da Silva')
   const phoneInput = screen.getByPlaceholderText('(11) 99999-9999')
-  const cpfInput = screen.getByPlaceholderText('000.000.000-00')
   const submitBtn = screen.getByRole('button', { name: /Salvar Paciente/i })
 
-  fireEvent.change(nameInput, { target: { value: 'Paciente Teste' } })
-  fireEvent.change(phoneInput, { target: { value: '22999021889' } })
-  // CPF com dígitos repetidos/inválidos
-  fireEvent.change(cpfInput, { target: { value: '11111111111' } })
+  // 1. Tenta submeter vazio
+  fireEvent.click(submitBtn)
+  expect(screen.getByText(/Nome e telefone são obrigatórios/i)).toBeTruthy()
+  expect(mocks.createPatientAction).not.toHaveBeenCalled()
 
+  // 2. Tenta submeter com telefone inválido
+  fireEvent.change(nameInput, { target: { value: 'Paciente Teste' } })
+  fireEvent.change(phoneInput, { target: { value: '123' } })
   fireEvent.click(submitBtn)
 
-  expect(screen.getByText(/CPF inválido/i)).toBeTruthy()
+  expect(screen.getByText(/Telefone deve conter DDD e 10 ou 11 dígitos/i)).toBeTruthy()
   expect(mocks.createPatientAction).not.toHaveBeenCalled()
 })
 
-test('QuickPatientForm submete com dados limpos e aciona onPatientCreated', async () => {
+test('QuickPatientForm submete sem CPF e aciona onPatientCreated', async () => {
   const onCreated = vi.fn()
   mocks.createPatientAction.mockClear()
 
@@ -332,19 +333,16 @@ test('QuickPatientForm submete com dados limpos e aciona onPatientCreated', asyn
 
   const nameInput = screen.getByPlaceholderText('Ex: João da Silva')
   const phoneInput = screen.getByPlaceholderText('(11) 99999-9999')
-  const cpfInput = screen.getByPlaceholderText('000.000.000-00')
   const submitBtn = screen.getByRole('button', { name: /Salvar Paciente/i })
 
   fireEvent.change(nameInput, { target: { value: ' Matteus Moreira ' } })
   fireEvent.change(phoneInput, { target: { value: '22999021889' } })
-  fireEvent.change(cpfInput, { target: { value: '14322094775' } })
 
   fireEvent.click(submitBtn)
 
   expect(mocks.createPatientAction).toHaveBeenCalledWith({
     name: 'Matteus Moreira',
     phone: '22999021889',
-    documentCpf: '14322094775',
     birthDate: '2000-01-01',
   })
 })

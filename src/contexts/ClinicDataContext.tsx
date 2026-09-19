@@ -905,21 +905,26 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSe
   }
 
   const removeParticipantFromSchedule = async (scheduleId: string, participantRecordId: string) => {
-    setSchedules((prev) =>
-      prev.map((s) => {
+    let previousSchedules: Schedule[] = []
+    setSchedules((prev) => {
+      previousSchedules = prev
+      return prev.map((s) => {
         if (s.id !== scheduleId) return s
         return {
           ...s,
           participants: s.participants.filter((p) => p.id !== participantRecordId),
         }
       })
-    )
+    })
     try {
       await removeParticipantMutation({
         scheduleId: scheduleId as any,
         participantRecordId: participantRecordId as any,
       })
     } catch (err) {
+      if (previousSchedules.length > 0) {
+        setSchedules(previousSchedules)
+      }
       throw err
     }
   }

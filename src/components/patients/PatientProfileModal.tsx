@@ -2,7 +2,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { PortalAccessSettings } from './PortalAccessSettings'
 import { useQuery } from '@/lib/staffConvex'
 import { api } from '@convex/_generated/api'
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient, AttendanceStatus, Specialty } from "@/types"
 import {
@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { formatDateBR, getTodayDateString } from "@/lib/dateUtils"
+import { formatDateBR, formatDateTimeBR, getTodayDateString } from "@/lib/dateUtils"
 import { formatPhoneBR, cleanPhoneDigits } from "@/lib/utils"
 import { formatCep } from "../../../shared/patientIdentity"
 import { formatSpecialtyName, formatScheduleTitle, DEFAULT_CLINICAL_SPECIALTIES } from "../../../shared/clinicalSpecialties"
@@ -48,6 +48,9 @@ import {
   Image as ImageIcon,
   CheckCheck,
   Building,
+  CalendarX,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react"
 
 interface PatientProfileModalProps {
@@ -85,6 +88,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     clinicalReports,
     getClinicalRecord,
     getEvolutions,
+    removeParticipantFromSchedule,
   } = useClinicData()
 
   const { role } = useAuth()
@@ -99,6 +103,51 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
     url: string
     title: string
   } | null>(null)
+
+  // Estado para desmarcação de agendamento do paciente
+  const [cancelTarget, setCancelTarget] = useState<{
+    scheduleId: string
+    participantId: string
+    title: string
+    date: string
+    startTime: string
+    endTime: string
+    roomName: string
+    professionalName: string
+  } | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return
+    setIsCancelling(true)
+    try {
+      await removeParticipantFromSchedule(cancelTarget.scheduleId, cancelTarget.participantId)
+      const formattedDate = formatDateBR(cancelTarget.date)
+      setFeedbackToast({
+        message: `Atendimento de ${formattedDate} às ${cancelTarget.startTime} desmarcado com sucesso. Vaga liberada!`,
+        type: "success",
+      })
+      setCancelTarget(null)
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+      feedbackTimerRef.current = setTimeout(() => {
+        setFeedbackToast(null)
+      }, 4000)
+    } catch (err: any) {
+      alert(`Erro ao desmarcar atendimento: ${err?.message || "Falha ao processar cancelamento."}`)
+    } finally {
+      setIsCancelling(false)
+    }
+  }
 
   const storedPatientSchedules = useQuery(
     api.schedules.listSchedulesForPatient,
@@ -147,6 +196,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         const cleanSpecialty = formatSpecialtyName(s.specialty, clinicalSpecialties, s.roomName)
         return {
           scheduleId: s._id,
+          participantId: (participant as any)._id || (participant as any).id,
           title: cleanTitle,
           type: s.type,
           specialty: cleanSpecialty,
@@ -423,13 +473,22 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap font-mono">
-                    <span>{formatPhoneBR(patient.phone)}</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                    <span className="font-mono">{formatPhoneBR(patient.phone)}</span>
                     {age !== null && (
                       <>
                         <span>•</span>
-                        <span className="font-sans font-medium text-foreground/80">
+                        <span className="font-medium text-foreground/80">
                           {age} anos ({formatDateBR(patient.birthDate)})
+                        </span>
+                      </>
+                    )}
+                    {patient.createdAt && (
+                      <>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1 text-primary font-medium">
+                          <Clock className="h-3 w-3" />
+                          <span>Cadastrado em: {formatDateTimeBR(patient.createdAt)}</span>
                         </span>
                       </>
                     )}
@@ -685,19 +744,29 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                       </div>
 
                       <div className="pt-2 border-t border-border/50">
-                        <span className="text-muted-foreground block text-[11px]">Endereço Residencial</span>
-                        <span className="text-foreground font-medium flex items-start gap-1.5 mt-0.5">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                          <span>
-                            {patient.address || "Endereço não cadastrado"}
-                            {patient.cep && (
-                              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
-                                CEP: {formatCep(patient.cep)}
-                              </span>
-                            )}
-                          </span>
+                        <span className="text-muted-foreground block text-[11px]">Data e Hora do Cadastro</span>
+                        <span className="text-foreground font-semibold flex items-center gap-1.5 mt-0.5">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          <span>{formatDateTimeBR(patient.createdAt)}</span>
                         </span>
                       </div>
+
+                      {(patient.address || patient.cep) && (
+                        <div className="pt-2 border-t border-border/50">
+                          <span className="text-muted-foreground block text-[11px]">Endereço Residencial</span>
+                          <span className="text-foreground font-medium flex items-start gap-1.5 mt-0.5">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                            <span>
+                              {patient.address || "Endereço não cadastrado"}
+                              {patient.cep && (
+                                <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                                  CEP: {formatCep(patient.cep)}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        </div>
+                      )}
 
                       {patient.customFields && patient.customFields.length > 0 && (
                         <div className="pt-2 border-t border-border/50">
@@ -719,12 +788,12 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     </CardContent>
                   </Card>
 
-                  {/* Convênio, Emergência & Observações */}
+                  {/* Convênio & Observações */}
                   <Card className="border-border shadow-xs">
                     <CardHeader className="p-4 pb-3 border-b border-border/60">
                       <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                         <Shield className="h-3.5 w-3.5 text-indigo-500" />
-                        <span>Convênio, Emergência & Notas</span>
+                        <span>Convênio & Observações</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 space-y-3 text-xs">
@@ -737,20 +806,22 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                        <div>
-                          <span className="text-muted-foreground block text-[11px]">Contato de Emergência</span>
-                          <span className="text-foreground font-medium block">
-                            {patient.emergencyContact || "Não informado"}
-                          </span>
+                      {(patient.emergencyContact || patient.emergencyPhone) && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                          <div>
+                            <span className="text-muted-foreground block text-[11px]">Contato de Emergência</span>
+                            <span className="text-foreground font-medium block">
+                              {patient.emergencyContact || "Não informado"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block text-[11px]">Telefone de Emergência</span>
+                            <span className="text-foreground font-mono font-medium block">
+                              {patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-muted-foreground block text-[11px]">Telefone de Emergência</span>
-                          <span className="text-foreground font-mono font-medium block">
-                            {patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       <div className="pt-2 border-t border-border/50">
                         <span className="text-muted-foreground block text-[11px]">Observações Cadastrais</span>
@@ -760,9 +831,9 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                       </div>
 
                       <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between">
-                        <span>Cadastrado em:</span>
-                        <span className="font-medium text-foreground">
-                          {formatDateBR(patient.createdAt)}
+                        <span>Data e hora do cadastro:</span>
+                        <span className="font-semibold text-foreground">
+                          {formatDateTimeBR(patient.createdAt)}
                         </span>
                       </div>
                     </CardContent>
@@ -834,6 +905,30 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                                 <div className="text-[10px] text-muted-foreground truncate flex items-center justify-between mt-1 pt-1 border-t border-border/40">
                                   <span>{sched.professionalName}</span>
                                   <span>{sched.roomName}</span>
+                                </div>
+                                <div className="pt-2 mt-1 border-t border-border/40 flex justify-end">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setCancelTarget({
+                                        scheduleId: sched.scheduleId,
+                                        participantId: sched.participantId,
+                                        title: sched.title,
+                                        date: sched.date,
+                                        startTime: sched.startTime,
+                                        endTime: sched.endTime,
+                                        roomName: sched.roomName,
+                                        professionalName: sched.professionalName,
+                                      })
+                                    }
+                                    className="h-6 px-2 text-[10px] font-semibold text-destructive hover:bg-destructive/10 border-destructive/30 hover:border-destructive/50 gap-1 w-full justify-center"
+                                    title="Desmarcar atendimento e liberar vaga"
+                                  >
+                                    <CalendarX className="h-3 w-3" />
+                                    <span>Desmarcar</span>
+                                  </Button>
                                 </div>
                               </div>
                             </div>
@@ -1060,14 +1155,15 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                     </Card>
                   ) : (
                     <div className="border border-border rounded-xl overflow-hidden shadow-xs">
-                      <div className="max-h-[320px] overflow-y-auto">
-                        <table className="w-full text-xs text-left">
+                      <div className="max-h-[320px] overflow-y-auto overflow-x-auto touch-pan-x">
+                        <table className="w-full min-w-[560px] text-xs text-left">
                           <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold uppercase text-[10px] sticky top-0">
                             <tr>
                               <th className="p-2.5 pl-3.5">Data & Horário</th>
                               <th className="p-2.5">Turma / Modalidade</th>
                               <th className="p-2.5">Profissional & Sala</th>
-                              <th className="p-2.5 text-right pr-3.5">Status de Presença</th>
+                              <th className="p-2.5">Status de Presença</th>
+                              <th className="p-2.5 text-right pr-3.5">Ações</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
@@ -1093,7 +1189,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                                   </div>
                                   <div className="text-[10px]">{item.roomName}</div>
                                 </td>
-                                <td className="p-2.5 text-right pr-3.5 whitespace-nowrap">
+                                <td className="p-2.5 whitespace-nowrap">
                                   {item.status === "present" && (
                                     <Badge className="bg-emerald-600/15 text-emerald-600 border-emerald-600/30 text-[10px] gap-1">
                                       <CheckCircle2 className="h-3 w-3" />
@@ -1122,6 +1218,34 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                                     <Badge variant="outline" className="text-muted-foreground text-[10px]">
                                       Agendado
                                     </Badge>
+                                  )}
+                                </td>
+                                <td className="p-2.5 text-right pr-3.5 whitespace-nowrap">
+                                  {(item.status === "scheduled" || item.status === "replacement") ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        setCancelTarget({
+                                          scheduleId: item.scheduleId,
+                                          participantId: item.participantId,
+                                          title: item.title,
+                                          date: item.date,
+                                          startTime: item.startTime,
+                                          endTime: item.endTime,
+                                          roomName: item.roomName,
+                                          professionalName: item.professionalName,
+                                        })
+                                      }
+                                      className="h-6 px-2 text-[11px] font-semibold text-destructive hover:bg-destructive/10 border-destructive/30 hover:border-destructive/50 gap-1"
+                                      title="Desmarcar horário e liberar vaga"
+                                    >
+                                      <CalendarX className="h-3 w-3" />
+                                      <span>Desmarcar</span>
+                                    </Button>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground">—</span>
                                   )}
                                 </td>
                               </tr>
@@ -1661,6 +1785,96 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
         </Dialog>
       )}
 
+      {/* Modal de Confirmação para Desmarcar Atendimento */}
+      <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && !isCancelling && setCancelTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          {cancelTarget && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-foreground">
+                  <div className="p-2 rounded-xl bg-destructive/10 text-destructive">
+                    <CalendarX className="h-5 w-5" />
+                  </div>
+                  <span>Desmarcar Atendimento</span>
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Confirme a desmarcação para liberar a vaga imediatamente na clínica.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 space-y-2 text-xs">
+                <div className="flex items-center justify-between font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    <span>{formatDateBR(cancelTarget.date)}</span>
+                  </span>
+                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs">
+                    {cancelTarget.startTime} às {cancelTarget.endTime}
+                  </Badge>
+                </div>
+
+                <div className="pt-1 text-[11px] text-muted-foreground space-y-0.5">
+                  <div>
+                    <strong className="text-foreground">{cancelTarget.title}</strong>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>{cancelTarget.professionalName}</span>
+                    <span>•</span>
+                    <span>{cancelTarget.roomName}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Ao desmarcar, os lembretes automáticos do WhatsApp serão cancelados e a vaga ficará livre para outros pacientes.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isCancelling}
+                  onClick={() => setCancelTarget(null)}
+                  className="h-8 text-xs px-3"
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isCancelling}
+                  onClick={handleConfirmCancel}
+                  className="h-8 text-xs px-3 font-semibold gap-1.5"
+                >
+                  {isCancelling ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Desmarcando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CalendarX className="h-3.5 w-3.5" />
+                      <span>Sim, Desmarcar</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast Flutuante de Feedback */}
+      {feedbackToast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium animate-fade-in">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{feedbackToast.message}</span>
+        </div>
+      )}
+
       {/* Documento Oculto para Impressão Nativa A4 */}
       <div id="printable-patient-sheet" className="hidden print:block font-sans text-black p-6">
         <div className="border-b-2 border-black pb-4 mb-4 flex items-center justify-between">
@@ -1688,9 +1902,12 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
             <div><strong>Telefone:</strong> {formatPhoneBR(patient.phone)}</div>
             <div><strong>Nascimento:</strong> {formatDateBR(patient.birthDate)} ({age} anos)</div>
             <div><strong>Convênio / Modalidade:</strong> {patient.healthInsurance || "Particular"}</div>
-            <div><strong>Contato Emergência:</strong> {patient.emergencyContact || "—"} ({patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"})</div>
-            <div><strong>CEP:</strong> {patient.cep ? formatCep(patient.cep) : "—"}</div>
-            <div className="col-span-2"><strong>Endereço:</strong> {patient.address || "Não informado"}</div>
+            <div className="col-span-2"><strong>Data e Hora do Cadastro:</strong> {formatDateTimeBR(patient.createdAt)}</div>
+            {(patient.emergencyContact || patient.emergencyPhone) && (
+              <div><strong>Contato Emergência:</strong> {patient.emergencyContact || "—"} ({patient.emergencyPhone ? formatPhoneBR(patient.emergencyPhone) : "—"})</div>
+            )}
+            {patient.cep && <div><strong>CEP:</strong> {formatCep(patient.cep)}</div>}
+            {patient.address && <div className="col-span-2"><strong>Endereço:</strong> {patient.address}</div>}
             {patient.customFields && patient.customFields.length > 0 && patient.customFields.map((cf, idx) => (
               <div key={idx}><strong>{cf.label}:</strong> {cf.type === 'date' ? formatDateBR(cf.value) : cf.value}</div>
             ))}

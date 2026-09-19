@@ -1,5 +1,95 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Agenda & Marcações Centrada em Pacientes (Mês, Semana e Dia), Busca Rápida e Desmarcação Ágil com Modal de Resumo
+- **Ponto de Fricção**:
+  1. A página Agenda & Marcações exibia blocos agregados de turmas e salas nas visualizações de Mês e Semana, tornando impossível "bater o olho" e identificar diretamente quais pacientes estavam agendados e em quais dias específicos. Para descobrir quem estava numa aula, era necessário clicar na turma e abrir um drawer lateral.
+  2. Em turmas com múltiplos alunos (ex: Pilates com até 8 vagas), os participantes ficavam agrupados dentro do horário. Para clínicas que operam com foco nos alunos, a recepção precisava de chips/cartões individuais de cada paciente (`10:00 • Nome do Paciente`) com indicador de cor da sala.
+  3. Ao desmarcar uma aula de série recorrente (ex: aluno matriculado toda terça e quinta), o operador precisava de flexibilidade para escolher entre desmarcar apenas aquele dia específico ou todas as datas futuras daquela série, sem que houvesse uma mutação atômica dedicada para isso no Convex.
+  4. O utilitário de formatação de telefone `formatPhoneBR` está exportado em `@/lib/utils` (reexportado de `shared/patientIdentity`), e não em `@/lib/phoneUtils`.
+  5. Na navegação entre meses em `MonthlyScheduleView`, o estado `selectedDayCell` permanecia com a data do mês anterior, exibindo dias e agendamentos desatualizados no painel lateral. De forma similar, no mobile em `WeeklyScheduleView`, ao avançar a semana, `mobileSelectedDay` retinha data da semana anterior gerando `indexOf === -1` no array de dias.
+  6. Em turmas com múltiplos alunos (ex: Pilates com 4 a 8 inscritos), a pesquisa por paciente podia deixar o aluno procurado oculto sob o rótulo `+X mais` caso ele estivesse após o 3º participante da aula.
+  7. No modal de resumo do agendamento (`PatientScheduleSummaryModal`), o clique em "Confirmar Presença" atualizava o backend e o contexto, mas o modal lia um snapshot estático, não refletindo o badge verde "Presente" sem fechar e reabrir.
+- **Mitigação / Regra**:
+  1. Backend Convex (`convex/schedules.ts` & `shared/accessPolicy.ts`):
+     - Criada a mutation `removeParticipantFromSeries`, com validação de pertencimento (`part.scheduleId === args.scheduleId`), filtro por data e hora de início (`s.date > schedule.date || (s.date === schedule.date && s.startTime >= schedule.startTime)`), desmatrícula atômica de ocorrências futuras, cancelamento de lembretes agendados e preservação de créditos de reposição conforme a política de antecedência (`cancellationNoticeHours`).
+     - Permissão atribuída aos perfis `admin`, `professional` e `reception`.
+  2. Modal de Resumo do Agendamento do Paciente (`PatientScheduleSummaryModal.tsx`):
+     - Exibe detalhes do agendamento: Nome do Paciente, data, horário, sala (com dot colorido), profissional responsável, especialidade/serviço e saldo de sessões/pacote.
+     - Ações rápidas: Alternar Presença/Falta (com reatividade imediata no modal via `activePatientSchedule` no `SchedulePage`), WhatsApp e Ficha Clínica 360°.
+     - Fluxo direto de desmarcação com escolha de escopo (pontual ou série inteira) e propagação de erros com `throw err`.
+     - Gerenciamento de timers assíncronos com `useRef` e descarte com `clearTimeout` para evitar vazamento de memória.
+  3. Visualização Mensal (`MonthlyScheduleView.tsx`):
+     - Chips individuais por paciente (`[10:00 • Nome do Paciente]`), com dot da sala e indicador sutil de vagas livres no rodapé.
+     - Sincronização automática de `selectedDayCell` na mudança de mês com `useEffect`.
+     - Ordenação que prioriza alunos correspondentes à pesquisa no topo das células e do painel lateral.
+  4. Visualização Semanal (`WeeklyScheduleView.tsx`):
+     - Colunas de Segunda a Domingo com cartões limpos e ação direta de desmarcar.
+     - Sincronização de `mobileSelectedDay` ao trocar de semana e fallback resiliente `activeMobileDay`.
+     - Priorização visual de alunos que batem com a busca.
+  5. Agenda Principal (`SchedulePage.tsx`):
+     - Campo de busca instantânea por paciente no topo da página.
+     - Derivação reativa `activePatientSchedule` a partir do estado `schedules`.
+     - Integração de `PatientScheduleSummaryModal` em todas as visões (Mês, Semana, Dia Grade e Dia Lista).
+  6. Testes:
+     - Criado `tests/schedule-patient-centric-views.test.tsx` com cobertura completa das 3 visualizações, abertura do modal de resumo, fluxo de desmarcação e busca rápida.
+- **Validação**: 56 arquivos de teste e 300 testes aprovados 100% no Vitest (`npm test`). Typecheck TypeScript (`tsc -b`) e oxlint com 0 erros.
+
+- **Ponto de Fricção**:
+  1. Quando pacientes ligavam para a clínica solicitando desmarcação de suas aulas, a recepção abria a Ficha do Paciente (`PatientProfileModal.tsx`), mas encontrava apenas o status "Agendado" sem nenhum botão ou atalho de ação para desmarcar.
+  2. O operador era forçado a sair da ficha do paciente, ir para a Agenda ou Agendamento Rápido, localizar a semana, achar o horário e turma correspondente, clicar no slot e encontrar o paciente na lista de vagas para desmarcar.
+  3. No `PatientProfileModal.tsx`, a derivação de `patientSchedules` mapeava apenas `scheduleId: s._id` e omitia o `participantId` de `s.participants`, impossibilitando a desmatrícula direta daquele participante sem consulta adicional.
+  4. No teste `tests/patient-creation-sheet.test.tsx`, a renderização do `PatientsPage` falhava quando a query `getHealthInsuranceOptions` retornava array vazio nos mocks, pois o fallback `?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]` não ativava para `[]`, fazendo `hasInsuranceOption("Particular")` ser falso e o formulário enviar `healthInsurance: ""`.
+- **Mitigação / Regra**:
+  1. Em `src/components/patients/PatientProfileModal.tsx`:
+     - O mapeamento de `patientSchedules` agora expõe `participantId: (participant as any)._id || (participant as any).id`.
+     - Na aba **Turmas & Presenças** (tabela "Histórico de Atendimentos & Aulas"): adicionada a coluna de "Ações" e o botão vermelho `[ 🗓️ Desmarcar ]` para qualquer atendimento com status `scheduled` ou `replacement`.
+     - Na aba **Visão Geral** (card "Próximas Sessões Marcadas"): adicionado botão direto de "Desmarcar" em cada card de atendimento futuro.
+     - Criado modal nativo de confirmação de desmarcação (`cancelTarget`) com apresentação de data, horário, modalidade, profissional e sala, prevenindo cliques acidentais e alertando que a vaga é liberada no ato e os lembretes do WhatsApp cancelados.
+     - Integração com `removeParticipantFromSchedule` de `ClinicDataContext`: desvincula a vaga, cancela lembretes agendados e processa automaticamente a fila de espera (`processWaitlist`), com feedback toast verde de confirmação na tela.
+  2. Em `src/pages/PatientsPage.tsx`:
+     - Fallback defensivo: `const healthInsuranceOptions = Array.isArray(healthInsuranceOptionsQuery) && healthInsuranceOptionsQuery.length > 0 ? healthInsuranceOptionsQuery : [...DEFAULT_HEALTH_INSURANCE_OPTIONS]`.
+  3. Em testes:
+     - Criado `tests/patient-profile-cancel-booking.test.tsx` cobrindo a presença do botão "Desmarcar" nos cards da Visão Geral e na tabela de Turmas & Presenças, além do fluxo de confirmação e chamada ao backend.
+- **Validação**: 55 arquivos de teste e 298 testes aprovados 100% no Vitest e Node (`npm test`). Typecheck TypeScript (`tsc -b`), build de produção Vite (`npm run build`) e oxlint aprovados com 0 erros.
+
+### [2026-09-19] Remoção de CEP, Endereço e Contato/Telefone de Emergência no Cadastro e Exibição de Data e Hora na Ficha
+- **Ponto de Fricção**:
+  1. No cadastro e edição de pacientes (`PatientsPage.tsx`), o formulário solicitava CEP, Endereço Residencial, Contato de Emergência e Telefone de Emergência. O usuário solicitou a remoção desses campos no cadastro e que, ao cadastrar, seja mostrada a data e hora do cadastro na ficha do paciente.
+  2. Ao remover o input de CEP, o loader e a rotina `lookupCep` (ViaCEP) no formulário, era essencial preservar o ícone `Loader2` que também é utilizado no feedback de carregamento da carteira de pacientes vinculados (`isProfLoading`).
+  3. No modal da Ficha do Paciente (`PatientProfileModal.tsx`), o cadastro exibia apenas a data em formato simples (`formatDateBR(patient.createdAt)`), sem detalhar a hora do cadastro. Além disso, blocos vazios de endereço ("Endereço não cadastrado") e de emergência ("Não informado") poluiam a tela para novos cadastros.
+  4. No teste `tests/patient-access-panel.test.tsx`, existia teste unitário que preenchia especificamente os campos de CEP, endereço e telefone de emergência no formulário, quebrando com a remoção dos inputs.
+- **Mitigação / Regra**:
+  1. No `src/pages/PatientsPage.tsx`:
+     - Removidos do formulário os campos de CEP, Endereço Residencial, Contato de Emergência e Telefone de Emergência.
+     - Descrição do modal atualizada para `"Informe os dados cadastrais e convênio do paciente."`.
+     - Ao submeter com sucesso (`handleSubmit`), o sistema fecha o modal de cadastro e abre imediatamente a Ficha Completa 360° (`setProfilePatient(...)`), garantindo que o usuário visualize a ficha com a data e hora exatas do cadastro instantaneamente.
+     - Preservado o ícone `Loader2` para `isProfLoading` e encapsulado o acesso ao `localStorage` para `viewMode` com verificação segura de funções.
+  2. No `src/components/patients/PatientProfileModal.tsx`:
+     - Utilizada a função universal `formatDateTimeBR(patient.createdAt)` de `src/lib/dateUtils.ts` para renderizar `dd/mm/aaaa às HH:mm` no fuso horário da clínica (`America/Sao_Paulo`).
+     - A data e a hora do cadastro foram inseridas em 4 pontos estratégicos:
+       - No cabeçalho principal ao lado do telefone e idade com o ícone `Clock`.
+       - No card "Identificação & Contatos" na aba "Visão Geral".
+       - No rodapé do card "Convênio & Observações".
+       - Na folha de impressão em PDF A4 (`#printable-patient-sheet`).
+     - Blocos de endereço e emergência agora são renderizados condicionalmente apenas se o paciente possuir histórico previamente preenchido, mantendo total retrocompatibilidade e evitando poluição visual em novos pacientes.
+  3. Em testes:
+     - `tests/patient-access-panel.test.tsx` atualizado para validar a ausência dos campos removidos.
+     - Criado `tests/patient-creation-sheet.test.tsx` cobrindo a submissão limpa sem os campos removidos, a abertura imediata da ficha e a exibição de data e hora no cabeçalho, visão geral e folha impressa.
+- **Validação**: 54 arquivos de teste e 293 testes aprovados no Vitest, mais 3 testes de service worker aprovados (`npm test`). Typecheck TypeScript (`tsc -b`), build Vite de produção (`npm run build`) e oxlint aprovados com 0 erros.
+
+### [2026-09-19] Remoção do CPF no Cadastro Rápido do Agendamento Rápido
+- **Ponto de Fricção**:
+  1. No fluxo de Agendamento Rápido (`QuickBookingPage.tsx` / `QuickPatientForm.tsx`), o formulário de "Cadastro Rápido" ainda solicitava e validava obrigatoriamente o CPF do paciente junto com nome e telefone.
+  2. A suíte de testes de integração (`tests/quick-booking-enhancements.test.tsx`) continha asserções estritas que exigiam a presença do input de CPF, sua máscara e validação de CPF inválido para submeter o cadastro rápido.
+- **Mitigação / Regra**:
+  1. Em `QuickPatientForm.tsx`:
+     - Removido o estado `cpf`, validações e máscara de CPF, assim como o campo do layout JSX.
+     - O formulário agora valida exclusivamente o nome completo e o telefone com DDD (10 ou 11 dígitos), omitindo `documentCpf` na chamada para a action `createPatient`.
+     - Layout ajustado de forma limpa, posicionando o campo de Telefone em largura total abaixo do Nome Completo.
+  2. Em `tests/quick-booking-enhancements.test.tsx`:
+     - Testes atualizados para confirmar a ausência definitiva do input de CPF (`expect(screen.queryByPlaceholderText('000.000.000-00')).toBeNull()`), validar mensagem para telefone inválido/campos vazios e garantir submissão com sucesso sem `documentCpf`.
+- **Validação**: 53 arquivos de teste e 290 testes aprovados no Vitest, mais 3 testes de service worker aprovados (`npm test`). Typecheck TypeScript (`tsc -b`) e oxlint com 0 erros.
+
 ### [2026-09-19] Remoção de CPF, Gênero e E-mail no Cadastro de Pacientes, Suporte a Campos Livres Dinâmicos e Robustez de Tipos Convex
 - **Ponto de Fricção**:
   1. No cadastro e edição do paciente, o usuário solicitou a remoção definitiva dos campos CPF, gênero e e-mail, e a introdução de campos livres personalizados adicionáveis e removíveis dinamicamente.

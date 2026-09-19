@@ -1204,6 +1204,74 @@ export const removeParticipantFromSchedule = mutation({
   },
 })
 
+// Remoção / Desmatrícula de participante de todas as sessões futuras da série
+export const removeParticipantFromSeries = mutation({
+  args: {
+    sessionToken: v.string(),
+    scheduleId: v.id("schedules"),
+    participantRecordId: v.id("scheduleParticipants"),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, ...args } = input
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
+
+    const part = await ctx.db.get(args.participantRecordId)
+    if (!part) throw new ConvexError("Participante não encontrado")
+    if (part.scheduleId !== args.scheduleId) throw new ConvexError("Participante não pertence à sessão.")
+    const schedule = await ctx.db.get(args.scheduleId)
+    if (!schedule) throw new ConvexError("Agendamento não encontrado")
+
+    const settings = await ctx.db.query("clinicSettings").first()
+    const noticeHours = settings?.cancellationNoticeHours ?? 2
+
+    if (!schedule.recurringGroupId) {
+      if (part.replacementCreditId && ["scheduled", "replacement"].includes(part.status)) {
+        const inPolicy = parseDateTimeToMs(schedule.date, schedule.startTime) - Date.now() >= noticeHours * 3600000
+        return cancelReplacement(ctx, part, inPolicy, "Desmatrícula pela recepção.")
+      }
+      await cancelParticipantJobs(ctx, part._id)
+      await ctx.db.delete(args.participantRecordId)
+      await processWaitlist(ctx, args.scheduleId)
+      return { success: true, count: 1 }
+    }
+
+    const seriesSchedules = await ctx.db
+      .query("schedules")
+      .withIndex("by_recurring_group", (q) => q.eq("recurringGroupId", schedule.recurringGroupId!))
+      .collect()
+
+    const futureSchedules = seriesSchedules.filter((s) => {
+      if (s.status === "cancelled") return false
+      if (s.date > schedule.date) return true
+      if (s.date === schedule.date) return s.startTime >= schedule.startTime
+      return false
+    })
+    let count = 0
+
+    for (const s of futureSchedules) {
+      const p = await ctx.db
+        .query("scheduleParticipants")
+        .withIndex("by_schedule", (q) => q.eq("scheduleId", s._id))
+        .filter((q) => q.eq(q.field("patientId"), part.patientId))
+        .first()
+
+      if (p) {
+        if (p.replacementCreditId && ["scheduled", "replacement"].includes(p.status)) {
+          const inPolicy = parseDateTimeToMs(s.date, s.startTime) - Date.now() >= noticeHours * 3600000
+          await cancelReplacement(ctx, p, inPolicy, "Desmatrícula da série pela recepção.")
+        } else {
+          await cancelParticipantJobs(ctx, p._id)
+          await ctx.db.delete(p._id)
+          await processWaitlist(ctx, s._id)
+        }
+        count++
+      }
+    }
+
+    return { success: true, count }
+  },
+})
+
 // Relatório Analítico de Frequência, Presenças, Faltas e Reposições
 export const getAttendanceReport = query({
   args: { sessionToken: v.string(),

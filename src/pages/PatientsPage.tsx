@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
-import { formatCep, formatPhone, isValidPhone, normalizeCep } from '../../shared/patientIdentity'
+import { formatPhone, isValidPhone } from '../../shared/patientIdentity'
 import { DEFAULT_HEALTH_INSURANCE_OPTIONS } from '../../shared/healthInsurance'
-import React, { useRef, useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { useClinicData } from "@/contexts/ClinicDataContext"
 import type { Patient, PatientCustomFieldDefinition, PatientCustomFieldValue, PatientCustomFieldType } from "@/types"
 import { useMutation, useQuery } from "@/lib/staffConvex"
@@ -51,8 +51,11 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const canEditPatient = role === 'admin'
   const { patients, addPatient, updatePatient, deletePatient, clinicalOverview, professionals = [] } = useClinicData()
   const healthInsuranceOptionsQuery = useQuery(api.clinic.getHealthInsuranceOptions)
+  const healthInsuranceOptions =
+    Array.isArray(healthInsuranceOptionsQuery) && healthInsuranceOptionsQuery.length > 0
+      ? healthInsuranceOptionsQuery
+      : [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
   const updateHealthInsuranceOptionsMutation = useMutation(api.clinic.updateHealthInsuranceOptions)
-  const healthInsuranceOptions = healthInsuranceOptionsQuery ?? [...DEFAULT_HEALTH_INSURANCE_OPTIONS]
   const clinicCustomFieldsQuery = useQuery(api.clinic.getPatientCustomFields)
   const updatePatientCustomFieldsMutation = useMutation(api.clinic.updatePatientCustomFields)
   const clinicCustomFields: PatientCustomFieldDefinition[] = Array.isArray(clinicCustomFieldsQuery)
@@ -96,13 +99,25 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const isProfLoading = selectedProfFilter !== "all" && effectiveAssignedIds === undefined
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem("altar_patients_view_mode")
-    return saved === "list" || saved === "grid" ? saved : "grid"
+    try {
+      const saved = typeof localStorage !== "undefined" && typeof localStorage.getItem === "function"
+        ? localStorage.getItem("altar_patients_view_mode")
+        : null
+      return saved === "list" || saved === "grid" ? saved : "grid"
+    } catch {
+      return "grid"
+    }
   })
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode)
-    localStorage.setItem("altar_patients_view_mode", mode)
+    try {
+      if (typeof localStorage !== "undefined" && typeof localStorage.setItem === "function") {
+        localStorage.setItem("altar_patients_view_mode", mode)
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -118,17 +133,11 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [birthDate, setBirthDate] = useState("1990-01-01")
-  const [cep, setCep] = useState("")
-  const [address, setAddress] = useState("")
-  const [emergencyContact, setEmergencyContact] = useState("")
-  const [emergencyPhone, setEmergencyPhone] = useState("")
   const [healthInsurance, setHealthInsurance] = useState("Particular")
   const [showInsuranceManager, setShowInsuranceManager] = useState(false)
   const [insuranceOptionsDraft, setInsuranceOptionsDraft] = useState<string[]>([])
   const [newInsuranceOption, setNewInsuranceOption] = useState("")
   const [isSavingInsuranceOptions, setIsSavingInsuranceOptions] = useState(false)
-  const [isLookingUpCep, setIsLookingUpCep] = useState(false)
-  const [cepFeedback, setCepFeedback] = useState<string | null>(null)
   const [notes, setNotes] = useState("")
   const [active, setActive] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -144,7 +153,15 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const [showAddAdHocField, setShowAddAdHocField] = useState(false)
   const [adHocLabel, setAdHocLabel] = useState("")
   const [adHocType, setAdHocType] = useState<PatientCustomFieldType>("text")
-  const cepLookupSequence = useRef(0)
+
+  // Sincroniza o modal da ficha com atualizações em segundo plano da lista de pacientes
+  useEffect(() => {
+    if (!profilePatient) return
+    const updated = patients.find((p) => p.id === profilePatient.id)
+    if (updated && updated !== profilePatient) {
+      setProfilePatient(updated)
+    }
+  }, [patients, profilePatient])
 
   // Modal de Exclusão
   const [deletingPatient, setDeletingPatient] = useState<Patient | null>(null)
@@ -157,56 +174,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
   const hasInsuranceOption = (value: string, options = healthInsuranceOptions) =>
     options.some((option) => option.toLowerCase() === value.toLowerCase())
-
-  const lookupCep = async (value: string) => {
-    const cleanCep = normalizeCep(value)
-    if (cleanCep.length !== 8) return
-
-    const requestSequence = ++cepLookupSequence.current
-    setIsLookingUpCep(true)
-    setCepFeedback(null)
-
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
-      if (!response.ok) throw new Error("Falha na consulta")
-
-      const result = await response.json() as {
-        erro?: boolean
-        logradouro?: string
-        bairro?: string
-        localidade?: string
-        uf?: string
-      }
-
-      if (requestSequence !== cepLookupSequence.current) return
-      if (result.erro) {
-        setCepFeedback("CEP não encontrado. Confira os números e tente novamente.")
-        return
-      }
-
-      const city = [result.localidade, result.uf].filter(Boolean).join(" - ")
-      const addressParts = [result.logradouro, result.bairro, city].filter(Boolean)
-      if (addressParts.length > 0) setAddress(addressParts.join(", "))
-    } catch {
-      if (requestSequence === cepLookupSequence.current) {
-        setCepFeedback("Não foi possível consultar o CEP agora. Você pode preencher o endereço manualmente.")
-      }
-    } finally {
-      if (requestSequence === cepLookupSequence.current) setIsLookingUpCep(false)
-    }
-  }
-
-  const handleCepChange = (value: string) => {
-    const formatted = formatCep(value)
-    setCep(formatted)
-    setCepFeedback(null)
-    if (normalizeCep(formatted).length === 8) {
-      void lookupCep(formatted)
-    } else {
-      cepLookupSequence.current += 1
-      setIsLookingUpCep(false)
-    }
-  }
 
   const handleOpenInsuranceManager = () => {
     setInsuranceOptionsDraft([...healthInsuranceOptions])
@@ -394,21 +361,14 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   )
 
   const handleOpenCreate = () => {
-    cepLookupSequence.current += 1
-    setIsLookingUpCep(false)
     setEditingPatientId(null)
     setName("")
     setPhone("")
     setBirthDate("1990-01-01")
-    setCep("")
-    setAddress("")
-    setEmergencyContact("")
-    setEmergencyPhone("")
     setHealthInsurance(hasInsuranceOption("Particular") ? "Particular" : "")
     setShowInsuranceManager(false)
     setShowCustomFieldsManager(false)
     setShowAddAdHocField(false)
-    setCepFeedback(null)
     setNotes("")
     setActive(true)
     setPatientCustomFields(
@@ -424,21 +384,14 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
   const handleOpenEdit = (patient: Patient) => {
     if (!canEditPatient) return
-    cepLookupSequence.current += 1
-    setIsLookingUpCep(false)
     setEditingPatientId(patient.id)
     setName(patient.name)
     setPhone(formatPhone(patient.phone))
     setBirthDate(patient.birthDate || "1990-01-01")
-    setCep(formatCep(patient.cep || ""))
-    setAddress(patient.address || "")
-    setEmergencyContact(patient.emergencyContact || "")
-    setEmergencyPhone(formatPhone(patient.emergencyPhone || ""))
     setHealthInsurance(patient.healthInsurance || (hasInsuranceOption("Particular") ? "Particular" : ""))
     setShowInsuranceManager(false)
     setShowCustomFieldsManager(false)
     setShowAddAdHocField(false)
-    setCepFeedback(null)
     setNotes(patient.notes || "")
     setActive(patient.active)
 
@@ -488,32 +441,37 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           name,
           phone,
           birthDate,
-          cep,
-          address,
-          emergencyContact,
-          emergencyPhone,
           healthInsurance,
           notes,
           customFields: sanitizedCustomFields,
           active,
         })
         showToast(`Paciente "${name}" atualizado com sucesso!`)
+        setIsModalOpen(false)
       } else {
-        await addPatient({
+        const newPatientId = await addPatient({
           name,
           phone,
           birthDate,
-          cep,
-          address,
-          emergencyContact,
-          emergencyPhone,
           healthInsurance,
           notes,
           customFields: sanitizedCustomFields,
         })
+        const now = Date.now()
+        setProfilePatient({
+          id: newPatientId,
+          name,
+          phone: formatPhone(phone),
+          birthDate,
+          healthInsurance,
+          notes,
+          customFields: sanitizedCustomFields,
+          active: true,
+          createdAt: now,
+        })
         showToast(`Paciente "${name}" cadastrado com sucesso! Acesso ao portal criado com a senha @mudar123.`)
+        setIsModalOpen(false)
       }
-      setIsModalOpen(false)
     } catch (err: any) {
       alert("Erro ao salvar paciente: " + (err?.message || "Tente novamente."))
     } finally {
@@ -1177,7 +1135,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                 {editingPatientId ? "Editar Paciente" : "Novo Cadastro de Paciente"}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Informe os dados cadastrais, contato de emergência e convênio do paciente.
+                Informe os dados cadastrais e convênio do paciente.
               </DialogDescription>
             </DialogHeader>
 
@@ -1208,58 +1166,6 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
                     type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">CEP</label>
-                  <div className="relative">
-                    <Input
-                      value={cep}
-                      onChange={(e) => handleCepChange(e.target.value)}
-                      placeholder="00000-000"
-                      inputMode="numeric"
-                      maxLength={9}
-                      aria-describedby={cepFeedback ? "patient-cep-feedback" : undefined}
-                    />
-                    {isLookingUpCep && (
-                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary" />
-                    )}
-                  </div>
-                  {cepFeedback && (
-                    <p id="patient-cep-feedback" className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                      {cepFeedback}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Endereço Residencial</label>
-                  <Input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Rua, Número, Bairro, Cidade"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Contato de Emergência</label>
-                  <Input
-                    value={emergencyContact}
-                    onChange={(e) => setEmergencyContact(e.target.value)}
-                    placeholder="Nome do contato"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-foreground/85 mb-1.5">Telefone de Emergência</label>
-                  <Input
-                    value={emergencyPhone}
-                    onChange={(e) => setEmergencyPhone(formatPhone(e.target.value))}
-                    placeholder="(11) 99999-9999"
-                    inputMode="tel"
                   />
                 </div>
               </div>

@@ -6,11 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Loader2 } from 'lucide-react'
 import {
-  formatCpf,
   formatPhone,
-  isValidCpf,
   isValidPhone,
-  normalizeCpf,
   normalizePhone,
 } from '../../../shared/patientIdentity'
 
@@ -24,7 +21,6 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [cpf, setCpf] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,16 +28,10 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
     e.preventDefault()
     setError('')
 
-    const cleanCpf = normalizeCpf(cpf)
     const cleanPhone = normalizePhone(phone)
 
-    if (!name.trim() || !cleanCpf || !cleanPhone) {
-      setError('Todos os campos são obrigatórios.')
-      return
-    }
-
-    if (!isValidCpf(cleanCpf)) {
-      setError('CPF inválido. Verifique os números digitados.')
+    if (!name.trim() || !cleanPhone) {
+      setError('Nome e telefone são obrigatórios.')
       return
     }
 
@@ -55,7 +45,6 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
       const result = await createPatient({
         name: name.trim(),
         phone: cleanPhone,
-        documentCpf: cleanCpf,
         birthDate: '2000-01-01', // placeholder — será atualizado no cadastro completo
       })
       onPatientCreated(result)
@@ -82,29 +71,16 @@ export function QuickPatientForm({ onPatientCreated, onCancel }: QuickPatientFor
           />
         </div>
         
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Telefone</label>
-            <Input 
-              value={phone} 
-              onChange={(e) => setPhone(formatPhone(e.target.value))} 
-              placeholder="(11) 99999-9999"
-              maxLength={15}
-              inputMode="tel"
-              disabled={isSubmitting}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">CPF</label>
-            <Input 
-              value={cpf} 
-              onChange={(e) => setCpf(formatCpf(e.target.value))} 
-              placeholder="000.000.000-00"
-              maxLength={14}
-              inputMode="numeric"
-              disabled={isSubmitting}
-            />
-          </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Telefone</label>
+          <Input 
+            value={phone} 
+            onChange={(e) => setPhone(formatPhone(e.target.value))} 
+            placeholder="(11) 99999-9999"
+            maxLength={15}
+            inputMode="tel"
+            disabled={isSubmitting}
+          />
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

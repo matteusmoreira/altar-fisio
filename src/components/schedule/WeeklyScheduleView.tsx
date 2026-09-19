@@ -1,13 +1,10 @@
 import { occupiesSeat } from '../../../shared/scheduleOccupancy'
 import React, { useState, useMemo } from "react"
-import type { Schedule } from "@/types"
+import type { Schedule, ScheduleParticipant } from "@/types"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  Calendar,
-  Clock,
-  User,
   Plus,
   UserPlus,
   CheckCircle2,
@@ -24,8 +21,19 @@ interface WeeklyScheduleViewProps {
   currentDate: string // YYYY-MM-DD
   schedules: Schedule[]
   onSelectSchedule: (schedule: Schedule) => void
+  onSelectPatientSchedule?: (schedule: Schedule, participant: ScheduleParticipant) => void
+  onCheckIn?: (
+    scheduleId: string,
+    participantId: string,
+    status: "present" | "absence" | "scheduled"
+  ) => Promise<any>
+  onSendWhatsApp?: (
+    schedule: Schedule,
+    participant: { name: string; phone: string }
+  ) => Promise<any>
   onCreateScheduleAtDate: (date: string) => void
   onOpenEnroll: (schedule: Schedule) => void
+  patientSearchQuery?: string
 }
 
 const WEEKDAY_NAMES_FULL = [
@@ -44,17 +52,35 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   currentDate,
   schedules,
   onSelectSchedule,
+  onSelectPatientSchedule,
+  onCheckIn,
+  onSendWhatsApp,
   onCreateScheduleAtDate,
   onOpenEnroll,
+  patientSearchQuery = "",
 }) => {
   const weekInfo = useMemo(() => getWeekRange(currentDate), [currentDate])
 
   // Estado para dia selecionado em visualização mobile
   const [mobileSelectedDay, setMobileSelectedDay] = useState<string>(() => {
-    // Se hoje estiver na semana atual, foca em hoje; caso contrário foca no primeiro dia
     const today = getTodayDateString()
     return weekInfo.days.includes(today) ? today : weekInfo.days[0]
   })
+
+  // Sincronizar dia selecionado no mobile ao mudar de semana
+  React.useEffect(() => {
+    if (!weekInfo.days.includes(mobileSelectedDay)) {
+      const today = getTodayDateString()
+      setMobileSelectedDay(weekInfo.days.includes(today) ? today : weekInfo.days[0])
+    }
+  }, [weekInfo.days, mobileSelectedDay])
+
+  // Dia ativo seguro no mobile
+  const activeMobileDay = weekInfo.days.includes(mobileSelectedDay)
+    ? mobileSelectedDay
+    : weekInfo.days.includes(getTodayDateString())
+    ? getTodayDateString()
+    : weekInfo.days[0]
 
   // Agrupar agendamentos por data (YYYY-MM-DD)
   const schedulesByDate = useMemo(() => {
@@ -77,14 +103,44 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
     return map
   }, [weekInfo.days, schedules])
 
+  const normalizedSearch = patientSearchQuery.trim().toLowerCase()
+
+  // Participantes agrupados por dia (com priorização de busca)
+  const participantsByDate = useMemo(() => {
+    const map: Record<string, Array<{ schedule: Schedule; participant: ScheduleParticipant }>> = {}
+    weekInfo.days.forEach((day) => {
+      const daySchedules = schedulesByDate[day] || []
+      const list: Array<{ schedule: Schedule; participant: ScheduleParticipant }> = []
+      daySchedules.forEach((s) => {
+        ;(s.participants || []).forEach((p) => {
+          list.push({ schedule: s, participant: p })
+        })
+      })
+
+      if (normalizedSearch) {
+        list.sort((a, b) => {
+          const aMatch = a.participant.patientName.toLowerCase().includes(normalizedSearch) ? 0 : 1
+          const bMatch = b.participant.patientName.toLowerCase().includes(normalizedSearch) ? 0 : 1
+          if (aMatch !== bMatch) return aMatch - bMatch
+          return a.schedule.startTime.localeCompare(b.schedule.startTime)
+        })
+      } else {
+        list.sort((a, b) => a.schedule.startTime.localeCompare(b.schedule.startTime))
+      }
+
+      map[day] = list
+    })
+    return map
+  }, [weekInfo.days, schedulesByDate, normalizedSearch])
+
   return (
     <div className="space-y-4">
       {/* SELETOR MOBILE EM PÍLULAS (Visível apenas em telas menores < sm) */}
       <div className="sm:hidden flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 no-scrollbar select-none">
         {weekInfo.days.map((dayStr, idx) => {
-          const isSelected = mobileSelectedDay === dayStr
+          const isSelected = activeMobileDay === dayStr
           const dayIsToday = isToday(dayStr)
-          const dayCount = schedulesByDate[dayStr]?.length || 0
+          const dayParticipants = participantsByDate[dayStr] || []
           const [, , dayNumber] = dayStr.split("-")
 
           return (
@@ -111,7 +167,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                     : "bg-muted text-muted-foreground"
                 }`}
               >
-                {dayCount}
+                {dayParticipants.length} pac.
               </span>
             </button>
           )
@@ -124,22 +180,22 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-foreground">
-                {WEEKDAY_NAMES_FULL[weekInfo.days.indexOf(mobileSelectedDay)]}
+                {WEEKDAY_NAMES_FULL[weekInfo.days.indexOf(activeMobileDay)]}
               </span>
-              {isToday(mobileSelectedDay) && (
+              {isToday(activeMobileDay) && (
                 <Badge variant="success" className="text-[9px] px-1.5 py-0">
                   Hoje
                 </Badge>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {formatDateBR(mobileSelectedDay)} • {schedulesByDate[mobileSelectedDay]?.length || 0} agendamento(s)
+              {formatDateBR(activeMobileDay)} • {participantsByDate[activeMobileDay]?.length || 0} paciente(s) agendado(s)
             </p>
           </div>
 
           <Button
             size="sm"
-            onClick={() => onCreateScheduleAtDate(mobileSelectedDay)}
+            onClick={() => onCreateScheduleAtDate(activeMobileDay)}
             className="h-8 gap-1 text-xs px-2.5 rounded-lg shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -147,21 +203,23 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
           </Button>
         </div>
 
-        {/* Lista de cards do dia selecionado em mobile */}
-        {(!schedulesByDate[mobileSelectedDay] ||
-          schedulesByDate[mobileSelectedDay].length === 0) ? (
+        {/* Lista de pacientes agendados no dia em mobile */}
+        {(!participantsByDate[activeMobileDay] ||
+          participantsByDate[activeMobileDay].length === 0) ? (
           <div className="p-8 text-center rounded-2xl bg-card border border-dashed border-border">
             <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-            <p className="text-xs font-medium text-foreground">
-              Nenhum agendamento neste dia
+            <p className="text-xs font-semibold text-foreground">
+              Nenhum paciente agendado neste dia
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
-              Não há turmas ou atendimentos para esta data.
+              {(schedulesByDate[activeMobileDay] || []).length > 0
+                ? "Há horários disponíveis sem matrículas."
+                : "Não há turmas ou atendimentos para esta data."}
             </p>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onCreateScheduleAtDate(mobileSelectedDay)}
+              onClick={() => onCreateScheduleAtDate(activeMobileDay)}
               className="gap-1.5 text-xs text-primary border-primary/30"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -170,30 +228,49 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
           </div>
         ) : (
           <div className="space-y-2.5">
-            {schedulesByDate[mobileSelectedDay].map((schedule) => {
-              const occupied = (schedule.participants || []).filter(
-                occupiesSeat
-              ).length
-              const isFull = occupied >= schedule.maxCapacity
-              const vacancies = Math.max(0, schedule.maxCapacity - occupied)
+            {participantsByDate[activeMobileDay].map(({ schedule, participant }) => {
+              const isPresent = participant.status === "present"
+              const isMatch =
+                normalizedSearch &&
+                participant.patientName.toLowerCase().includes(normalizedSearch)
 
               return (
                 <Card
-                  key={schedule.id}
-                  onClick={() => onSelectSchedule(schedule)}
-                  className="p-3.5 border-border hover:border-primary/50 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
+                  key={participant.id}
+                  onClick={() => {
+                    if (onSelectPatientSchedule) {
+                      onSelectPatientSchedule(schedule, participant)
+                    } else {
+                      onSelectSchedule(schedule)
+                    }
+                  }}
+                  className={`p-3.5 border transition-all cursor-pointer shadow-xs active:scale-[0.99] space-y-2.5 ${
+                    isMatch ? "ring-2 ring-amber-500 border-amber-500" : "border-border hover:border-primary/50"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="px-2 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs border border-primary/20">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="px-2 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs border border-primary/20 shrink-0">
                         {schedule.startTime}
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-foreground leading-tight">
-                          {schedule.title}
-                        </h4>
-                        <p className="text-[11px] text-muted-foreground">
-                          {schedule.professionalName}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-bold text-foreground leading-tight truncate">
+                            {participant.patientName}
+                          </h4>
+                          {participant.status === "replacement" && (
+                            <Badge variant="purple" className="text-[9px] px-1.5 py-0">
+                              Reposição
+                            </Badge>
+                          )}
+                          {isPresent && (
+                            <Badge className="bg-emerald-600/15 text-emerald-600 border-emerald-600/30 text-[9px] px-1.5 py-0">
+                              Presente
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {schedule.professionalName} • {schedule.roomName}
                         </p>
                       </div>
                     </div>
@@ -202,31 +279,48 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                       variant={schedule.type === "turma" ? "purple" : "info"}
                       className="text-[9px] px-1.5 py-0 shrink-0"
                     >
-                      {schedule.type === "turma" ? "Turma" : "Individual"}
+                      {schedule.type === "turma" ? "Turma" : "Indiv"}
                     </Badge>
                   </div>
 
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border/60 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: schedule.roomColor }}
-                      />
-                      <span className="text-[11px] font-medium text-muted-foreground truncate max-w-[140px]">
-                        {schedule.roomName}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      {schedule.title}
+                    </span>
 
-                    <div className="flex items-center gap-1.5">
-                      {isFull ? (
-                        <Badge variant="destructive" className="text-[9px]">
-                          Lotada ({occupied}/{schedule.maxCapacity})
-                        </Badge>
-                      ) : (
-                        <Badge variant="success" className="text-[9px]">
-                          {vacancies} vaga(s)
-                        </Badge>
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {onCheckIn && (
+                        <Button
+                          size="sm"
+                          variant={isPresent ? "default" : "outline"}
+                          onClick={() =>
+                            onCheckIn(
+                              schedule.id,
+                              participant.id,
+                              isPresent ? "scheduled" : "present"
+                            )
+                          }
+                          className={`h-7 px-2 text-[11px] gap-1 rounded-lg ${
+                            isPresent ? "bg-emerald-600 text-white" : ""
+                          }`}
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          <span>{isPresent ? "Presente" : "Confirmar"}</span>
+                        </Button>
                       )}
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          if (onSelectPatientSchedule) {
+                            onSelectPatientSchedule(schedule, participant)
+                          }
+                        }}
+                        className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 rounded-lg"
+                      >
+                        Desmarcar
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -241,15 +335,34 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
         <div className="grid grid-cols-7 gap-2.5 min-w-[920px]">
           {weekInfo.days.map((dayStr, idx) => {
             const daySchedules = schedulesByDate[dayStr] || []
+            const dayParticipants = participantsByDate[dayStr] || []
             const dayIsToday = isToday(dayStr)
-            const isWeekend = idx === 5 || idx === 6 // Sábado ou Domingo
+            const isWeekend = idx === 5 || idx === 6
             const [, , dayNumber] = dayStr.split("-")
+
+            const hasSearchMatch =
+              normalizedSearch &&
+              dayParticipants.some((dp) =>
+                dp.participant.patientName.toLowerCase().includes(normalizedSearch)
+              )
+
+            const totalVacancies = daySchedules.reduce((acc, s) => {
+              const occupied = (s.participants || []).filter(occupiesSeat).length
+              return acc + Math.max(0, s.maxCapacity - occupied)
+            }, 0)
+
+            const vacantSlots = daySchedules.filter((s) => {
+              const occupied = (s.participants || []).filter(occupiesSeat).length
+              return occupied < s.maxCapacity
+            })
 
             return (
               <div
                 key={dayStr}
                 className={`flex flex-col rounded-2xl border transition-all ${
-                  dayIsToday
+                  hasSearchMatch
+                    ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/40"
+                    : dayIsToday
                     ? "bg-primary/5 border-primary/40 ring-1 ring-primary/30"
                     : isWeekend
                     ? "bg-muted/30 border-border/60"
@@ -279,13 +392,15 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   <div className="flex items-center gap-1 shrink-0">
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
-                        daySchedules.length > 0
-                          ? "bg-primary/10 text-primary"
+                        hasSearchMatch
+                          ? "bg-amber-500 text-white font-black"
+                          : dayParticipants.length > 0
+                          ? "bg-primary/10 text-primary font-bold"
                           : "bg-muted text-muted-foreground"
                       }`}
-                      title={`${daySchedules.length} agendamento(s)`}
+                      title={`${dayParticipants.length} paciente(s) agendado(s)`}
                     >
-                      {daySchedules.length}
+                      {dayParticipants.length} pac.
                     </span>
 
                     <Button
@@ -300,100 +415,140 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   </div>
                 </div>
 
-                {/* Lista de Cards da Coluna */}
-                <div className="p-2 flex-1 space-y-2 min-h-[360px] flex flex-col">
-                  {daySchedules.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-3 text-center">
-                      <p className="text-[11px] text-muted-foreground/60 mb-2">Sem horários</p>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onCreateScheduleAtDate(dayStr)}
-                        className="h-6 text-[10px] px-2 text-primary hover:bg-primary/10 rounded-lg gap-1 font-semibold"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>Agendar</span>
-                      </Button>
-                    </div>
-                  ) : (
-                    daySchedules.map((schedule) => {
-                      const occupied = (schedule.participants || []).filter(
-                        occupiesSeat
-                      ).length
-                      const isFull = occupied >= schedule.maxCapacity
-                      const vacancies = Math.max(0, schedule.maxCapacity - occupied)
-
-                      return (
-                        <div
-                          key={schedule.id}
-                          onClick={() => onSelectSchedule(schedule)}
-                          className="p-2.5 rounded-xl border border-border/80 bg-background/90 hover:bg-background hover:border-primary/50 hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between text-left"
+                {/* Lista de Pacientes da Coluna */}
+                <div className="p-2 flex-1 space-y-2 min-h-[380px] flex flex-col justify-between">
+                  <div className="space-y-1.5 flex-1">
+                    {dayParticipants.length === 0 && vacantSlots.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center p-3 text-center min-h-[160px]">
+                        <p className="text-[11px] text-muted-foreground/60 mb-2">Sem marcações</p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onCreateScheduleAtDate(dayStr)}
+                          className="h-6 text-[10px] px-2 text-primary hover:bg-primary/10 rounded-lg gap-1 font-semibold"
                         >
-                          <div>
-                            {/* Horário e Badge de Tipo */}
-                            <div className="flex items-center justify-between gap-1 mb-1.5">
-                              <span className="font-extrabold text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-md leading-none">
-                                {schedule.startTime}
-                              </span>
-                              <Badge
-                                variant={schedule.type === "turma" ? "purple" : "info"}
-                                className="text-[8px] px-1 py-0 h-4"
-                              >
-                                {schedule.type === "turma" ? "Turma" : "Indiv"}
-                              </Badge>
+                          <Plus className="h-3 w-3" />
+                          <span>Agendar</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      dayParticipants.map(({ schedule, participant }) => {
+                        const isPresent = participant.status === "present"
+                        const isMatch =
+                          normalizedSearch &&
+                          participant.patientName.toLowerCase().includes(normalizedSearch)
+
+                        return (
+                          <div
+                            key={participant.id}
+                            onClick={() => {
+                              if (onSelectPatientSchedule) {
+                                onSelectPatientSchedule(schedule, participant)
+                              } else {
+                                onSelectSchedule(schedule)
+                              }
+                            }}
+                            className={`p-2 rounded-xl border bg-background/95 hover:bg-background hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between text-left ${
+                              isMatch
+                                ? "ring-2 ring-amber-500 border-amber-500 bg-amber-500/10"
+                                : "border-border/80 hover:border-primary/50"
+                            }`}
+                          >
+                            <div>
+                              {/* Horário & Status */}
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className="font-extrabold text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded leading-none">
+                                  {schedule.startTime}
+                                </span>
+
+                                <div className="flex items-center gap-1">
+                                  {participant.status === "replacement" && (
+                                    <Badge variant="purple" className="text-[8px] px-1 py-0 h-3.5">
+                                      Reposição
+                                    </Badge>
+                                  )}
+                                  {isPresent && (
+                                    <Badge className="bg-emerald-600/15 text-emerald-600 border-emerald-600/30 text-[8px] px-1 py-0 h-3.5">
+                                      Presente
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Nome do Paciente em Destaque */}
+                              <h5 className="font-bold text-xs text-foreground leading-tight group-hover:text-primary transition-colors truncate">
+                                {participant.patientName}
+                              </h5>
+
+                              {/* Fisioterapeuta e Sala */}
+                              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground truncate">
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: schedule.roomColor }}
+                                />
+                                <span className="truncate">{schedule.roomName}</span>
+                              </div>
                             </div>
 
-                            {/* Título */}
-                            <h5 className="font-bold text-xs text-foreground leading-tight group-hover:text-primary transition-colors line-clamp-2">
-                              {schedule.title}
-                            </h5>
-
-                            {/* Profissional e Sala */}
-                            <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                              {schedule.professionalName}
-                            </p>
-
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: schedule.roomColor }}
-                              />
-                              <span className="text-[10px] font-medium text-muted-foreground truncate">
-                                {schedule.roomName}
+                            {/* Rodapé do Card: Ação rápida de desmarcar */}
+                            <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center justify-between">
+                              <span className="text-[9px] text-muted-foreground truncate max-w-[80px]">
+                                {schedule.professionalName.split(" ")[0]}
                               </span>
-                            </div>
-                          </div>
 
-                          {/* Rodapé do Card: Vagas e Ação de Encaixe */}
-                          <div className="mt-2.5 pt-2 border-t border-border/60 flex items-center justify-between gap-1">
-                            {isFull ? (
-                              <span className="text-[9px] font-bold text-destructive">
-                                Lotada ({occupied}/{schedule.maxCapacity})
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-                                {vacancies} vaga(s)
-                              </span>
-                            )}
-
-                            {!isFull && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  onOpenEnroll(schedule)
+                                  if (onSelectPatientSchedule) {
+                                    onSelectPatientSchedule(schedule, participant)
+                                  }
                                 }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer"
-                                title="Encaixar paciente neste horário"
+                                className="text-[9px] font-bold text-destructive hover:underline cursor-pointer"
+                                title="Desmarcar horário deste paciente"
                               >
-                                <UserPlus className="h-2.5 w-2.5" />
-                                <span>+ Encaixar</span>
+                                Desmarcar
                               </button>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })
+                        )
+                      })
+                    )}
+
+                    {/* Vagas disponíveis sem pacientes */}
+                    {vacantSlots.length > 0 && (
+                      <div className="pt-1.5 space-y-1">
+                        {vacantSlots.slice(0, 2).map((s) => {
+                          const occupied = (s.participants || []).filter(occupiesSeat).length
+                          const left = Math.max(0, s.maxCapacity - occupied)
+                          return (
+                            <div
+                              key={s.id}
+                              onClick={() => onOpenEnroll(s)}
+                              className="p-1.5 rounded-lg border border-dashed border-border/70 bg-muted/20 hover:bg-primary/5 hover:border-primary/40 text-[10px] flex items-center justify-between cursor-pointer transition-colors"
+                              title={`Encaixar paciente às ${s.startTime}`}
+                            >
+                              <span className="font-semibold text-muted-foreground">
+                                {s.startTime} ({left}v)
+                              </span>
+                              <span className="text-primary font-bold hover:underline flex items-center gap-0.5">
+                                <UserPlus className="h-2.5 w-2.5" />
+                                <span>+ Encaixe</span>
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rodapé da Coluna com Vagas Livres */}
+                  {totalVacancies > 0 && (
+                    <div className="pt-2 border-t border-border/60 text-center">
+                      <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        +{totalVacancies} vaga(s) livre(s)
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

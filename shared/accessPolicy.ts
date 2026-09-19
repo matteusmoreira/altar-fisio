@@ -427,6 +427,11 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "professional",
     "reception"
   ],
+  "schedules:removeParticipantFromSeries": [
+    "admin",
+    "professional",
+    "reception"
+  ],
   "schedules:getAttendanceReport": [
     "admin",
     "professional",

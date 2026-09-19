@@ -41,32 +41,18 @@ test('admin retains patient controls', () => {
   expect(screen.getByRole('button', { name: 'Excluir paciente' })).toBeTruthy()
 })
 
-test('patient form formats emergency phone and fills address from CEP', async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      logradouro: 'Rua Rio Grande do Norte',
-      bairro: 'Extensão do Bosque',
-      localidade: 'Rio das Ostras',
-      uf: 'RJ',
-    }),
-  })
-  vi.stubGlobal('fetch', fetchMock)
-
+test('patient form removes CEP, address, emergency contact and emergency phone', async () => {
   render(<PatientsPage onNavigateToClinical={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: 'Novo Paciente' }))
 
-  const cep = screen.getByPlaceholderText('00000-000') as HTMLInputElement
-  const emergencyPhone = screen.getByPlaceholderText('(11) 99999-9999') as HTMLInputElement
-  const address = screen.getByPlaceholderText('Rua, Número, Bairro, Cidade') as HTMLInputElement
+  expect(screen.queryByPlaceholderText('00000-000')).toBeNull()
+  expect(screen.queryByPlaceholderText('(11) 99999-9999')).toBeNull()
+  expect(screen.queryByPlaceholderText('Rua, Número, Bairro, Cidade')).toBeNull()
+  expect(screen.queryByPlaceholderText('Nome do contato')).toBeNull()
 
-  fireEvent.change(cep, { target: { value: '22790702' } })
-  fireEvent.change(emergencyPhone, { target: { value: '22999902189' } })
-
-  expect(cep.value).toBe('22790-702')
-  expect(emergencyPhone.value).toBe('(22) 99990-2189')
-  await waitFor(() => expect(address.value).toBe('Rua Rio Grande do Norte, Extensão do Bosque, Rio das Ostras - RJ'))
-  expect(fetchMock).toHaveBeenCalledWith('https://viacep.com.br/ws/22790702/json/')
+  expect(screen.getByPlaceholderText('Nome do paciente')).toBeTruthy()
+  expect(screen.getByPlaceholderText('(11) 98888-8888')).toBeTruthy()
+  expect(screen.getByText('Informe os dados cadastrais e convênio do paciente.')).toBeTruthy()
 })
 
 test('admin manages health insurance options inside the patient form', async () => {
