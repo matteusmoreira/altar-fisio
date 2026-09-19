@@ -406,7 +406,7 @@ export const listClinicalReports = query({
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
 
     if (args.patientId) {
       return await ctx.db
@@ -415,7 +415,7 @@ export const listClinicalReports = query({
         .order("desc")
         .collect()
     }
-    return await ctx.db.query("clinicalReports").order("desc").take(100)
+    return await ctx.db.query("clinicalReports").order("desc").take(150)
   },
 })
 
@@ -424,7 +424,7 @@ export const getClinicalReport = query({
   args: { sessionToken: v.string(),  id: v.id("clinicalReports") },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
 
     return await ctx.db.get(args.id)
   },
@@ -433,16 +433,22 @@ export const getClinicalReport = query({
 // Criação oficial de novo laudo clínico com autenticidade COFFITO
 export const createClinicalReport = mutation({
   args: { sessionToken: v.string(),
-    patientId: v.id("patients"),
-    professionalId: v.id("professionals"),
+    patientId: v.optional(v.id("patients")),
+    patientName: v.optional(v.string()),
+    professionalId: v.optional(v.id("professionals")),
     type: v.union(
       v.literal("report"),
       v.literal("certificate"),
       v.literal("receipt"),
       v.literal("tcle")
     ),
+    modelKey: v.optional(v.string()),
     title: v.string(),
     date: v.string(),
+    timeRange: v.optional(v.string()),
+    paperSize: v.optional(v.string()),
+    showWatermark: v.optional(v.boolean()),
+    signatureImageUrl: v.optional(v.string()),
     chiefComplaint: v.optional(v.string()),
     painScaleEva: v.optional(v.number()),
     painLocation: v.optional(v.string()),
@@ -460,20 +466,25 @@ export const createClinicalReport = mutation({
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
 
-    const prof = await ctx.db.get(args.professionalId)
-    if (!prof) throw new Error("Profissional de saúde não encontrado no cadastro")
+    let prof = args.professionalId ? await ctx.db.get(args.professionalId) : null
+    if (!prof) {
+      // Se não especificado, busca o Dr. Marcelo ou primeiro ativo
+      const profs = await ctx.db.query("professionals").filter((q) => q.eq(q.field("active"), true)).collect()
+      prof = profs.find((p) => p.name.toLowerCase().includes("marcelo")) || profs[0] || null
+    }
 
     const now = Date.now()
-    const cleanCrefito = prof.crefito ? prof.crefito.replace(/[^A-Za-z0-9]/g, "") : "CREFITO"
+    const cleanCrefito = prof?.crefito ? prof.crefito.replace(/[^A-Za-z0-9]/g, "") : "40008F"
     const documentHash = `COFFITO-${cleanCrefito}-${now.toString(36).toUpperCase()}`
 
     return await ctx.db.insert("clinicalReports", {
       ...args,
+      professionalId: prof?._id,
       documentHash,
-      signedProfessionalName: prof.name,
-      crefito: prof.crefito,
+      signedProfessionalName: prof?.name || "Dr. Marcelo S. Santos",
+      crefito: prof?.crefito || "CREFITO 2: 40008-F",
       createdAt: now,
       updatedAt: now,
     })
@@ -486,6 +497,10 @@ export const updateClinicalReport = mutation({
     id: v.id("clinicalReports"),
     title: v.optional(v.string()),
     date: v.optional(v.string()),
+    timeRange: v.optional(v.string()),
+    paperSize: v.optional(v.string()),
+    showWatermark: v.optional(v.boolean()),
+    signatureImageUrl: v.optional(v.string()),
     chiefComplaint: v.optional(v.string()),
     painScaleEva: v.optional(v.number()),
     painLocation: v.optional(v.string()),
@@ -504,7 +519,7 @@ export const updateClinicalReport = mutation({
   },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
 
     const { id, professionalId, ...data } = args
     const existing = await ctx.db.get(id)
@@ -534,13 +549,57 @@ export const deleteClinicalReport = mutation({
   args: { sessionToken: v.string(),  id: v.id("clinicalReports") },
   handler: async (ctx, input) => {
     const { sessionToken, ...args } = input
-    await requireStaff(ctx, sessionToken, ["admin","professional"]);
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
 
     const existing = await ctx.db.get(args.id)
     if (!existing) throw new Error("Laudo clínico não encontrado")
 
     await ctx.db.delete(args.id)
     return { success: true, id: args.id }
+  },
+})
+
+// Modelos Customizados de Laudos
+export const listReportCustomTemplates = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin", "professional", "reception"]);
+    return await ctx.db.query("reportCustomTemplates").order("desc").collect()
+  },
+})
+
+export const saveReportCustomTemplate = mutation({
+  args: {
+    sessionToken: v.string(),
+    id: v.optional(v.id("reportCustomTemplates")),
+    title: v.string(),
+    type: v.string(),
+    content: v.string(),
+    cidDefault: v.optional(v.string()),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, id, ...data } = input
+    await requireStaff(ctx, sessionToken, ["admin", "professional", "reception"]);
+
+    const now = Date.now()
+    if (id) {
+      await ctx.db.patch(id, { ...data, updatedAt: now })
+      return id
+    }
+    return await ctx.db.insert("reportCustomTemplates", {
+      ...data,
+      createdAt: now,
+      updatedAt: now,
+    })
+  },
+})
+
+export const deleteReportCustomTemplate = mutation({
+  args: { sessionToken: v.string(), id: v.id("reportCustomTemplates") },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin", "professional", "reception"]);
+    await ctx.db.delete(input.id)
+    return { success: true, id: input.id }
   },
 })
 

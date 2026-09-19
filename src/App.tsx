@@ -23,6 +23,7 @@ const OnlineBookingsPage = lazy(() => import("@/pages/OnlineBookingsPage").then(
 const BookingBuilderPage = lazy(() => import("@/pages/BookingBuilderPage").then((m) => ({ default: m.BookingBuilderPage })))
 const PatientPortalPage = lazy(() => import("@/pages/PatientPortalPage").then((m) => ({ default: m.PatientPortalPage })))
 const QuickBookingPage = lazy(() => import("@/pages/QuickBookingPage").then((m) => ({ default: m.QuickBookingPage })))
+const MedicalReportsPage = lazy(() => import("@/pages/MedicalReportsPage").then((m) => ({ default: m.MedicalReportsPage })))
 
 
 function PageLoadingFallback() {
@@ -115,6 +116,13 @@ function AppContent() {
     }
   }
 
+  const handleNavigateToReports = (patientId: string) => {
+    if (canAccessSection("medical_reports")) {
+      setSelectedPatientId(patientId)
+      setCurrentSection("medical_reports")
+    }
+  }
+
   return (
     <ClinicDataProvider key={user?.id} currentSection={currentSection}>
       <AppLayout currentSection={currentSection} onNavigate={setCurrentSection}>
@@ -122,16 +130,26 @@ function AppContent() {
         {currentSection === "dashboard" && (
           <DashboardPage onNavigate={setCurrentSection} />
         )}
-        {currentSection === "schedule" && <SchedulePage onNavigate={setCurrentSection} />}
+        {currentSection === "schedule" && (
+          <SchedulePage
+            onNavigate={setCurrentSection}
+            onNavigateToReports={handleNavigateToReports}
+          />
+        )}
         {currentSection === "online_bookings" && <OnlineBookingsPage />}
         {currentSection === "classes" && <ClassesPage />}
         {currentSection === "patients" && (
-          <PatientsPage onNavigateToClinical={handleNavigateToClinical} />
+          <PatientsPage
+            onNavigateToClinical={handleNavigateToClinical}
+            onNavigateToReports={handleNavigateToReports}
+          />
         )}
         {currentSection === "professionals" && <ProfessionalsPage />}
         {currentSection === "clinical" && canAccessSection("clinical") && (
-
           <ClinicalRecordPage initialPatientId={selectedPatientId} />
+        )}
+        {currentSection === "medical_reports" && canAccessSection("medical_reports") && (
+          <MedicalReportsPage initialPatientId={selectedPatientId} />
         )}
         {currentSection === "packages" && <PackagesPage />}
         {currentSection === "finance" && canAccessSection("finance") && <FinancePage />}

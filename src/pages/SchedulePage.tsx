@@ -77,9 +77,10 @@ import type { NavSection } from "@/components/layout/AppLayout"
 
 interface SchedulePageProps {
   onNavigate?: (section: NavSection) => void
+  onNavigateToReports?: (patientId: string) => void
 }
 
-export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
+export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate, onNavigateToReports }) => {
   const { user, isProfessional, isAdmin } = useAuth()
   const {
     services,
@@ -1818,6 +1819,14 @@ export const SchedulePage: React.FC<SchedulePageProps> = ({ onNavigate }) => {
           isOpen={!!patientProfileId}
           onClose={() => setPatientProfileId(null)}
           onEdit={() => {}}
+          onNavigateToReports={(patientId) => {
+            setPatientProfileId(null)
+            if (onNavigateToReports) {
+              onNavigateToReports(patientId)
+            } else if (onNavigate) {
+              onNavigate("medical_reports")
+            }
+          }}
         />
       )}
     </div>

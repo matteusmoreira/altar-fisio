@@ -144,13 +144,16 @@
   #printable-patient-sheet,
   #printable-patient-sheet *,
   #printable-chief-complaint,
-  #printable-chief-complaint * {
+  #printable-chief-complaint *,
+  #printable-report-sheet,
+  #printable-report-sheet * {
     visibility: visible;
   }
 
   #printable-document,
   #printable-patient-sheet,
-  #printable-chief-complaint {
+  #printable-chief-complaint,
+  #printable-report-sheet {
     position: absolute;
     left: 0;
     top: 0;

@@ -555,16 +555,22 @@ export default defineSchema({
 
   // Laudos Clínicos e Documentos Oficiais Emitidos (CRUD de Laudos)
   clinicalReports: defineTable({
-    patientId: v.id("patients"),
-    professionalId: v.id("professionals"),
+    patientId: v.optional(v.id("patients")),
+    patientName: v.optional(v.string()),
+    professionalId: v.optional(v.id("professionals")),
     type: v.union(
       v.literal("report"),
       v.literal("certificate"),
       v.literal("receipt"),
       v.literal("tcle")
     ),
+    modelKey: v.optional(v.string()),
     title: v.string(), // Ex: "Laudo de Evolução Clínica e Biomecânica"
     date: v.string(), // YYYY-MM-DD
+    timeRange: v.optional(v.string()), // "das 08:00 às 09:00 horas"
+    paperSize: v.optional(v.string()), // "a4" | "a5"
+    showWatermark: v.optional(v.boolean()),
+    signatureImageUrl: v.optional(v.string()),
     // Conteúdo clínico estruturado do laudo
     chiefComplaint: v.optional(v.string()),
     painScaleEva: v.optional(v.number()),
@@ -591,6 +597,16 @@ export default defineSchema({
     .index("by_patient", ["patientId"])
     .index("by_professional", ["professionalId"])
     .index("by_date", ["date"]),
+
+  // Modelos Customizados de Laudos Salvos pela Clínica
+  reportCustomTemplates: defineTable({
+    title: v.string(),
+    type: v.string(), // "laudo" | "declaracao"
+    content: v.string(),
+    cidDefault: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
 
   // Configuração do Construtor de Agendamento Público e Triagem
   bookingFormConfig: defineTable({

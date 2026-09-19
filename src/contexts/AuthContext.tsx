@@ -170,6 +170,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return canAccessBookingBuilder // Admin e Recepção
       case "quick_booking":
         return isAdmin || isReception // Admin e Recepção
+      case "medical_reports":
+        return true // Admin, Fisioterapeutas e Recepção
       default:
         return false
     }

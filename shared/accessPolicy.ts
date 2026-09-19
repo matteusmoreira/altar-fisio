@@ -27,8 +27,10 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   "clinic:getPatientCustomFields": ["admin", "professional", "reception"],
   "clinic:updatePatientCustomFields": ["admin", "reception"],
   "clinic:getClinicalSpecialties": "public",
-  "clinic:updateClinicalSpecialties": ["admin"],
   "clinical:attachPosturalPhoto": ["admin", "professional"],
+  "clinical:listReportCustomTemplates": ["admin", "professional", "reception"],
+  "clinical:saveReportCustomTemplate": ["admin", "professional", "reception"],
+  "clinical:deleteReportCustomTemplate": ["admin", "professional", "reception"],
   "clinic:getAdminSettings": ["admin"],
   "portalAuth:changePassword": ["admin"],
   "audit:logAction": [
@@ -153,23 +155,28 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
   ],
   "clinical:listClinicalReports": [
     "admin",
-    "professional"
+    "professional",
+    "reception"
   ],
   "clinical:getClinicalReport": [
     "admin",
-    "professional"
+    "professional",
+    "reception"
   ],
   "clinical:createClinicalReport": [
     "admin",
-    "professional"
+    "professional",
+    "reception"
   ],
   "clinical:updateClinicalReport": [
     "admin",
-    "professional"
+    "professional",
+    "reception"
   ],
   "clinical:deleteClinicalReport": [
     "admin",
-    "professional"
+    "professional",
+    "reception"
   ],
   "consents:getPatientConsents": [
     "admin",

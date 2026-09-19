@@ -9,6 +9,7 @@ import {
   Users,
   Layers,
   FileText,
+  FileCheck2,
   DollarSign,
   Settings,
   Menu,
@@ -43,6 +44,7 @@ export type NavSection =
   | "patients"
   | "professionals"
   | "clinical"
+  | "medical_reports"
   | "packages"
   | "finance"
   | "notifications"
@@ -130,6 +132,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { id: "patients", label: "Pacientes & Alunos", shortLabel: "Pacientes", icon: Users, group: "clinico" },
     { id: "professionals", label: "Profissionais da Saúde", shortLabel: "Equipe", icon: Stethoscope, badge: "CREFITO", group: "clinico" },
     { id: "clinical", label: "Prontuário & Avaliações", shortLabel: "Prontuário", icon: FileText, badge: "CREFITO", group: "clinico" },
+    { id: "medical_reports", label: "Laudos", shortLabel: "Laudos", icon: FileCheck2, badge: "Emissão", group: "clinico" },
     { id: "packages", label: "Serviços & Pacotes", shortLabel: "Serviços", icon: BookmarkCheck, group: "gestao" },
     { id: "finance", label: "Financeiro Interno", shortLabel: "Financeiro", icon: DollarSign, group: "gestao" },
     { id: "notifications", label: "Lembretes WhatsApp/Email", shortLabel: "Lembretes", icon: Bell, group: "gestao" },

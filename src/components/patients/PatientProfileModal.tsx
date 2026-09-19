@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Printer,
+  FileCheck2,
   Edit2,
   ChevronRight,
   TrendingUp,
@@ -54,6 +55,7 @@ interface PatientProfileModalProps {
   onClose: () => void
   onEdit: (patient: Patient) => void
   onNavigateToClinical?: (patientId: string) => void
+  onNavigateToReports?: (patientId: string) => void
 }
 
 const DAY_NAMES = [
@@ -74,6 +76,7 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
   onClose,
   onEdit,
   onNavigateToClinical,
+  onNavigateToReports,
 }) => {
   const {
     patientPackages,
@@ -561,6 +564,22 @@ export const PatientProfileModal: React.FC<PatientProfileModalProps> = ({
                   <Phone className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">WhatsApp</span>
                 </Button>
+
+                {onNavigateToReports && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      onClose()
+                      onNavigateToReports(patient.id)
+                    }}
+                    className="gap-1.5 text-xs h-9 bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 shadow-2xs font-semibold"
+                    title="Emitir Laudo ou Declaração para este paciente"
+                  >
+                    <FileCheck2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Emitir Laudo</span>
+                  </Button>
+                )}
 
                 <Button
                   size="sm"

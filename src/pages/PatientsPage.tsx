@@ -44,9 +44,10 @@ import { ViewModeToggle, type ViewMode } from "@/components/ui/view-mode-toggle"
 
 interface PatientsPageProps {
   onNavigateToClinical: (patientId: string) => void
+  onNavigateToReports?: (patientId: string) => void
 }
 
-export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical }) => {
+export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical, onNavigateToReports }) => {
   const { role, user, isProfessional } = useAuth()
   const canEditPatient = role === 'admin'
   const { patients, addPatient, updatePatient, deletePatient, clinicalOverview, professionals = [] } = useClinicData()
@@ -1634,6 +1635,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
         onClose={() => setProfilePatient(null)}
         onEdit={handleOpenEdit}
         onNavigateToClinical={onNavigateToClinical}
+        onNavigateToReports={onNavigateToReports}
       />
     </div>
   )

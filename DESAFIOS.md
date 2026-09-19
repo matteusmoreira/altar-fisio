@@ -1,6 +1,25 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
-### [2026-09-19] Polimento no Layout da Ficha do Paciente e Padronização da Impressão em PDF (Logo Inteira, Sem ID, Sem Assinaturas e Rodapé Institucional com Site)
+### [2026-09-19] Novo Módulo Lateral "Laudos" com 5 Modelos Físicos, Assinatura Digital Dr. Marcelo e Isolamento de Impressão A4/A5
+- **Ponto de Fricção**:
+  1. A clínica utilizava 5 modelos impressos físicos em papel (Laudos de Fisioterapia 3x/semana, Cirurgias/Fraturas, Diário, RPG e Declaração de Comparecimento com horários e moldura dupla). Era necessário transpor esses documentos para o sistema digital com 100% de fidelidade visual, carimbo oficial e assinatura do Dr. Marcelo.
+  2. Ao adicionar novas funções ao backend Convex em `convex/clinical.ts` (`listReportCustomTemplates`, etc.) e registrá-las em `shared/accessPolicy.ts`, funções pré-existentes de `clinicalReports` já estavam declaradas mais abaixo no arquivo. A declaração duplicada gerou erro TypeScript `TS1117: An object literal cannot have multiple properties with the same name`.
+  3. No arquivo de testes `tests/medical-reports-page.test.tsx`, a remoção da anotação inicial `// @vitest-environment jsdom` causou falha de execução (`window is not defined`), e múltiplos `render()` sem `afterEach(cleanup)` geraram nós DOM duplicados acumulados no body.
+  4. Para impressão física vetorial via `window.print()`, a folha `#printable-report-sheet` precisa ser explicitamente declarada nas regras globais `@media print` de `src/index.css`, garantindo que menus laterais, botões de ação e cabeçalhos do navegador fiquem invisíveis na impressão e apenas o documento limpo seja impresso ou salvo em PDF.
+  5. Durante refatoração em `DrMarceloSignature.tsx`, uma substituição de ternário deixou uma tag de fechamento órfã `)}` que causou erro `TS1381`. Deve-se sempre manter a estrutura condicional estrita `showStamp ? (...) : (...)`.
+  6. Para fidelidade absoluta aos blocos físicos fotografados, os Laudos requerem moldura retangular fina perimetral (`border-[1.5px] border-gray-900 absolute inset-3 sm:inset-4`), título centralizado sublinhado `LAUDO`, marca d'água translúcida circular estilizada ("Clínica de Fisioterapia & Ortopedia RPG Dr. Marcelo") e a Declaração de Comparecimento requer moldura arredondada (`rounded-3xl`) com emblema preto circular no topo.
+- **Mitigação / Regra**:
+  1. No `src/components/reports/`:
+     - Criados os 5 modelos oficiais físicos mais modelo livre em `reportTemplates.ts`.
+     - Criado `DrMarceloSignature.tsx` com rubrica vetorial em tom azul caneta realista (`#1e40af`), carimbo oficial `Dr. Marcelo S. Santos — CREFITO 2: 40008-F` e endereço institucional.
+     - Criada folha timbrada `PrintableReportSheet.tsx` com suporte a formatos A4 e A5, moldura retangular para laudos e arredondada para declaração de comparecimento, cabeçalhos fiéis aos blocos físicos e marca d'água circular suave da clínica.
+  2. No `shared/accessPolicy.ts`:
+     - Verificar sempre se o nome da função já existe no objeto antes de inseri-lo, evitando chaves duplicadas. Atualizado acesso aos laudos para `['admin', 'professional', 'reception']`.
+  3. Em testes com jsdom:
+     - Manter compulsoriamente `// @vitest-environment jsdom` na primeira linha do arquivo e registrar `afterEach(() => cleanup())`.
+  4. No `src/index.css`:
+     - Incluído `#printable-report-sheet` nas regras de visibilidade e posicionamento absoluto do `@media print`.
+- **Validação**: 61 arquivos de teste e 326 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build de produção Vite concluído com 0 erros e deploy Convex em produção (`exuberant-guanaco-180`) sincronizado com sucesso.
 - **Ponto de Fricção**:
   1. A emissão de documentos impressos e geração de PDF possuía dois pontos de ação concorrentes (`Imprimir PDF` no topo do modal da Ficha do Paciente e os botões `Imprimir` e `Baixar PDF` via `html2canvas` dentro da aba de Queixa Principal). O usuário preferiu o comportamento da impressão nativa vetorial do botão superior e solicitou a remoção do botão de download de PDF da aba.
   2. O cabeçalho dos documentos impressos repetia o nome e subtítulo da clínica em texto tipográfico ao lado do logotipo oficial, gerando poluição visual, visto que a arte gráfica do logotipo já contém a tipografia médica e o nome institucional. Além disso, a exibição de `Doc ID: ...` poluia o cabeçalho para vias entregues ao paciente.
