@@ -1,5 +1,22 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-09-19] Ocultação de Botões do Topo (Portal do Aluno e Página Pública) e Itens do Menu (Agendamentos Online, Prontuário, Financeiro e Construtor)
+- **Ponto de Fricção**:
+  1. A barra de cabeçalho superior desktop do `AppLayout` exibia atalhos externos para o Portal do Aluno (`/portal`) e para a Página Pública de Agendamento (`/agendar`), poluindo a visão operacional da clínica.
+  2. O menu lateral da aplicação (e o drawer de navegação mobile) exibia os módulos "Agendamentos Online", "Prontuário & Avaliações", "Financeiro Interno" e "Construtor de Agendamento", que foram solicitados para serem ocultados do sistema.
+  3. No mobile bottom nav (`md:hidden`), o 5º botão alternava entre `finance` ("Caixa") para admin e `clinical` ("Prontuário") para fisioterapeuta. Se mantidos, quebrariam a regra de ocultar esses módulos do sistema no mobile.
+  4. Em testes unitários com jsdom do `AppLayout`, a renderização do modal `ThemeCustomizerModal` requer que `normalizeToHex` esteja presente no mock de `@/contexts/ThemeContext`, exigindo o uso de `importOriginal` para carregar funções utilitárias puras do módulo de tema.
+- **Mitigação / Regra**:
+  1. No `src/components/layout/AppLayout.tsx`:
+     - Removidos do cabeçalho superior os botões `Portal do Aluno /portal` e `Página Pública /agendar`, preservando o relógio com data e fuso oficial de Brasília.
+     - Removidos de `allNavItems` os itens `online_bookings`, `clinical`, `finance` e `booking_builder`.
+     - Criado dicionário imutável `SECTION_TITLES` para garantir resolução correta de rótulo no breadcrumb e no topo mobile mesmo se o usuário navegar internamente para uma seção não listada na sidebar.
+     - Atualizado o 5º botão do bottom nav bar mobile para apontar para `medical_reports` ("Laudos") com o ícone `FileCheck2`, e `packages` ("Pacotes") para recepção, removendo qualquer menção a "Caixa" ou "Prontuário".
+     - Limpeza cirúrgica de dependências e imports órfãos (`ExternalLink`, `CalendarCheck`, `FileText`, `DollarSign`, `Sparkles`, `useQuery`, `api`, `publicBookings`, `pendingOnlineCount`).
+  2. Testes dedicados:
+     - Criado `tests/hidden-navigation-items.test.tsx` com 3 testes cobrindo a ausência dos botões do topo, ausência dos 4 itens no menu e preservação dos itens principais.
+- **Validação**: 62 arquivos de teste e 329 testes aprovados no Vitest, mais 3 testes de service worker (100% de sucesso). Typecheck TypeScript (`tsc -b`), build Vite de produção (1.25s) e oxlint sem erros.
+
 ### [2026-09-19] Novo Módulo Lateral "Laudos" com 5 Modelos Físicos, Assinatura Digital Dr. Marcelo e Isolamento de Impressão A4/A5
 - **Ponto de Fricção**:
   1. A clínica utilizava 5 modelos impressos físicos em papel (Laudos de Fisioterapia 3x/semana, Cirurgias/Fraturas, Diário, RPG e Declaração de Comparecimento com horários e moldura dupla). Era necessário transpor esses documentos para o sistema digital com 100% de fidelidade visual, carimbo oficial e assinatura do Dr. Marcelo.

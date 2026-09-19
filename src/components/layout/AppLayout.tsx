@@ -8,9 +8,7 @@ import {
   Calendar,
   Users,
   Layers,
-  FileText,
   FileCheck2,
-  DollarSign,
   Settings,
   Menu,
   X,
@@ -28,13 +26,8 @@ import {
   UserCheck,
   LogOut,
   Clock,
-  ExternalLink,
-  CalendarCheck,
   CalendarPlus,
-  Sparkles,
 } from "lucide-react"
-import { useQuery } from "@/lib/staffConvex"
-import { api } from "@convex/_generated/api"
 
 export type NavSection =
   | "dashboard"
@@ -51,6 +44,23 @@ export type NavSection =
   | "booking_builder"
   | "quick_booking"
   | "settings"
+
+const SECTION_TITLES: Record<NavSection, string> = {
+  dashboard: "Visão Geral",
+  schedule: "Agenda & Marcações",
+  quick_booking: "Agendamento Rápido",
+  online_bookings: "Agendamentos Online",
+  classes: "Turmas & Salas",
+  patients: "Pacientes & Alunos",
+  professionals: "Profissionais da Saúde",
+  clinical: "Prontuário & Avaliações",
+  medical_reports: "Laudos",
+  packages: "Serviços & Pacotes",
+  finance: "Financeiro Interno",
+  notifications: "Lembretes WhatsApp/Email",
+  booking_builder: "Construtor de Agendamento",
+  settings: "Configurações da Clínica",
+}
 
 interface AppLayoutProps {
   currentSection: NavSection
@@ -104,11 +114,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  const publicBookings = useQuery(api.bookingBuilder.listPublicBookings, {})
-  const pendingOnlineCount = Array.isArray(publicBookings)
-    ? publicBookings.filter((b) => b.status === "pending_approval").length
-    : 0
-
   const allNavItems: Array<{
     id: NavSection
     label: string
@@ -120,23 +125,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { id: "dashboard", label: "Visão Geral", shortLabel: "Início", icon: Activity, group: "atendimento" },
     { id: "schedule", label: "Agenda & Marcações", shortLabel: "Agenda", icon: Calendar, badge: "Hoje", group: "atendimento" },
     { id: "quick_booking", label: "Agendamento Rápido", shortLabel: "Agendar", icon: CalendarPlus, group: "atendimento" },
-    {
-      id: "online_bookings",
-      label: "Agendamentos Online",
-      shortLabel: "Online",
-      icon: CalendarCheck,
-      badge: pendingOnlineCount > 0 ? `${pendingOnlineCount} Novo` : undefined,
-      group: "atendimento",
-    },
     { id: "classes", label: "Turmas & Salas", shortLabel: "Turmas", icon: Layers, badge: "Pilates", group: "atendimento" },
     { id: "patients", label: "Pacientes & Alunos", shortLabel: "Pacientes", icon: Users, group: "clinico" },
     { id: "professionals", label: "Profissionais da Saúde", shortLabel: "Equipe", icon: Stethoscope, badge: "CREFITO", group: "clinico" },
-    { id: "clinical", label: "Prontuário & Avaliações", shortLabel: "Prontuário", icon: FileText, badge: "CREFITO", group: "clinico" },
     { id: "medical_reports", label: "Laudos", shortLabel: "Laudos", icon: FileCheck2, badge: "Emissão", group: "clinico" },
     { id: "packages", label: "Serviços & Pacotes", shortLabel: "Serviços", icon: BookmarkCheck, group: "gestao" },
-    { id: "finance", label: "Financeiro Interno", shortLabel: "Financeiro", icon: DollarSign, group: "gestao" },
     { id: "notifications", label: "Lembretes WhatsApp/Email", shortLabel: "Lembretes", icon: Bell, group: "gestao" },
-    { id: "booking_builder", label: "Construtor de Agendamento", shortLabel: "Construtor", icon: Sparkles, badge: "Online", group: "gestao" },
     { id: "settings", label: "Configurações da Clínica", shortLabel: "Ajustes", icon: Settings, group: "gestao" },
   ]
 
@@ -521,7 +515,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   {theme.clinicName}
                 </span>
                 <span className="text-[10px] text-muted-foreground truncate">
-                  {navItems.find((n) => n.id === currentSection)?.label || "Clinica Dr Marcelo"}
+                  {SECTION_TITLES[currentSection] || "Clinica Dr Marcelo"}
                 </span>
               </div>
             </>
@@ -731,35 +725,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <span className="text-foreground/80 font-bold">{theme.clinicName}</span>
             <span className="text-muted-foreground/40">/</span>
             <span className="text-primary font-bold">
-              {navItems.find((n) => n.id === currentSection)?.label || "Visão Geral"}
+              {SECTION_TITLES[currentSection] || "Visão Geral"}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            <a
-              href="/portal"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-xs font-semibold transition-all shadow-2xs"
-              title="Abrir Portal do Aluno / Área do Paciente"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Portal do Aluno</span>
-              <span>/portal</span>
-            </a>
-
-            <a
-              href="/agendar"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-all shadow-2xs"
-              title="Abrir página pública de agendamento online"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Página Pública</span>
-              <span>/agendar</span>
-            </a>
-
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-border bg-background/80 shadow-2xs text-xs">
               <Clock className="h-3.5 w-3.5 text-primary" />
               <span className="font-semibold text-foreground">
@@ -822,25 +792,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         </button>
 
         {/* 5º Botão Contextual por Perfil */}
-        {role === "admin" ? (
+        {role === "admin" || role === "professional" ? (
           <button
-            onClick={() => onNavigate("finance")}
+            onClick={() => onNavigate("medical_reports")}
             className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
-              currentSection === "finance" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
+              currentSection === "medical_reports" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <DollarSign className="h-5 w-5" />
-            <span className="text-[10px] leading-tight">Caixa</span>
-          </button>
-        ) : role === "professional" ? (
-          <button
-            onClick={() => onNavigate("clinical")}
-            className={`flex flex-col items-center justify-center min-h-[44px] min-w-[50px] gap-0.5 px-2 py-1 rounded-xl transition-colors ${
-              currentSection === "clinical" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FileText className="h-5 w-5" />
-            <span className="text-[10px] leading-tight">Prontuário</span>
+            <FileCheck2 className="h-5 w-5" />
+            <span className="text-[10px] leading-tight">Laudos</span>
           </button>
         ) : (
           <button
