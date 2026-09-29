@@ -74,7 +74,20 @@ export const getNotificationSettings = query({
   handler: async (ctx, args) => {
     await requireStaff(ctx, args.sessionToken, ['admin', 'reception'])
     const settings = await ctx.db.query('clinicSettings').first()
-    return { activeConfirmationTemplateId: settings?.activeConfirmationTemplateId, activeReminder24hTemplateId: settings?.activeReminder24hTemplateId, activeReminder2hTemplateId: settings?.activeReminder2hTemplateId, activeReminder1hTemplateId: settings?.activeReminder1hTemplateId, activeReminder30mTemplateId: settings?.activeReminder30mTemplateId, activeWaitlistTemplateId: settings?.activeWaitlistTemplateId }
+    return {
+      activeConfirmationTemplateId: settings?.activeConfirmationTemplateId,
+      activeReminder24hTemplateId: settings?.activeReminder24hTemplateId,
+      activeReminder2hTemplateId: settings?.activeReminder2hTemplateId,
+      activeReminder1hTemplateId: settings?.activeReminder1hTemplateId,
+      activeReminder30mTemplateId: settings?.activeReminder30mTemplateId,
+      activeWaitlistTemplateId: settings?.activeWaitlistTemplateId,
+      reminder24hEnabled: settings?.reminder24hEnabled !== false,
+      reminder2hEnabled: settings?.reminder2hEnabled !== false,
+      reminder1hEnabled: settings?.reminder1hEnabled !== false,
+      reminder30mEnabled: settings?.reminder30mEnabled !== false,
+      waitlistEnabled: settings?.waitlistEnabled !== false,
+      confirmationEnabled: settings?.confirmationEnabled !== false,
+    }
   },
 })
 

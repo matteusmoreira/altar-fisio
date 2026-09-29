@@ -710,6 +710,9 @@ export const sendScheduleConfirmationAction = internalAction({
   },
   handler: async (ctx, args) => {
     const settings: any = await ctx.runQuery(internal.notifications.getClinicSettingsInternal, {})
+    if (settings?.confirmationEnabled === false) {
+      return { success: false, reason: "Confirmações automáticas desativadas" }
+    }
     const clinicName = settings?.clinicName || "Clinica Dr Marcelo"
     const noticeHours = settings?.cancellationNoticeHours || 2
     const defaultInst: any = await ctx.runQuery(internal.whatsapp.getDefaultInstanceInternal, {})

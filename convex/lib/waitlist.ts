@@ -58,7 +58,10 @@ export async function bookCredit(ctx: MutationCtx, patientId: Id<'patients'>, cr
   await prepareReminders(ctx, participantId)
   if (entryId) {
     await ctx.db.patch(entryId, { status: 'booked', participantId, reason: undefined })
-    await queueAppointmentJob(ctx, { patientId, scheduleId, participantId, entryId, kind: 'waitlist_booked', fingerprint: scheduleFingerprint(s), dueAt: Date.now() })
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (settings?.waitlistEnabled !== false) {
+      await queueAppointmentJob(ctx, { patientId, scheduleId, participantId, entryId, kind: 'waitlist_booked', fingerprint: scheduleFingerprint(s), dueAt: Date.now() })
+    }
   }
   return participantId
 }

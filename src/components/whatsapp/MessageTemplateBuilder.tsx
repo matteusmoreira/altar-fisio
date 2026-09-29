@@ -156,6 +156,7 @@ export const MessageTemplateBuilder: React.FC = () => {
   const saveTemplateMutation = useMutation(api.whatsapp.saveTemplate)
   const deleteTemplateMutation = useMutation(api.whatsapp.deleteTemplate)
   const assignReminderMutation = useMutation(api.whatsapp.assignReminderTemplate)
+  const toggleReminderMutation = useMutation(api.whatsapp.toggleReminderEnabled)
 
   // Estado do Editor
   const [editingTemplateId, setEditingTemplateId] = useState<any | null>(null)
@@ -357,12 +358,37 @@ export const MessageTemplateBuilder: React.FC = () => {
     }
   }
 
+  // Ativar ou desativar lembrete individualmente
+  const handleToggleReminder = async (
+    target: "reminder_24h" | "reminder_2h" | "reminder_1h" | "reminder_30m" | "waitlist_booked" | "booking_confirmation",
+    enabled: boolean
+  ) => {
+    try {
+      await toggleReminderMutation({ target, enabled })
+      const label = ({
+        reminder_24h: 'Lembrete 24h',
+        reminder_2h: 'Lembrete 2h',
+        reminder_1h: 'Lembrete 1h',
+        reminder_30m: 'Lembrete 30 minutos',
+        waitlist_booked: 'Encaixe pela fila',
+        booking_confirmation: 'Confirmação ao Agendar'
+      })[target]
+      showToast(enabled ? `${label} ativado com sucesso!` : `${label} desativado! Não serão enviados disparos automáticos deste aviso.`)
+    } catch (err: any) {
+      showToast("Erro ao alterar status: " + (err?.message || "Tente novamente"))
+    }
+  }
+
   // Vincular a lembretes e confirmações automáticas
   const handleAssignReminder = async (target: "reminder_24h" | "reminder_2h" | "reminder_1h" | "reminder_30m" | "waitlist_booked" | "booking_confirmation", templateId?: any) => {
+    if (templateId === "__disabled__") {
+      await handleToggleReminder(target, false)
+      return
+    }
     try {
       await assignReminderMutation({ target, templateId })
       const label = ({ reminder_24h: 'Véspera', reminder_2h: '2h (desativado)', reminder_1h: '1h', reminder_30m: '30 minutos', waitlist_booked: 'Encaixe pela fila', booking_confirmation: 'Confirmação' })[target]
-      showToast(`Template vinculado com sucesso ao ${label}!`)
+      showToast(`Template vinculado e ${label} ativado!`)
     } catch (err: any) {
       showToast("Erro ao vincular template")
     }
@@ -469,90 +495,114 @@ export const MessageTemplateBuilder: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
-            {/* Confirmação Imediata ao Agendar */}
-            <div className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs">
-              <span className="font-medium text-muted-foreground">Ao Agendar:</span>
-              <select
-                className="bg-transparent font-semibold text-blue-700 dark:text-blue-400 outline-none cursor-pointer max-w-[150px] truncate"
-                value={clinicSettings?.activeConfirmationTemplateId || ""}
-                onChange={(e) => handleAssignReminder("booking_confirmation", e.target.value ? (e.target.value as any) : undefined)}
-              >
-                <option value="">Texto Padrão da Clínica</option>
-                {templates.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.title} ({t.type})
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => handleEditAssignedTemplate("booking_confirmation", clinicSettings?.activeConfirmationTemplateId)}
-                className="h-6 px-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1 shrink-0"
-                title="Editar modelo de confirmação ao agendar (Agendamento Rápido)"
-              >
-                <Edit2 className="w-3 h-3" />
-                <span>Editar</span>
-              </Button>
-            </div>
-
-            {/* Lembrete 24h */}
-            <div className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs">
-              <span className="font-medium text-muted-foreground">Lembrete 24h:</span>
-              <select
-                className="bg-transparent font-semibold text-emerald-700 dark:text-emerald-400 outline-none cursor-pointer max-w-[150px] truncate"
-                value={clinicSettings?.activeReminder24hTemplateId || ""}
-                onChange={(e) => handleAssignReminder("reminder_24h", e.target.value ? (e.target.value as any) : undefined)}
-              >
-                <option value="">Texto Padrão da Clínica</option>
-                {templates.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.title} ({t.type})
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => handleEditAssignedTemplate("reminder_24h", clinicSettings?.activeReminder24hTemplateId)}
-                className="h-6 px-1.5 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1 shrink-0"
-                title="Editar modelo de lembrete 24h"
-              >
-                <Edit2 className="w-3 h-3" />
-                <span>Editar</span>
-              </Button>
-            </div>
-
             {([
-              ['reminder_1h', 'Lembrete 1h', clinicSettings?.activeReminder1hTemplateId],
-              ['reminder_30m', 'Lembrete 30 minutos', clinicSettings?.activeReminder30mTemplateId],
-              ['waitlist_booked', 'Encaixe pela fila', clinicSettings?.activeWaitlistTemplateId],
-            ] as const).map(([target, label, value]) => (
-              <div key={target} className="flex items-center gap-1.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border shadow-xs text-xs">
-                <span className="text-muted-foreground">{label}:</span>
-                <select
-                  className="bg-transparent max-w-[140px] truncate font-medium outline-none cursor-pointer"
-                  value={value || ''}
-                  onChange={e => handleAssignReminder(target, e.target.value || undefined)}
+              {
+                target: "booking_confirmation" as const,
+                label: "Ao Agendar",
+                color: "text-blue-700 dark:text-blue-400",
+                btnColor: "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40",
+                enabled: clinicSettings?.confirmationEnabled !== false,
+                templateId: clinicSettings?.activeConfirmationTemplateId,
+                editTitle: "Editar modelo de confirmação ao agendar (Agendamento Rápido)",
+              },
+              {
+                target: "reminder_24h" as const,
+                label: "Lembrete 24h",
+                color: "text-emerald-700 dark:text-emerald-400",
+                btnColor: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40",
+                enabled: clinicSettings?.reminder24hEnabled !== false,
+                templateId: clinicSettings?.activeReminder24hTemplateId,
+                editTitle: "Editar modelo de lembrete 24h",
+              },
+              {
+                target: "reminder_1h" as const,
+                label: "Lembrete 1h",
+                color: "text-amber-700 dark:text-amber-400",
+                btnColor: "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40",
+                enabled: clinicSettings?.reminder1hEnabled !== false,
+                templateId: clinicSettings?.activeReminder1hTemplateId,
+                editTitle: "Editar modelo de Lembrete 1h",
+              },
+              {
+                target: "reminder_30m" as const,
+                label: "Lembrete 30 minutos",
+                color: "text-indigo-700 dark:text-indigo-400",
+                btnColor: "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40",
+                enabled: clinicSettings?.reminder30mEnabled !== false,
+                templateId: clinicSettings?.activeReminder30mTemplateId,
+                editTitle: "Editar modelo de Lembrete 30 minutos",
+              },
+              {
+                target: "waitlist_booked" as const,
+                label: "Encaixe pela fila",
+                color: "text-teal-700 dark:text-teal-400",
+                btnColor: "text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/40",
+                enabled: clinicSettings?.waitlistEnabled !== false,
+                templateId: clinicSettings?.activeWaitlistTemplateId,
+                editTitle: "Editar modelo de Encaixe pela fila",
+              },
+            ]).map((cfg) => {
+              const isEnabled = cfg.enabled
+              const selectValue = !isEnabled ? "__disabled__" : (cfg.templateId || "")
+
+              return (
+                <div
+                  key={cfg.target}
+                  className={`flex items-center gap-1.5 p-1.5 sm:p-2 rounded-lg border shadow-xs transition-all ${
+                    isEnabled
+                      ? "bg-background/80 border-border"
+                      : "bg-muted/40 border-dashed border-muted-foreground/30 opacity-75"
+                  }`}
                 >
-                  <option value="">Texto padrão</option>
-                  {templates.map(t => <option key={t._id} value={t._id}>{t.title} ({t.type})</option>)}
-                </select>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleEditAssignedTemplate(target as any, value)}
-                  className="h-6 px-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground gap-1 shrink-0"
-                  title={`Editar modelo de ${label}`}
-                >
-                  <Edit2 className="w-3 h-3" />
-                  <span>Editar</span>
-                </Button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReminder(cfg.target, !isEnabled)}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                      isEnabled
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-200"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80 line-through"
+                    }`}
+                    title={isEnabled ? `Clique para desativar ${cfg.label}` : `Clique para ativar ${cfg.label}`}
+                  >
+                    {isEnabled ? "Ativo" : "Desativado"}
+                  </button>
+
+                  <span className={`font-medium ${isEnabled ? "text-muted-foreground" : "text-muted-foreground/70"}`}>
+                    {cfg.label}:
+                  </span>
+
+                  <select
+                    className={`bg-transparent font-semibold outline-none cursor-pointer max-w-[150px] truncate ${
+                      isEnabled ? cfg.color : "text-muted-foreground italic"
+                    }`}
+                    value={selectValue}
+                    onChange={(e) => handleAssignReminder(cfg.target, e.target.value || undefined)}
+                  >
+                    <option value="__disabled__">🚫 Desativado</option>
+                    <option value="">Texto Padrão da Clínica</option>
+                    {templates.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.title} ({t.type})
+                      </option>
+                    ))}
+                  </select>
+
+                  {isEnabled && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleEditAssignedTemplate(cfg.target as any, cfg.templateId)}
+                      className={`h-6 px-1.5 text-[11px] font-semibold gap-1 shrink-0 ${cfg.btnColor}`}
+                      title={cfg.editTitle}
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>Editar</span>
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </CardContent>
       </Card>
@@ -607,15 +657,29 @@ export const MessageTemplateBuilder: React.FC = () => {
                     <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t text-[11px]">
                       <div className="flex flex-wrap items-center gap-1">
                         {isConfDefault && (
-                          <Badge className="bg-blue-600 text-white text-[9px] py-0 font-medium">
-                            📌 Ao Agendar (Agendamento Rápido)
+                          <Badge className={`${clinicSettings?.confirmationEnabled !== false ? "bg-blue-600 text-white" : "bg-muted text-muted-foreground line-through"} text-[9px] py-0 font-medium`}>
+                            📌 Ao Agendar {clinicSettings?.confirmationEnabled === false ? "(Desativado)" : ""}
                           </Badge>
                         )}
                         {is24hDefault && (
-                          <Badge className="bg-emerald-600 text-white text-[9px] py-0 font-medium">24h Ativo</Badge>
+                          <Badge className={`${clinicSettings?.reminder24hEnabled !== false ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground line-through"} text-[9px] py-0 font-medium`}>
+                            24h {clinicSettings?.reminder24hEnabled !== false ? "Ativo" : "Desativado"}
+                          </Badge>
                         )}
-                        {is2hDefault && (
-                          <Badge className="bg-teal-600 text-white text-[9px] py-0 font-medium">2h Desativado</Badge>
+                        {clinicSettings?.activeReminder1hTemplateId === t._id && (
+                          <Badge className={`${clinicSettings?.reminder1hEnabled !== false ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground line-through"} text-[9px] py-0 font-medium`}>
+                            1h {clinicSettings?.reminder1hEnabled !== false ? "Ativo" : "Desativado"}
+                          </Badge>
+                        )}
+                        {clinicSettings?.activeReminder30mTemplateId === t._id && (
+                          <Badge className={`${clinicSettings?.reminder30mEnabled !== false ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground line-through"} text-[9px] py-0 font-medium`}>
+                            30m {clinicSettings?.reminder30mEnabled !== false ? "Ativo" : "Desativado"}
+                          </Badge>
+                        )}
+                        {clinicSettings?.activeWaitlistTemplateId === t._id && (
+                          <Badge className={`${clinicSettings?.waitlistEnabled !== false ? "bg-teal-600 text-white" : "bg-muted text-muted-foreground line-through"} text-[9px] py-0 font-medium`}>
+                            Fila {clinicSettings?.waitlistEnabled !== false ? "Ativo" : "Desativado"}
+                          </Badge>
                         )}
                       </div>
 

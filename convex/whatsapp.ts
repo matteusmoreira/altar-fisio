@@ -958,19 +958,81 @@ export const assignReminderTemplate = mutation({
     if (!settings) throw new Error("Configurações não encontradas")
 
     if (args.target === "reminder_24h") {
-      await ctx.db.patch(settings._id, { activeReminder24hTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeReminder24hTemplateId: args.templateId, reminder24hEnabled: true })
     } else if (args.target === "reminder_2h") {
-      await ctx.db.patch(settings._id, { activeReminder2hTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeReminder2hTemplateId: args.templateId, reminder2hEnabled: true })
     } else if (args.target === "reminder_1h") {
-      await ctx.db.patch(settings._id, { activeReminder1hTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeReminder1hTemplateId: args.templateId, reminder1hEnabled: true })
     } else if (args.target === "reminder_30m") {
-      await ctx.db.patch(settings._id, { activeReminder30mTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeReminder30mTemplateId: args.templateId, reminder30mEnabled: true })
     } else if (args.target === "waitlist_booked") {
-      await ctx.db.patch(settings._id, { activeWaitlistTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeWaitlistTemplateId: args.templateId, waitlistEnabled: true })
     } else if (args.target === "booking_confirmation") {
-      await ctx.db.patch(settings._id, { activeConfirmationTemplateId: args.templateId })
+      await ctx.db.patch(settings._id, { activeConfirmationTemplateId: args.templateId, confirmationEnabled: true })
     }
     return { success: true }
+  },
+})
+
+export const toggleReminderEnabled = mutation({
+  args: {
+    sessionToken: v.string(),
+    target: v.union(
+      v.literal("reminder_24h"),
+      v.literal("reminder_2h"),
+      v.literal("reminder_1h"),
+      v.literal("reminder_30m"),
+      v.literal("waitlist_booked"),
+      v.literal("booking_confirmation")
+    ),
+    enabled: v.boolean(),
+  },
+  handler: async (ctx, input) => {
+    const { sessionToken, target, enabled } = input
+    await requireStaff(ctx, sessionToken, ["admin", "reception"])
+
+    const settings = await ctx.db.query("clinicSettings").first()
+    if (!settings) throw new Error("Configurações não encontradas")
+
+    const patchField: Record<string, string> = {
+      reminder_24h: "reminder24hEnabled",
+      reminder_2h: "reminder2hEnabled",
+      reminder_1h: "reminder1hEnabled",
+      reminder_30m: "reminder30mEnabled",
+      waitlist_booked: "waitlistEnabled",
+      booking_confirmation: "confirmationEnabled",
+    }
+
+    const field = patchField[target]
+    if (field) {
+      await ctx.db.patch(settings._id, { [field]: enabled })
+    }
+
+    // Se desativou, cancela jobs enfileirados que ainda não dispararam para evitar envios indesejados
+    if (!enabled && ["reminder_24h", "reminder_1h", "reminder_30m", "waitlist_booked"].includes(target)) {
+      const queuedJobs = await ctx.db
+        .query("appointmentJobs")
+        .withIndex("by_status", (q) => q.eq("status", "queued"))
+        .collect()
+
+      for (const job of queuedJobs) {
+        if (job.kind === target) {
+          if (job.scheduledFunctionId) {
+            try {
+              const scheduled = await ctx.db.system.get(job.scheduledFunctionId)
+              if (scheduled?.state.kind === "pending") {
+                await ctx.scheduler.cancel(job.scheduledFunctionId)
+              }
+            } catch {
+              // ignora erro se já disparado
+            }
+          }
+          await ctx.db.patch(job._id, { status: "skipped" })
+        }
+      }
+    }
+
+    return { success: true, enabled }
   },
 })
 

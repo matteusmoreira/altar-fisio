@@ -750,6 +750,7 @@ export const sendQuickBookingWhatsApp = mutation({
     const patient = await ctx.db.get(args.patientId)
     if (!patient?.phone) return { success: false, error: 'Paciente sem telefone cadastrado.' }
 
+    const settings = await ctx.db.query('clinicSettings').first()
     let messageToSend: string = args.customMessage?.trim() || ''
 
     if (!messageToSend) {
@@ -760,7 +761,6 @@ export const sendQuickBookingWhatsApp = mutation({
       }
       schedules.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
 
-      const settings = await ctx.db.query('clinicSettings').first()
       const clinicName = settings?.clinicName || 'Clinica Dr Marcelo'
       const noticeHours = settings?.cancellationNoticeHours ?? 2
 
@@ -822,12 +822,14 @@ export const sendQuickBookingWhatsApp = mutation({
       }
     }
 
-    // Dispara APENAS 1 mensagem de WhatsApp com o resumo consolidado
-    await ctx.scheduler.runAfter(0, internal.notifications.sendQuickBookingSummaryAction, {
-      patientName: patient.name,
-      phone: patient.phone,
-      message: messageToSend,
-    })
+    // Dispara APENAS 1 mensagem de WhatsApp com o resumo consolidado se as confirmações estiverem ativas
+    if (settings?.confirmationEnabled !== false) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendQuickBookingSummaryAction, {
+        patientName: patient.name,
+        phone: patient.phone,
+        message: messageToSend,
+      })
+    }
 
     return { success: true }
   },

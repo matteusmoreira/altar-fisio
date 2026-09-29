@@ -32,6 +32,10 @@ export const claim = internalMutation({
     }
     const schedule = await ctx.db.get(job.scheduleId)
     const settings = await ctx.db.query('clinicSettings').first()
+    if (job.kind === 'reminder_24h' && settings?.reminder24hEnabled === false) { await ctx.db.patch(job._id, { status: 'skipped' }); return null }
+    if (job.kind === 'reminder_1h' && settings?.reminder1hEnabled === false) { await ctx.db.patch(job._id, { status: 'skipped' }); return null }
+    if (job.kind === 'reminder_30m' && settings?.reminder30mEnabled === false) { await ctx.db.patch(job._id, { status: 'skipped' }); return null }
+    if (job.kind === 'waitlist_booked' && settings?.waitlistEnabled === false) { await ctx.db.patch(job._id, { status: 'skipped' }); return null }
     const templateId = job.kind === 'reminder_24h' ? settings?.activeReminder24hTemplateId : job.kind === 'reminder_1h' ? settings?.activeReminder1hTemplateId : job.kind === 'reminder_30m' ? settings?.activeReminder30mTemplateId : job.kind === 'waitlist_booked' ? settings?.activeWaitlistTemplateId : undefined
     const template = templateId ? await ctx.db.get(templateId) : null
     await ctx.db.patch(job._id, { status: 'sending', attemptedAt: Date.now(), error: undefined })
@@ -164,6 +168,8 @@ export const scan = mutation({
 export const prepareDaily = internalMutation({
   args: { date: v.string() },
   handler: async (ctx, args) => {
+    const settings = await ctx.db.query('clinicSettings').first()
+    if (settings?.reminder24hEnabled === false) return { queuedCount: 0 }
     const schedules = await ctx.db.query('schedules').withIndex('by_date', q => q.eq('date', args.date)).collect()
     let queuedCount = 0
     for (const s of schedules) {

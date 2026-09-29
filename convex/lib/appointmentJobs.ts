@@ -33,10 +33,13 @@ export async function prepareReminders(ctx: MutationCtx, participantId: Id<'sche
     await cancelParticipantJobs(ctx, participantId)
     return
   }
+  const settings = await ctx.db.query('clinicSettings').first()
   const fingerprint = scheduleFingerprint(s)
   const jobs = await ctx.db.query('appointmentJobs').withIndex('by_participant', q => q.eq('participantId', participantId)).collect()
   if (jobs.some(j => j.status === 'queued' && j.fingerprint !== fingerprint)) await cancelParticipantJobs(ctx, participantId)
   for (const [kind, minutes] of [['reminder_1h', 60], ['reminder_30m', 30]] as const) {
+    if (kind === 'reminder_1h' && settings?.reminder1hEnabled === false) continue
+    if (kind === 'reminder_30m' && settings?.reminder30mEnabled === false) continue
     const dueAt = sessionTime(s) - minutes * 60000
     if (dueAt < Date.now() || jobs.some(j => j.kind === kind && j.fingerprint === fingerprint && j.status !== 'skipped')) continue
     await queueAppointmentJob(ctx, { patientId: p.patientId, scheduleId: s._id, participantId, kind, fingerprint, dueAt })
