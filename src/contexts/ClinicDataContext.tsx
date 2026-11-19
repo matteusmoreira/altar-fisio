@@ -366,11 +366,11 @@ export const ClinicDataProvider: React.FC<{ children: React.ReactNode; currentSe
   )
   const convexClinicalOverview = useQuery(
     api.clinical.listAllClinicalOverview,
-    isSection(["clinical", "patients"]) ? {} : "skip"
+    isSection(["clinical"]) ? {} : "skip"
   )
   const convexClinicalReports = useQuery(
     api.clinical.listClinicalReports,
-    isSection(["clinical", "patients"]) ? {} : "skip"
+    isSection(["clinical"]) ? {} : "skip"
   )
 
   // Convex Mutations

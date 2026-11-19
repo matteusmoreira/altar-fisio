@@ -141,6 +141,10 @@ export const accessPolicy: Record<string, 'public' | 'patient' | readonly string
     "admin",
     "professional"
   ],
+  "clinical:listPatientIdsWithRecord": [
+    "admin",
+    "professional"
+  ],
   "clinical:updateSoapEvolution": [
     "admin",
     "professional"

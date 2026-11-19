@@ -105,7 +105,7 @@ test('listAssignedPatientIds returns patients linked via schedules or clinical e
       specialty: 'pilates',
       roomId: room,
       professionalId: prof1,
-      date: '2026-09-10',
+      date: new Date().toISOString().split('T')[0],
       startTime: '08:00',
       endTime: '08:50',
       maxCapacity: 3,
@@ -116,6 +116,25 @@ test('listAssignedPatientIds returns patients linked via schedules or clinical e
       scheduleId: schedule,
       patientId: p1,
       status: 'scheduled',
+    })
+
+    // Agenda antiga (fora da janela de 180 dias): não deve vincular o Paciente 3
+    const oldSchedule = await ctx.db.insert('schedules', {
+      title: 'Pilates Solo',
+      type: 'turma',
+      specialty: 'pilates',
+      roomId: room,
+      professionalId: prof1,
+      date: new Date(Date.now() - 300 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startTime: '08:00',
+      endTime: '08:50',
+      maxCapacity: 3,
+      status: 'scheduled',
+    })
+    await ctx.db.insert('scheduleParticipants', {
+      scheduleId: oldSchedule,
+      patientId: p3,
+      status: 'present',
     })
 
     // Evolucao clinica com Dra. Stefanie

@@ -50,7 +50,9 @@ interface PatientsPageProps {
 export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical, onNavigateToReports }) => {
   const { role, user, isProfessional } = useAuth()
   const canEditPatient = role === 'admin'
-  const { patients, addPatient, updatePatient, deletePatient, clinicalOverview, professionals = [] } = useClinicData()
+  const { patients, addPatient, updatePatient, deletePatient, professionals = [] } = useClinicData()
+  const patientIdsWithRecordQuery = useQuery(api.clinical.listPatientIdsWithRecord)
+  const patientIdsWithRecord = useMemo(() => new Set<string>(patientIdsWithRecordQuery ?? []), [patientIdsWithRecordQuery])
   const healthInsuranceOptionsQuery = useQuery(api.clinic.getHealthInsuranceOptions)
   const healthInsuranceOptions =
     Array.isArray(healthInsuranceOptionsQuery) && healthInsuranceOptionsQuery.length > 0
@@ -331,7 +333,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
       if (!matchesSearch) return false
 
-      const hasRecord = clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)
+      const hasRecord = patientIdsWithRecord.has(p.id)
 
       if (statusFilter === "active" && !p.active) return false
       if (statusFilter === "inactive" && p.active) return false
@@ -345,7 +347,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
 
       return true
     })
-  }, [patients, searchTerm, statusFilter, clinicalOverview, selectedProfFilter, effectiveAssignedIds])
+  }, [patients, searchTerm, statusFilter, patientIdsWithRecord, selectedProfFilter, effectiveAssignedIds])
 
   // KPIs
   const basePatients = useMemo(() => {
@@ -357,8 +359,8 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
   const totalCount = basePatients.length
   const activeCount = useMemo(() => basePatients.filter((p) => p.active).length, [basePatients])
   const withRecordCount = useMemo(
-    () => basePatients.filter((p) => clinicalOverview.some((co) => co.patientId === p.id && co.hasRecord)).length,
-    [basePatients, clinicalOverview]
+    () => basePatients.filter((p) => patientIdsWithRecord.has(p.id)).length,
+    [basePatients, patientIdsWithRecord]
   )
 
   const handleOpenCreate = () => {
@@ -725,8 +727,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
         /* MODO GRADE */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
           {filteredPatients.map((patient) => {
-            const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
-            const hasRecord = !!overviewItem?.hasRecord
+            const hasRecord = patientIdsWithRecord.has(patient.id)
 
             return (
               <Card
@@ -891,8 +892,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
               </thead>
               <tbody className="divide-y divide-border/60">
                 {filteredPatients.map((patient) => {
-                  const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
-                  const hasRecord = !!overviewItem?.hasRecord
+                  const hasRecord = patientIdsWithRecord.has(patient.id)
 
                   return (
                     <tr
@@ -1025,8 +1025,7 @@ export const PatientsPage: React.FC<PatientsPageProps> = ({ onNavigateToClinical
           {/* Cards Condensados para Mobile (< 640px) */}
           <div className="sm:hidden divide-y divide-border/60">
             {filteredPatients.map((patient) => {
-              const overviewItem = clinicalOverview.find((co) => co.patientId === patient.id)
-              const hasRecord = !!overviewItem?.hasRecord
+              const hasRecord = patientIdsWithRecord.has(patient.id)
 
               return (
                 <div

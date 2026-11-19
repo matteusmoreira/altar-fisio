@@ -330,6 +330,12 @@ export default defineSchema({
     .index("by_professional", ["professionalId"])
     .index("by_patient_timestamp", ["patientId", "timestamp"]),
 
+  // Contador de evoluções por paciente (evita ler o histórico SOAP inteiro na visão geral)
+  clinicalEvolutionStats: defineTable({
+    patientId: v.id("patients"),
+    count: v.number(),
+  }).index("by_patient", ["patientId"]),
+
   // Financeiro Interno: Contas a Pagar e Receber & Vendas
   financialTransactions: defineTable({
     type: v.union(v.literal("income"), v.literal("expense")),

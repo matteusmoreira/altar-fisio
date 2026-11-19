@@ -1,5 +1,11 @@
 # DESAFIOS.md — Registro de Desafios e Pontos de Fricção
 
+### [2026-11-19] Limites reais do Convex Free e consultas que crescem com o histórico
+- Limites oficiais (convex.dev/pricing, nov/2026): 1 GB/mês de Database I/O, 1 GB/mês de egress, 0,5 GB de banco, 1M chamadas/mês (atualização de assinatura conta). Anotações antigas diziam 10 GB.
+- Consulta reativa que lê histórico por paciente/profissional (evoluções SOAP, agendas de todo o período) é o que estoura o I/O: usar contador/tabela-resumo (`clinicalEvolutionStats`) ou janela de datas, nunca `.take(50)`/`.collect()` por item.
+- Antes de pôr uma seção em `isSection([...])` do `ClinicDataContext`, confirmar que a tela usa o dado; Pacientes assinava visão clínica e 150 laudos só para um selo "tem ficha".
+- Rodar testes/build num clone em disco local (`C:\Users\matte\dev\altar-fisio`): na pasta do Google Drive o Vitest estoura tempo ao iniciar os processos.
+
 ### [2026-09-19] Contenção de Transbordamento Horizontal no Dashboard Mobile-First (iPhone 14 Pro e Telas < 400px)
 - **Ponto de Fricção**:
   1. Em visualizações móveis (ex: iPhone 14 Pro, 393px de largura), todo o lado direito do Dashboard sofria um corte visual rígido de ~50px:
@@ -630,7 +636,7 @@
 
 ### [2026-09-16] Otimização Extrema do Banco Convex para Permanência no Plano Gratuito (Hobby Tier)
 - **Ponto de Fricção**:
-  1. No Convex Free (Hobby), há limites estritos de 1 GB de armazenamento, 10 GB de bandwidth de leitura mensal e 1.000.000 de invocações de função.
+  1. No Convex Free (Hobby), há limites estritos de 0,5 GB de armazenamento, 1 GB de Database I/O mensal e 1.000.000 de invocações de função.
   2. O cron `preparar-lembretes-1h-30min` rodava a cada 5 minutos varrendo em cascata todos os agendamentos futuros do banco (`appointmentNotifications.backfill`), consumindo mais de 43.200 chamadas de função por mês sem necessidade, já que os lembretes são preparados no momento em que cada paciente é agendado (`prepareReminders`).
   3. No frontend (`ClinicDataContext`), todos os usuários logados abriam 18 subscrições WebSocket reativas simultâneas, mantendo ativas queries pesadas de cálculo de comissões, relatórios clínicos, auditoria e logs de WhatsApp mesmo enquanto utilizavam apenas a Agenda.
   4. A função `enrichSchedule` executava centenas de leituras N+1 redundantes buscando as mesmas salas, profissionais, pacotes e serviços para cada participante em visualizações de semana/mês da agenda.
@@ -929,7 +935,7 @@ Este arquivo é lido no início de cada nova sessão e atualizado ao final de ca
 ---
 
 ### [2026-09-02] Otimização Extrema de Banco Convex para Plano Gratuito (Hobby)
-- **Ponto de Fricção**: O plano gratuito do Convex limita o banco a 1 GB de armazenamento, 10 GB de bandwidth de leitura mensal e 1.000.000 de chamadas de função. Consultas sem índice com `.collect()` ou `.filter()` realizam varreduras de tabela inteira (*table scans*), N+1 queries baixam payloads textuais maciços repetidamente, e ausência de retenção de logs estoura o armazenamento silenciosamente.
+- **Ponto de Fricção**: O plano gratuito do Convex limita o banco a 0,5 GB de armazenamento, 1 GB de Database I/O mensal e 1.000.000 de chamadas de função. Consultas sem índice com `.collect()` ou `.filter()` realizam varreduras de tabela inteira (*table scans*), N+1 queries baixam payloads textuais maciços repetidamente, e ausência de retenção de logs estoura o armazenamento silenciosamente.
 - **Mitigação / Regra**:
   1. Em tabelas com grande crescimento temporal (`schedules`, `financialTransactions`, `notificationLogs`), indexar por data (`by_dueDate`, `by_date`) e utilizar range queries (`.gte("dueDate", start).lte("dueDate", end)`) com `.take(limit)` para carregar estritamente o mês em visualização.
   2. Em consultas agregadas como prontuários (`listAllClinicalOverview`), buscar apenas a última evolução (`.order("desc").first()`) e limitar contagens amostrais, evitando baixar parágrafos SOAP de todas as sessões anteriores.

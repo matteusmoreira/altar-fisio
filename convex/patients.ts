@@ -214,6 +214,11 @@ export const deletePatient = mutation({
     for (const evo of evolutions) {
       await ctx.db.delete(evo._id)
     }
+    const evolutionStats = await ctx.db
+      .query("clinicalEvolutionStats")
+      .withIndex("by_patient", (q) => q.eq("patientId", args.id))
+      .first()
+    if (evolutionStats) await ctx.db.delete(evolutionStats._id)
 
     // 3. Limpeza de Pacientes-Pacotes
     const patientPkgs = await ctx.db
@@ -269,6 +274,8 @@ export const deletePatient = mutation({
   },
 })
 
+const ASSIGNED_PATIENTS_WINDOW_DAYS = 180
+
 export const listAssignedPatientIds = query({
   args: {
     sessionToken: v.string(),
@@ -283,10 +290,17 @@ export const listAssignedPatientIds = query({
       : (professionalId ?? user.professionalId)
     if (!targetProfId) return []
 
+    // Janela de histórico limitada (plano free do Convex): sem ela a leitura cresce para sempre
+    // e é refeita a cada check-in do profissional.
+    const windowStartMs = Date.now() - ASSIGNED_PATIENTS_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    const windowStartDate = new Date(windowStartMs).toISOString().split("T")[0]
+
     // 1. Participantes em agendamentos do profissional
     const schedules = await ctx.db
       .query("schedules")
-      .withIndex("by_professional_date", (q) => q.eq("professionalId", targetProfId))
+      .withIndex("by_professional_date", (q) =>
+        q.eq("professionalId", targetProfId).gte("date", windowStartDate)
+      )
       .collect()
 
     const patientIdSet = new Set<string>()
@@ -306,7 +320,9 @@ export const listAssignedPatientIds = query({
     // 2. Pacientes com evolução SOAP registrada pelo profissional
     const evolutions = await ctx.db
       .query("clinicalEvolutions")
-      .withIndex("by_professional", (q) => q.eq("professionalId", targetProfId))
+      .withIndex("by_professional", (q) =>
+        q.eq("professionalId", targetProfId).gte("_creationTime", windowStartMs)
+      )
       .collect()
 
     for (const evo of evolutions) {

@@ -1,6 +1,52 @@
 import { requireStaff } from './lib/security'
-import { query, mutation } from "./_generated/server"
+import { query, mutation, internalMutation } from "./_generated/server"
+import type { MutationCtx } from "./_generated/server"
+import type { Id } from "./_generated/dataModel"
+import { internal } from "./_generated/api"
 import { v } from "convex/values"
+
+// Atualiza o contador de evoluções do paciente. Sem contador ainda, conta o histórico uma única vez.
+async function updateEvolutionCount(ctx: MutationCtx, patientId: Id<"patients">, delta: number) {
+  const stats = await ctx.db
+    .query("clinicalEvolutionStats")
+    .withIndex("by_patient", (q) => q.eq("patientId", patientId))
+    .first()
+  if (stats) {
+    await ctx.db.patch(stats._id, { count: Math.max(0, stats.count + delta) })
+    return
+  }
+  const evolutions = await ctx.db
+    .query("clinicalEvolutions")
+    .withIndex("by_patient", (q) => q.eq("patientId", patientId))
+    .collect()
+  await ctx.db.insert("clinicalEvolutionStats", { patientId, count: evolutions.length })
+}
+
+// Preenche os contadores dos pacientes antigos (rodar uma vez após o deploy)
+export const backfillEvolutionStats = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("patients").paginate({ numItems: 50, cursor: args.cursor ?? null })
+    for (const patient of page.page) {
+      const stats = await ctx.db
+        .query("clinicalEvolutionStats")
+        .withIndex("by_patient", (q) => q.eq("patientId", patient._id))
+        .first()
+      if (stats) continue
+      const evolutions = await ctx.db
+        .query("clinicalEvolutions")
+        .withIndex("by_patient", (q) => q.eq("patientId", patient._id))
+        .collect()
+      if (evolutions.length > 0) {
+        await ctx.db.insert("clinicalEvolutionStats", { patientId: patient._id, count: evolutions.length })
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.clinical.backfillEvolutionStats, { cursor: page.continueCursor })
+    }
+    return { processed: page.page.length, isDone: page.isDone }
+  },
+})
 
 // Geração de URL temporária assinada para upload seguro no Convex Storage
 export const generateUploadUrl = mutation({
@@ -192,7 +238,7 @@ export const addSoapEvolution = mutation({
     // Geração de identificador criptográfico/hash de assinatura em conformidade com o COFFITO
     const signatureHash = `COFFITO-${prof.crefito.replace(/[^A-Za-z0-9]/g, "")}-${now.toString(36).toUpperCase()}`
 
-    return await ctx.db.insert("clinicalEvolutions", {
+    const evolutionId = await ctx.db.insert("clinicalEvolutions", {
       ...args,
       timestamp: now,
       signedProfessionalName: prof.name,
@@ -200,6 +246,8 @@ export const addSoapEvolution = mutation({
       isLocked: true, // Imutabilidade legal
       signatureHash,
     })
+    await updateEvolutionCount(ctx, args.patientId, 1)
+    return evolutionId
   },
 })
 
@@ -255,6 +303,16 @@ export const getPainEvolutionHistory = query({
   },
 })
 
+// IDs dos pacientes com ficha clínica (a tela de Pacientes só precisa disso)
+export const listPatientIdsWithRecord = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, input) => {
+    await requireStaff(ctx, input.sessionToken, ["admin", "professional"])
+    const records = await ctx.db.query("clinicalRecords").collect()
+    return records.map((record) => record.patientId)
+  },
+})
+
 // Visão Geral e Painel de Prontuários de Todos os Pacientes
 export const listAllClinicalOverview = query({
   args: { sessionToken: v.string() },
@@ -279,11 +337,20 @@ export const listAllClinicalOverview = query({
 
         let evolutionsCount = 0
         if (lastEvo) {
-          const recentEvos = await ctx.db
-            .query("clinicalEvolutions")
+          const stats = await ctx.db
+            .query("clinicalEvolutionStats")
             .withIndex("by_patient", (q) => q.eq("patientId", p._id))
-            .take(50)
-          evolutionsCount = recentEvos.length
+            .first()
+          if (stats) {
+            evolutionsCount = stats.count
+          } else {
+            // Paciente sem contador (dados anteriores ao backfill): conta como antes
+            const recentEvos = await ctx.db
+              .query("clinicalEvolutions")
+              .withIndex("by_patient", (q) => q.eq("patientId", p._id))
+              .take(50)
+            evolutionsCount = recentEvos.length
+          }
         }
 
         return {
@@ -350,6 +417,7 @@ export const deleteSoapEvolution = mutation({
     if (!evo) throw new Error("Evolução não encontrada")
 
     await ctx.db.delete(args.id)
+    await updateEvolutionCount(ctx, evo.patientId, -1)
     return { success: true, id: args.id }
   },
 })

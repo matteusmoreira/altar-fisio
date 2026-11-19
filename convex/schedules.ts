@@ -74,6 +74,19 @@ export interface ScheduleEnrichmentCache {
   patients?: Map<string, any>
   pkgDefs?: Map<string, any>
   services?: Map<string, any>
+  // Guardam a leitura em andamento para o mesmo paciente/pacote não ser relido em semana/mês
+  patientPkgs?: Map<string, Promise<any>>
+  activePatientPkgs?: Map<string, Promise<any[]>>
+}
+
+function cachedRead<T>(map: Map<string, Promise<T>> | undefined, key: string, read: () => Promise<T>): Promise<T> {
+  if (!map) return read()
+  let pending = map.get(key)
+  if (!pending) {
+    pending = read()
+    map.set(key, pending)
+  }
+  return pending
 }
 
 // Helper para enriquecer agendamento com sala, profissional e participantes
@@ -113,7 +126,7 @@ export async function enrichSchedule(ctx: any, schedule: any, cache?: ScheduleEn
 
       // Se o participante já tem vínculo direto com um pacote específico:
       if (p.patientPackageId) {
-        const directPkg = await ctx.db.get(p.patientPackageId)
+        const directPkg = await cachedRead(cache?.patientPkgs, p.patientPackageId, () => ctx.db.get(p.patientPackageId))
         if (directPkg && directPkg.status === "active" && directPkg.remainingSessions > 0) {
           let pkgDef = pkgDefCache?.get(directPkg.packageId)
           if (pkgDef === undefined) {
@@ -133,10 +146,12 @@ export async function enrichSchedule(ctx: any, schedule: any, cache?: ScheduleEn
       }
 
       // Buscar se o paciente tem pacote ativo correspondente à especialidade pelo índice otimizado
-      const patientPkgs = await ctx.db
-        .query("patientPackages")
-        .withIndex("by_patient_status", (q: any) => q.eq("patientId", p.patientId).eq("status", "active"))
-        .collect()
+      const patientPkgs = await cachedRead(cache?.activePatientPkgs, p.patientId, () =>
+        ctx.db
+          .query("patientPackages")
+          .withIndex("by_patient_status", (q: any) => q.eq("patientId", p.patientId).eq("status", "active"))
+          .collect()
+      )
 
       const validPkgs = []
       for (const item of patientPkgs) {
@@ -222,6 +237,8 @@ export const listSchedulesByDate = query({
       patients: new Map(),
       pkgDefs: new Map(),
       services: new Map(),
+      patientPkgs: new Map(),
+      activePatientPkgs: new Map(),
     }
     const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s, cache)))
 
@@ -286,6 +303,8 @@ export const listSchedulesByDateRange = query({
       patients: new Map(),
       pkgDefs: new Map(),
       services: new Map(),
+      patientPkgs: new Map(),
+      activePatientPkgs: new Map(),
     }
     const enriched = await Promise.all(schedules.map((s) => enrichSchedule(ctx, s, cache)))
 
